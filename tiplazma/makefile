@@ -6,7 +6,7 @@ run: tiplazma.obx
 
 tiplazma.nex tiplazma.obx: tiplazma.agf tiplazma.ray tiplazma.g10
 
-tiplazma.agf tiplazma.ray tiplazma.g10: flower30.pcx MakeTabs.class
+tiplazma.agf tiplazma.ray tiplazma.g10: flower_f.pcx MakeTabs.class
 	$(JAVA) MakeTabs $<
 
 .PHONY: clean

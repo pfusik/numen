@@ -1,6 +1,6 @@
 start x=$100 y=$1c0 z=$80 a=$00 h=24
 
-wait 0.1
+wait 0.2	# party ver: 0.1
 after 0.96 a +$21
 wait 0.16
 after 0.64 go $c0 a=$10 z -10
@@ -15,7 +15,7 @@ after 0.3 x=$400
 after 0.2 a=$f8
 after 0.4 a=$e8
 after 0.2 a=$e0
-wait 0.16
+wait 0.24	# party ver: 0.16
 after 0.1 a=$f0
 after 0.4 a=$10
 after 0.1 a=$20

@@ -99,7 +99,7 @@ Pic_skp	dex
 
 	ift	NUMEN
 	mwa	#dli	Dli_vector
-	mwa	#-282	Vbl_clock
+	mwa	#-282+14	Vbl_clock
 	jsr	Idle
 	jmp	NextBlock
 	els

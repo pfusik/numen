@@ -5,7 +5,7 @@ import java.io.*;
 
 public class Test extends Canvas {
 	private static final int DY = 0;
-	private static final int C1 = 16;
+	private static final int C1 = 15;
 	private static final int C2 = -800;
 
 	private	final static int R = 50;
@@ -37,12 +37,14 @@ public class Test extends Canvas {
 			double ay = Math.abs(y - MAP_HEIGHT / 2 + 0.5 - DY);
 			if (ay < 3) {
 				for (int x = 0; x < MAP_WIDTH; x++)
-					map[y][x] = 0;
+					map[y][x] = (byte) (((int) ay << 4) + 15);
 			}
 			else {
 				int iz = (int) (0x10000 / ay);
 				for (int x = 0; x < MAP_WIDTH; x++) {
-					int u = ((C1 * (x - MAP_WIDTH / 2) * iz) >> 16) & 15;
+					int u = ((C1 * (x - MAP_WIDTH / 2) * iz) >> 16) % 15;
+					if (u < 0)
+						u += 15;
 					int v = ((C2 * iz) >> 16) & 15;
 					map[y][x] = (byte) ((v << 4) + u);
 				}

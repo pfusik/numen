@@ -18,8 +18,6 @@ Mover		equ	Runtime1_begin-Reloc1_begin+Mover_reloc
 ;_Runtime1_end	equ	Runtime1_begin-Reloc1_begin+Reloc1_end
 		ert	Runtime1_end!=Runtime1_begin-Reloc1_begin+Reloc1_end
 
-Banks_save	equ	$3b00
-
 	org	$3e00
 Banks_sig	org	*+3	; 'tQa'
 Loader_bankTable	org	*+17
@@ -37,44 +35,11 @@ Loader_moveToBank
 	cmp	#'a'
 	beq	Loader_startMove
 Banks_auto
-	sei:mva	#0	^4e
-	ldx:rne	^4b
-	stx	$22f
-	stx	^40
-	ldy	#0
-Banks_auto1
-	stx	^31
-	mva	$7fff	Banks_save,x
-	inx:inx
-	bne	Banks_auto1
-Banks_auto2
-	stx	^31
-	stx	$7fff
-	inx:inx
-	bne	Banks_auto2
-Banks_auto3
-	stx	^31
-	cpx	$7fff
-	bne	Banks_auto4
-	txa:sta	Loader_bankTable,y+
-	cpy	#Banks_MAIN_INDEX
-	bcs	Banks_auto5
-Banks_auto4
-	inx:inx
-	bne	Banks_auto3
-Banks_auto5
-	ldx	#0
-Banks_auto6
-	stx	^31
-	mva	Banks_save,x	$7fff
-	inx:inx
-	bne	Banks_auto6
-	cpy	#Banks_MAIN_INDEX
-	bcc	*
-	mva	#$fe	Loader_bankTable,y
-	pla:sta	^31
-	pha
-	mva:cli	#$40	^4e
+	jsr	Banks_detect
+	sty	$22f	; Y=0
+	cpx	#Banks_MAIN_INDEX
+	bne	*
+	mva	#$fe	Loader_bankTable,x
 	mva	#'t'	Banks_sig
 	mva	#'Q'	Banks_sig+1
 	mva	#'a'	Banks_sig+2
@@ -88,7 +53,6 @@ Loader_bankIndex equ	*-1
 	sta	dl2+2
 	mva	#$c0	^4e
 	lda	Loader_bankTable,x
-	ora	#1
 	ldx	<$8000
 	ldy	>$8000
 	jsr	Mover_reloc
@@ -107,13 +71,31 @@ Loader_run
 	sta	^40
 	ldy	#29
 	sta:rpl	^00,y-
-	mva	#$fe	^31
+	ert	Banks_LOAD_LAST_INDEX+1!=Banks_MAIN_INDEX
+	inx
 	lda	Loader_bankTable,x
 	ldx	<Reloc1_toLoad
 	ldy	>Reloc1_toLoad
 	jsr	Mover_reloc
 	ldx	#Banks_NUMBER-1
-	mva:rpl	Loader_bankTable,x	Banks_table,x-
+Loader_moveBanks
+	mva	Loader_bankTable,x	^31
+	ldy	$e000
+	iny
+	sty:cpy	$e000
+	beq	Loader_shadowRam
+	and	#~1
+	sta	^31
+	ldy	$e000
+	iny
+	sty:cpy $e000
+	beq Loader_shadowRam
+; blue screen of death
+	mva	#$72	^1a
+	bne	*
+Loader_shadowRam
+	sta	Banks_table,x
+	dex:bpl	Loader_moveBanks
 	txs	#$ff
 	stx	$33d	; reset=coldstart
 
@@ -123,6 +105,11 @@ Loader_run
 	mwa	#PlayInf_packed	Inflate_inputPointer
 	mva	#Banks_PLAYINF_INDEX	Inflate_inputBankIndex
 	jmp	NextBlock
+
+Banks_MAX	equ	Banks_MAIN_INDEX
+Banks_temp	equ	$3b00
+Banks_tab	equ	Loader_bankTable
+	icl	'banks.asx'
 
 Reloc1_toLoad
 	dta	a(Runtime1_begin,Runtime1_end-1)

@@ -11,7 +11,7 @@ Text_LINES	equ	20
 Scroll_pos	equ	$16
 DL_tmp		equ	$17
 
-	org	$f040
+	org	$f140
 DL
 	dta	$90
 DL_top
@@ -37,7 +37,7 @@ Text_bottomIndex
 	dta	42-Text_COLUMNS+4*Text_COLUMNS	; Dracon
 	dta	42-Text_COLUMNS+6*Text_COLUMNS	; X-Ray
 
-	org	$f100
+	org	$f200
 DL_interrupt1
 	lda	Scroll_pos
 	sta	^4a
@@ -139,7 +139,7 @@ Scroll_dontSetDL
 	pla
 	rti
 
-	org	$f200+43-Text_COLUMNS
+	org	$f300+43-Text_COLUMNS
 Text
 	ins	'text.raw'
 

@@ -16,7 +16,7 @@ start.zix: ../ZipXex.class zipx9600.obx start.xex
 zipx9600.obx: ../zipxex.asx
 	$(XASM) /o:$@ /d:inflate=$$9600 $<
 
-start.xex: start.asx ../filelen.asx font.raw diablik.gr8 numen.gr8
+start.xex: start.asx ../filelen.asx ../banks.asx font.raw diablik.gr8 numen.gr8
 	$(XASM) /o:$@ $<
 
 .PHONY: ../filelen.asx

@@ -86,7 +86,8 @@ Eru_init_1
 	mva	#$98	^17
 	mva	#$9c	^18
 	mwa	#Eru_vbl	Vbl_vector
-	jmp	NextBlock
+:NUMEN	jmp	NextBlock
+:!NUMEN	jmp	*
 
 Eru_vbl
 	dec	Eru_ct

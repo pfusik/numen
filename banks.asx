@@ -1,0 +1,88 @@
+;Banks_MAX   equ 255
+
+; where to save current memory?
+;Banks_temp  equ $3d00	; 256 bytes
+
+; where to save results?
+;Banks_tab   equ	$3e00	; Banks_MAX bytes
+
+; which byte to test?
+Banks_base0 equ $0000
+Banks_ext   equ $4000
+Banks_base2 equ $8000
+Banks_base3 equ $c000
+
+Banks_detect
+ sei
+ ldx #0
+ stx $d40e
+Banks_detect_waitVBlank
+ ldy $d40b
+ bne Banks_detect_waitVBlank
+ stx $d400
+ lda $d301
+ pha
+ lda #$fe
+ sta $d301
+ lda Banks_base3
+ pha
+ lda Banks_base2
+ pha
+ lda Banks_base0
+ pha
+Banks_detect_save
+ sty $d301
+ lda Banks_ext
+ sta Banks_temp,y
+ iny
+ bne Banks_detect_save
+Banks_detect_storeIndexes
+ sty $d301
+ sty Banks_ext
+ iny
+ bne Banks_detect_storeIndexes
+ lda #$fe
+ sta $d301
+ sta Banks_base0
+ sta Banks_base2
+ sta Banks_base3
+Banks_detect_checkIndexes
+ sty $d301
+ cpy Banks_ext
+ bne Banks_detect_noBank
+; make sure we read
+; what we wrote to PORTB!
+; if not, skip this bank!
+ cpy $d301
+ bne Banks_detect_noBank
+ tya
+ sta Banks_tab,x
+ inx
+ cpx #Banks_MAX
+ beq Banks_restoreAll
+Banks_detect_noBank
+ iny
+ bne Banks_detect_checkIndexes
+Banks_restoreAll
+ ldy #0
+Banks_restore
+ sty $d301
+ lda Banks_temp,y
+ sta Banks_ext
+ iny
+ bne Banks_restore
+ lda #$fe
+ sta $d301
+ pla
+ sta Banks_base0
+ pla
+ sta Banks_base2
+ pla
+ sta Banks_base3
+ pla
+ sta $d301
+ lsr $d40e
+ cli
+ rts
+
+ end

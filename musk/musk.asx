@@ -73,6 +73,7 @@ Pic_skp	dex
 	mva	>Pic_dl2	(Pic_p1),y
 	mva	>Pic_dl1	(Pic_p2),y
 
+ ift NUMEN
 	ldx	<-312-2*50
 	ldy	>-312-2*50
 	jsr	Musk_show
@@ -83,18 +84,29 @@ Musk_show
 	lda:rne	^4b
 	stx	Vbl_clock
 	sty	Vbl_clock+1
+ els
+	lda:rne	^4b
+ eif
 	ldx	#8
 	mva:rpl	Pic_cols,x	^12,x-
 	mva	#$22	^40
 	mwa	#Pic_dl1	^42
 	mva	#$40	dli_gtiaMode
+ ift NUMEN
 	mwa	#dli	Dli_vector
 	rts
+ els
+	mwa	#dli	$fffa
+	mva	#$80	^4e
+	jmp	*
+ eif
 
-dli	lda:pha	^31
+dli
+:NUMEN	lda	^31
+	pha
 	txa:pha
 	tya:pha
-	mva	Banks_table+Banks_MAIN_INDEX	^31
+:NUMEN	mva	Banks_table+Banks_MAIN_INDEX	^31
 	ldx	#$c0
 	ldy	#96
 	lda	#$40
@@ -111,9 +123,9 @@ dli_1
 	sta	dli_gtiaMode
 	pla:tay
 	pla:tax
-	pla
-	sta	^4a
-	sta	^31
+:NUMEN	pla
+:NUMEN	sta	^4a
+:NUMEN	sta	^31
 	pla
 	rti
 

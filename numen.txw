@@ -1,0 +1,56 @@
+NUMEN - a TAQUART production in 2002
+------------------------------------
+
+There are two official distributions:
+- two 130K disk sides
+- one big ATR image
+The  second one  is  recommended  for
+SIO2PC and emulator users - you don't
+have to swap the image.
+
+The demo consists of following files:
+START.COM
+  This is  the menu  that  allows you
+  to load the main part and the note.
+  You may  also  select  memory banks
+  to  be used  by the main part  (the
+  note  doesn't  use  them).  If  you
+  don't  understand  it,   then  just
+  select "Auto".
+MEMORY.CFG
+  Here is written the memory configu-
+  ration.  This  file  is  read  when
+  START.COM starts  and can  be saved
+  by  "Save"  in  "Setup".  This file
+  must be  either empty  (which means
+  "Auto")  or 16-byte  (the bytes are
+  bank codes).
+NUMEN1.TQA
+NUMEN2.TQA
+  This is the main part.
+OUTRO.COM
+  This is the note.  You may  load it
+  from any DOS or executable loader.
+NUMEN.TXT
+  It's the text you are reading now.
+
+START.COM always uses "D:" device for
+file I/O.  This means you must run it
+from a DOS,  not a simple  executable
+loader.     Original    distributions
+contain  a tiny DOS  entirely in boot
+sectors   (that's  why  there  is  no
+DOS.SYS).  This DOS  has  just enough
+capabilities  to run  the demo  -  it
+loads START.COM, reads any files, but
+writes only small (one sector) files,
+handling only one density  (there are
+different   versions   in   different
+distributions).
+
+You may copy the files to a different
+disk or HDD  and run  START.COM  from
+any  DOS   (contact  us  in  case  of
+problems).
+
+Enjoy!

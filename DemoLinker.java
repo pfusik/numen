@@ -62,14 +62,15 @@ public class DemoLinker {
 
 			// name, obx, pack
 			link("title/title.nex", true, true);
+			link("tunnel56/tabc.nex", true, true);
 			link("flash/flash.nex", true, true);
 			link("flash/tunnelz.ang", false, false);
 			link("flash/tunnelz.ray", false, true);
 			link("duke/1intro/duke.nex", true, true);
 			link("duke/2corrid/duke.nex", true, true);
 			link("tunnel56/tunnel56.nex", true, true);
-			link("tunnel56/taba.dat", false, false);
-			link("tunnel56/tabr.dat", false, true);
+			//link("tunnel56/taba.dat", false, false);
+			//link("tunnel56/tabr.dat", false, true);
 			link("env/env.nex", true, true);
 			link("babka/babka.nex", true, true);
 			link("hipbump/hipbump.nex", true, true);
@@ -138,12 +139,12 @@ public class DemoLinker {
 			link("playinf.obx", true, true);
 			link("inflate.obx", 2, true, false);
 			writeWord(0x8000);
-			writeWord(0x8000 + 4 + outputIndex + inputIndex + 2 + 2 - 1);
+			writeWord(0x8000 + 4 + outputIndex + 2 + inputIndex + 2 - 1);
 			writeWord(0x4006);
-			writeWord(0x4006 + outputIndex - 1);
+			writeWord(0x4006 + outputIndex + 2 - 1);
 			outputStream.write(outputBuffer, 0, outputIndex);
-			outputStream.write(inputBuffer, 0, inputIndex);
 			writeWord(0x0000);
+			outputStream.write(inputBuffer, 0, inputIndex);
 			writeWord(0x0000);
 			writeWord(0x02e0);
 			writeWord(0x02e1);

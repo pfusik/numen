@@ -3,10 +3,19 @@
 	icl	'../nex.asx'
 
 BARS	equ	0
+REUSE	equ	NUMEN	; reuse unrolled code of "flash"
+
+	ift	REUSE
+Flash_hp equ	$20
+Flash_lp equ	$84
+Banks_TABC equ	Banks_forEffect+2
+	els
+Banks_TABC equ	Banks_table+Banks_MAIN_INDEX
+	eif
 
 dblo	equ	$be00	$200
-movetex	equ	$c000	$c01	move texture
-chraysh	equ	$ea00	<$200	change ray shape
+; movetex	equ	$c000	$c01	; move texture
+chraysh	equ	$ea00	<$200	; change ray shape
 raypage	equ	$ebc0	<$40
 screen	equ	$3600	$8c0
 
@@ -41,6 +50,8 @@ py	equ	$e9
 vx	equ	$ea
 vy	equ	$eb
 i2	equ	$ec
+u0	equ	$ed
+v0	equ	$ee
 
 	ift	NUMEN
 	org	$0200
@@ -48,9 +59,7 @@ i2	equ	$ec
 	org	$e800
 	eif
 hi2	org	*+256
-;lo2	ins	'skosy.lot'
 lo2	ins	'kwadrati.lot'
-;lo2	ins 'kwadrat.lot'								;NEW
 
 	org	$3ec0
 dl	dta	$f0,$6f,a(screen),$0f
@@ -84,7 +93,7 @@ dlix
 	rti
 
 dli2
-	mva	Banks_table+Banks_MAIN_INDEX	^31
+	mva	Banks_TABC	^31
 	lda:pha	saver+1
 	lda:pha	saver
 	rts
@@ -98,7 +107,7 @@ spito
 	lda	an
 	add	id
 	bpl	spits
-:3	dec	id
+	dec	id
 spits	and	#$7f
 	sta	an
 	jsr	frame
@@ -107,7 +116,7 @@ spits	and	#$7f
 	org	$ce00
 div3
 hi1	org	*+256
-lo1	ins	'kwadrat.lot'
+lo1	ins	'kwadra15.lot'
 	org	$ee00
 sin	dta	sin(0,48,256)
 
@@ -116,8 +125,8 @@ lo2hi	dta	$dd,$cd,$fd,$ed,$9d,$8d,$bd,$ad
 	dta	$5d,$4d,$7d,$6d,$1d,$0d,$3d,$2d
 
 main
-:NUMEN	jsr	Inflate
-
+:NUMEN&&!REUSE	jsr	Inflate
+ ift 0
 	mwa	#movetex	di
 	ldx	#0
 
@@ -140,6 +149,7 @@ mmovet
 	inx
 	bne	mmovet
 	mva	#{rts}	(di,x)
+ eif
 	mwa	#chraysh	di
 	ldx	#48
 
@@ -181,29 +191,27 @@ mdiv3	adc	#2	-
 	sta	div3,x+
 	bpl	mdiv3
 	mwa	#screen	si
-	mwa	#atab	ai
-	mwa	#rtab	ri
+:!REUSE	mwa	#atab	ai
+:!REUSE	mwa	#rtab	ri
 	mva	Banks_forEffect	^31
-	lda	<lim1
-	ldx	>lim1
+:!REUSE	lda	<lim1
+:!REUSE	ldx	>lim1
 	jsr	mcod_scr
 
 	mva	Banks_forEffect+1	^31
-	lda	<lim2
-	ldx	>lim2
+:!REUSE	lda	<lim2
+:!REUSE	ldx	>lim2
 	ldy	>pro2
 	jsr	mcod_next
-	lda	<lim3
-	ldx	>lim3
+:!REUSE	lda	<lim3
+:!REUSE	ldx	>lim3
 	jsr	mcod_scr
 
 ;	mva	Banks_table+Banks_MAIN_INDEX	^31
 	mwa	#ctab	si
 
 	ldy	#0
-initex	lda:tax	lo1,y
-	sta	dblo,y
-	sta	dblo+$100,y
+initex	mva:tax	lo1,y	dblo,y
 	mva	lo2hi,x	hi1,y
 	ldx	lo2,y
 	mva	lo2hi,x	hi2,y
@@ -212,7 +220,7 @@ initex	lda:tax	lo1,y
 
 	lda:rne	^4b
 	sta	^40
-	mva	Banks_table+Banks_MAIN_INDEX	^31
+	mva	Banks_TABC	^31
 	ldx	#0
 	ldy	#0
 firsh	jsr	chraysh
@@ -260,6 +268,49 @@ izp	mwa	#hi1	hp,x
 	eif
 
 mcod_scr
+	ift	REUSE
+	ldy	>$4000
+mcod_next
+	mva	#0	di
+	sty	di+1
+mcod_byte
+	ldy	#4
+	lda	(di),y	; hp+2*ray
+	lsr	@
+	tay
+	lda	raypage-Flash_hp/2,y
+	ldy	#2
+	sta	(di),y-
+	lda:tay	(di),y	; ang
+	lda	div3,y
+	ldy	#4
+	sta	(di),y+
+	lda	(di),y
+	cmp	#{ldy a:,x}
+	bcs	mcod_nvsc
+	lda	#8
+	adc:sta	di	-
+	scc:inc	di+1
+mcod_nvsc
+	ldy	#5+4
+	lda	(di),y	; lp+2*ray
+	lsr	@
+	tay
+	lda	raypage-Flash_lp/2,y
+	ldy	#5+2
+	sta	(di),y-
+	lda:tay	(di),y	; ang
+	lda	div3,y
+	adc	#lp-hp	-
+	ldy	#5+4
+	sta	(di),y
+	lda	#13
+	adc:sta	di
+	scc:inc	di+1
+	lda	(di),0
+	bmi	mcod_byte
+	els	; REUSE
+
 	mvy	#27	vct
 	ldy	>$4000
 mcod_next
@@ -330,20 +381,191 @@ mcod_nvsc
 	cmp	li
 	jcc	mcod_byte
 	mva	#{rts}	(li),0
+
+	eif	; REUSE
+
 	rts
 
 movev
 	lda	vx
-	add:sta	px
+	add	px
+	bit	vx
+	bpl	move15_1
+	bcs	move15_3
+	sbc	#$f	-
+	bcs	move15_3	!
+move15_1
+	bcs	move15_2
+	cmp	#$f0
+	scc
+move15_2
+	adc	#$f	+
+move15_3
+	sta	px
 	lda	vy
 	add:sta	py
+	and	#$f0
+	sta	v0
 	lda	px
 :4	lsr	@
-	eor	py
-	and	#$f
-	eor	py
+	sta	u0
+	jeq	m15b
+	tay:dey
+	eor	#$f
+	sub	v0
+	sta	m15a_0+4
+	sta	m15a_0+11
+	add	#$10
+	sta	m15a_1+4
+	sta	m15a_1+11
+	add	#$10
+	sta	m15a_2+4
+	sta	m15a_2+11
+	add	#$10
+	sta	m15a_3+4
+	sta	m15a_3+11
+	add	#$10
+	sta	m15a_4+4
+	sta	m15a_4+11
+	add	#$10
+	sta	m15a_5+4
+	sta	m15a_5+11
+	add	#$10
+	sta	m15a_6+4
+	sta	m15a_6+11
+	add	#$10
+	sta	m15a_7+4
+	sta	m15a_7+11
+	add	#$10
+	sta	m15a_8+4
+	sta	m15a_8+11
+	add	#$10
+	sta	m15a_9+4
+	sta	m15a_9+11
+	add	#$10
+	sta	m15a_a+4
+	sta	m15a_a+11
+	add	#$10
+	sta	m15a_b+4
+	sta	m15a_b+11
+	add	#$10
+	sta	m15a_c+4
+	sta	m15a_c+11
+	add	#$10
+	sta	m15a_d+4
+	sta	m15a_d+11
+	add	#$10
+	sta	m15a_e+4
+	sta	m15a_e+11
+	add	#$10
+	sta	m15a_f+4
+	sta	m15a_f+11
+m15a_0	mva:tax	dblo,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15a_1	mva:tax	dblo+$10,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15a_2	mva:tax	dblo+$20,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15a_3	mva:tax	dblo+$30,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15a_4	mva:tax	dblo+$40,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15a_5	mva:tax	dblo+$50,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15a_6	mva:tax	dblo+$60,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15a_7	mva:tax	dblo+$70,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15a_8	mva:tax	dblo+$80,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15a_9	mva:tax	dblo+$90,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15a_a	mva:tax	dblo+$a0,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15a_b	mva:tax	dblo+$b0,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15a_c	mva:tax	dblo+$c0,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15a_d	mva:tax	dblo+$d0,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15a_e	mva:tax	dblo+$e0,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15a_f	mva:tax	dblo+$f0,y	lo1,y
+	mva	lo2hi,x	hi1,y
+	dey
+	jpl	m15a_0
+m15b
+	lda	#$e
+	sub	u0
 	tay
-	jmp	movetex
+	lda	u0
+	eor	v0
+	sta	m15b_0+1
+	add	#$10
+	sta	m15b_1+1
+	add	#$10
+	sta	m15b_2+1
+	add	#$10
+	sta	m15b_3+1
+	add	#$10
+	sta	m15b_4+1
+	add	#$10
+	sta	m15b_5+1
+	add	#$10
+	sta	m15b_6+1
+	add	#$10
+	sta	m15b_7+1
+	add	#$10
+	sta	m15b_8+1
+	add	#$10
+	sta	m15b_9+1
+	add	#$10
+	sta	m15b_a+1
+	add	#$10
+	sta	m15b_b+1
+	add	#$10
+	sta	m15b_c+1
+	add	#$10
+	sta	m15b_d+1
+	add	#$10
+	sta	m15b_e+1
+	add	#$10
+	sta	m15b_f+1
+m15b_0	mva:tax	dblo,y	lo1,y
+	mva	lo2hi,x	hi1,y
+m15b_1	mva:tax	dblo,y	lo1+$10,y
+	mva	lo2hi,x	hi1+$10,y
+m15b_2	mva:tax	dblo,y	lo1+$20,y
+	mva	lo2hi,x	hi1+$20,y
+m15b_3	mva:tax	dblo,y	lo1+$30,y
+	mva	lo2hi,x	hi1+$30,y
+m15b_4	mva:tax	dblo,y	lo1+$40,y
+	mva	lo2hi,x	hi1+$40,y
+m15b_5	mva:tax	dblo,y	lo1+$50,y
+	mva	lo2hi,x	hi1+$50,y
+m15b_6	mva:tax	dblo,y	lo1+$60,y
+	mva	lo2hi,x	hi1+$60,y
+m15b_7	mva:tax	dblo,y	lo1+$70,y
+	mva	lo2hi,x	hi1+$70,y
+m15b_8	mva:tax	dblo,y	lo1+$80,y
+	mva	lo2hi,x	hi1+$80,y
+m15b_9	mva:tax	dblo,y	lo1+$90,y
+	mva	lo2hi,x	hi1+$90,y
+m15b_a	mva:tax	dblo,y	lo1+$a0,y
+	mva	lo2hi,x	hi1+$a0,y
+m15b_b	mva:tax	dblo,y	lo1+$b0,y
+	mva	lo2hi,x	hi1+$b0,y
+m15b_c	mva:tax	dblo,y	lo1+$c0,y
+	mva	lo2hi,x	hi1+$c0,y
+m15b_d	mva:tax	dblo,y	lo1+$d0,y
+	mva	lo2hi,x	hi1+$d0,y
+m15b_e	mva:tax	dblo,y	lo1+$e0,y
+	mva	lo2hi,x	hi1+$e0,y
+m15b_f	mva:tax	dblo,y	lo1+$f0,y
+	mva	lo2hi,x	hi1+$f0,y
+	dey
+	jpl	m15b_0
+	rts
 
 director
 ; do przodu
@@ -511,8 +733,51 @@ spit0
 	and	#$7f
 	sta	an
 	jsr	frame
+ ift 0 ; sorry!
+	ldy	#15
+movet
+	ldx	hi2,y
+	mva	hi2+$10,y	hi2,y
+	mva	hi2+$20,y	hi2+$10,y
+	mva	hi2+$30,y	hi2+$20,y
+	mva	hi2+$40,y	hi2+$30,y
+	mva	hi2+$50,y	hi2+$40,y
+	mva	hi2+$60,y	hi2+$50,y
+	mva	hi2+$70,y	hi2+$60,y
+	mva	hi2+$80,y	hi2+$70,y
+	mva	hi2+$90,y	hi2+$80,y
+	mva	hi2+$a0,y	hi2+$90,y
+	mva	hi2+$b0,y	hi2+$a0,y
+	mva	hi2+$c0,y	hi2+$b0,y
+	mva	hi2+$d0,y	hi2+$c0,y
+	mva	hi2+$e0,y	hi2+$d0,y
+	mva	hi2+$f0,y	hi2+$e0,y
+	txa:sta	hi2+$f0,y
+	ldx	lo2,y
+	mva	lo2+$10,y	lo2,y
+	mva	lo2+$20,y	lo2+$10,y
+	mva	lo2+$30,y	lo2+$20,y
+	mva	lo2+$40,y	lo2+$30,y
+	mva	lo2+$50,y	lo2+$40,y
+	mva	lo2+$60,y	lo2+$50,y
+	mva	lo2+$70,y	lo2+$60,y
+	mva	lo2+$80,y	lo2+$70,y
+	mva	lo2+$90,y	lo2+$80,y
+	mva	lo2+$a0,y	lo2+$90,y
+	mva	lo2+$b0,y	lo2+$a0,y
+	mva	lo2+$c0,y	lo2+$b0,y
+	mva	lo2+$d0,y	lo2+$c0,y
+	mva	lo2+$e0,y	lo2+$d0,y
+	mva	lo2+$f0,y	lo2+$e0,y
+	txa:sta	lo2+$f0,y
+	dey
+	jpl	movet
+	dec	ct
+	jne	spit0
+ els
 	dec	ct
 	bne	spit0
+ eif
 
 	mva	#-3	id
 	jmp	spito
@@ -530,7 +795,9 @@ Banks_MAIN_INDEX	equ	2
 	eif
 
 	org	$4000
-ctab	ins	'tabc.dat'
+ctab
+	ift	!REUSE
+	ins	'tabc.dat'
 
 	org	$8000
 	ift	NUMEN
@@ -539,6 +806,7 @@ rtab	org	*+4480
 	els
 atab	ins	'taba.dat'
 rtab	ins	'tabr.dat'
+	eif
 	eif
 
 	end

@@ -71,6 +71,16 @@ r3	sta	$4e00,y
 	bcc	r1
 :$33e5-* nop	heheehe
 
+; zeby dzialal skok ponizej pozycji 80 hex
+	org	$404e
+	cmp	#$fe
+	bcc	$4066
+	sne
+stp	jmp	$4a07
+	lda	($ec),y
+	cmp	#$fe
+	bcs	stp
+
 ; zeby dalej jechac strzalka w dol
 	org	$f622
 	dta	$f5

@@ -7,7 +7,7 @@ DEMOPARTS = \
 	duke/1intro/duke.nex \
 	title/title.nex \
 	duke/2corrid/duke.nex \
-	tunnel56/tunnel56.nex \
+	tunnel56/tabc.nex tunnel56/tunnel56.nex \
 	env/env.nex \
 	babka/babka.nex \
 	hipbump/hipbump.nex hipbump/bumpmap.gfx \
@@ -35,22 +35,28 @@ DEMOPARTS = \
 runxex: demo.xex
 	$(RUNXEX) demo.xex
 
+.PHONY: all
+all: Numen.atr Numen_A.atr Numen_B.atr
+
 .PHONY: runatrs
 runatrs: Numen_A.atr Numen_B.atr
 	$(RUNATR) Numen_A.atr
 
 .PHONY: runatr
-runatr: numen.atr
-	$(RUNATR) numen.atr
+runatr: Numen.atr
+	$(RUNATR) Numen.atr
 
-Numen_A.atr: FilesToATR.class dos128.obx start/start.com memory.cfg numen1.tqa outro/outro.com
-	$(JAVA) FilesToATR 1040 128 Numen_A.atr dos128.obx start/start.com memory.cfg numen1.tqa outro/outro.com
+Numen_A.atr: FilesToATR.class dos128.obx start/start.com memory.cfg numen1.tqa outro/outro.com numen.txt
+	$(JAVA) FilesToATR 1040 128 Numen_A.atr dos128.obx start/start.com memory.cfg numen1.tqa outro/outro.com numen.txt
 
 Numen_B.atr: FilesToATR.class bootb.obx numen2.tqa
 	$(JAVA) FilesToATR 1040 128 Numen_B.atr bootb.obx numen2.tqa
 
-numen.atr: FilesToATR.class dos256.obx start/start.com memory.cfg numen1.tqa numen2.tqa outro/outro.com
-	$(JAVA) FilesToATR 376 256 numen.atr dos256.obx start/start.com memory.cfg numen1.tqa numen2.tqa outro/outro.com
+Numen.atr: FilesToATR.class dos256.obx start/start.com memory.cfg numen1.tqa numen2.tqa outro/outro.com numen.txt
+# Can't use following, because the command line is too long for stupid Windows 98 !
+#	$(JAVA) FilesToATR 376 256 Numen.atr dos256.obx start/start.com memory.cfg numen1.tqa numen2.tqa outro/outro.com numen.txt
+# This is just a few characters shorter:
+	java -cp . FilesToATR 376 256 Numen.atr dos256.obx start/start.com memory.cfg numen1.tqa numen2.tqa outro/outro.com numen.txt
 
 demo.xex: numen1.tqa numen2.tqa
 	cat numen1.tqa numen2.tqa > demo.xex
@@ -62,10 +68,9 @@ dos256.obx: dos.asx
 	$(XASM) /o:dos256.obx /d:SECTOR_SIZE=256 dos.asx
 
 numen1.tqa numen2.tqa: DemoLinker.class loader.obx playinf.obx inflate.obx $(DEMOPARTS)
-#	if not "$?"=="" $(JAVA) DemoLinker
-# "Command line too long." (i.e. "Windows 98 sucks!")
 	$(JAVA) DemoLinker
 
+loader.obx: banks.asx
 loader.obx playinf.obx inflate.obx: numendef.asx
 
 .PHONY: $(DEMOPARTS) start/start.com outro/outro.com
@@ -78,15 +83,19 @@ playinf.obx: bonoxxx.mpf mptplfox.asx
 filelen.asx: FileLength.class demo.xex outro/outro.com
 #	echo "DEMO_LENGTH_PERCENT equ [%+99]/100" | $(JAVA) FileLength demo.xex > filelen.asx
 #	echo "OUTRO_LENGTH_PERCENT equ [%+99]/100" | $(JAVA) FileLength outro/outro.com >> filelen.asx
-	echo "DEMO_LENGTH_PERCENT equ %/100" | $(JAVA) FileLength demo.xex > filelen.asx
-	echo "OUTRO_LENGTH_PERCENT equ %/100" | $(JAVA) FileLength outro/outro.com >> filelen.asx
+	echo DEMO_LENGTH_PERCENT equ %/100 | $(JAVA) FileLength demo.xex > filelen.asx
+	echo OUTRO_LENGTH_PERCENT equ %/100 | $(JAVA) FileLength outro/outro.com >> filelen.asx
+
+numen.txt: AsciiToAtascii.class numen.txw
+	$(JAVA) AsciiToAtascii numen.txw numen.txt
 
 PCXtoGR8.class PCXtoGR9.class PCXtoHIP.class PCXGRBto256.class: PCXImage.class
 
 .PHONY: clean
 clean:
-	$(RM) numen.atr Numen_A.atr Numen_B.atr
+	$(RM) Numen.atr Numen_A.atr Numen_B.atr
 	$(RM) FilesToATR.class dos128.obx dos256.obx bootb.obx
+	$(RM) numen.txt AsciiToAtascii.class
 	$(RM) demo.xex numen1.tqa numen2.tqa DemoLinker.class
 	$(RM) filelen.asx FileLength.class ZipXex.class
 	$(RM) loader.obx playinf.obx inflate.obx

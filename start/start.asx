@@ -109,8 +109,6 @@ A_DOWN	equ	4
 A_LEFT	equ	5
 A_RIGHT	equ	6
 
-Banks_save	equ	$3b00
-
 s1	equ	$80	2
 s2	equ	$82	2
 mask	equ	$86
@@ -703,6 +701,11 @@ invertSetupBar
 	scc:ldx	#12
 	jmp	invertBar
 
+Banks_MAX	equ	255
+Banks_temp	equ	$3b00
+Banks_tab	equ	allBanks
+	icl	'../banks.asx'
+
 ; here we go!
 start
 	tsx:stx	menuStack
@@ -760,37 +763,13 @@ movepic_panel1
 	bne	movepic_panel
 	stx	s1
 	stx	s2
+	stx	$22f
 ; detect extended memory
-	ldx:rne	^4b
-	sei:stx	^4e
-	stx	^40
-	ldy	#0
-Banks_auto1
-	stx	^31
-	mva	$7fff	Banks_save,x
-	inx:inx
-	bne	Banks_auto1
-Banks_auto2
-	stx	^31
-	stx	$7fff
-	inx:inx
-	bne	Banks_auto2
-Banks_auto3
-	stx	^31
-	cpx	$7fff
-	bne	Banks_auto4
-	txa:sta	allBanks,y+
-Banks_auto4
-	inx:inx
-	bne	Banks_auto3
-Banks_auto6
-	stx	^31
-	mva	Banks_save,x	$7fff
-	inx:inx
-	bne	Banks_auto6
-	dey
-	bmi	*	; ??? something very bad must have happened ???
-	sty	totalBanks
+	jsr	Banks_detect
+	txa
+	beq	*	; ??? something very bad must have happened ???
+	dex	; don't count base bank (which should be the last)
+	stx	totalBanks
 	mva	#$ff	^31
 ; by default use first 16 banks
 	ldy	#15
@@ -799,9 +778,9 @@ initAutoBanks
 	mva	#1	bankSelection,y
 	dey:bpl	initAutoBanks
 	sta	autoBanks
-	ldy	#111
+	ldy	#256-16
 	lsr	@
-	sta:rpl	bankSelection+16,y-
+	sta:rne	bankSelection+15,y-
 	mva	#$fe	selectedBanks+16
 ; show screen
 	lda:rne	^4b
@@ -834,7 +813,7 @@ initAutoBanks
 	ldy	>configFileName
 	jsr	openFileForReading
 	cpy	#0
-	bmi	menu_enter
+	bmi	readConfig_close
 	mwa	#16	$348+FILE_CHANNEL
 	ldx	<selectedBanks
 	ldy	>selectedBanks
@@ -854,15 +833,18 @@ readConfig_selectBanks
 	lda	selectedBanks,y
 	ldx	totalBanks
 readConfig_findBank
+	cmp	allBanks-1,x
+	beq	readConfig_foundBank
 	dex
-	bmi	readConfig_wrongConfig
-	cmp	allBanks,x
 	bne	readConfig_findBank
-	lda	#1
-	cmp:sta	bankSelection,x
-	bne	readConfig_nextBank
 readConfig_wrongConfig
 	mva	#-1	selectedBanks
+	bne	readConfig_nextBank	!
+readConfig_foundBank
+	lda	#1
+	cmp	bankSelection-1,x
+	beq	readConfig_wrongConfig
+	sta	bankSelection-1,x
 readConfig_nextBank
 	iny:cpy	#16
 	bcc	readConfig_selectBanks
@@ -942,19 +924,17 @@ menu_ok
 	jcc	tooFewMemory
 
 setup_run
-	dex
 setup_saveBanksForUndo
-	lda	bankSelection,x
+	lda	bankSelection-1,x
 	cmp	#1
 	rol	@
-	sta	bankSelection,x
+	sta	bankSelection-1,x
 	dex
-	bpl	setup_saveBanksForUndo
-
-	mvx	#1	setupMode
-	stx	setupRow
-	dex	#0
+	bne	setup_saveBanksForUndo
 	stx	setupTopBank
+	inx	#1
+	stx	setupMode
+	stx	setupRow
 	lda	autoBanks
 	add	#NO_CHAR
 setup_enter
@@ -1036,7 +1016,7 @@ setup_up
 	lda	setupTopBank
 	beq	setup_loop
 	dec	setupTopBank
-	bpl	setup_refreshBanks	!
+	bcs	setup_refreshBanks	!
 setup_down
 	inx
 	cpx	#4
@@ -1154,11 +1134,11 @@ setup_please16
 	jmp	setup_enter
 
 setup_banksOk
-	ldx:dex	totalBanks
+	ldx	totalBanks
 setup_acceptBanks
 	lda	#1
-	and:sta	bankSelection,x
-	dex:bpl	setup_acceptBanks
+	and:sta	bankSelection-1,x
+	dex:bne	setup_acceptBanks
 	lda	autoText
 	sub	#NO_CHAR
 	sta	autoBanks
@@ -1202,20 +1182,20 @@ setup_toggleAuto
 	lda	autoText
 	cmp	#YES_CHAR
 	bne	setup_noSetAuto
-	ldx:dex	totalBanks
+	ldx	totalBanks
 setup_clearBanks
-	lsr:asl	bankSelection,x
-	dex:bpl	setup_clearBanks
-	ldx	#15
-	inc:rpl	bankSelection,x-
+	lsr:asl	bankSelection-1,x
+	dex:bne	setup_clearBanks
+	ldx	#16
+	inc:rne	bankSelection-1,x-
 	jmp	setup_refreshBanks
 setup_noSetAuto
 	ldy	#1
 	ldx	#0
 	jmp	setup_loop
 setup_cancel
-	ldx:dex	totalBanks
-	lsr:rpl	bankSelection,x-
+	ldx	totalBanks
+	lsr:rne	bankSelection-1,x-
 setup_menu
 	jsr	clearPanel
 	jmp	menu_enter
@@ -1460,9 +1440,9 @@ vbl
 	jmp	$4c4c
 oldvbl	equ	*-2
 
-	org	$3a00
-allBanks org	*+128
-bankSelection org *+128
+	org	$3900
+allBanks org	*+256
+bankSelection org *+256
 
 	org	$3c00
 dl1	dta	$70,$70,$70,$4f,a(scr1)

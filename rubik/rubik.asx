@@ -225,9 +225,9 @@ main
 	sta	ROTM_vb
 	sta	ROTM_vc
 	els
-	mva	#3	ROTM_va
-	mva	#4	ROTM_vb
-	mva	#6	ROTM_vc
+	mva	#5	ROTM_va	; party ver: 3
+	mva	#4	ROTM_vb	; party ver: 4
+	mva	#7	ROTM_vc	; party ver: 6
 	eif
 	jsr	ROTM_set
 

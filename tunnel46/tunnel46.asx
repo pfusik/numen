@@ -6,7 +6,7 @@ SLICE_HEIGHT	equ 14
 MOVES_MAX equ 64
 DELAY_BETWEEN equ 0			* 0
 INIT_DELAY	equ 20
-SMALL_DELAY	equ 250
+SMALL_DELAY	equ 180	; party ver: 250
 
 DEBUG	equ	0
 	ert	DEBUG&&NUMEN
@@ -378,6 +378,7 @@ PART_A3	equ *
 PA3_hlp	dta b($d0)
 PART_A3_RUN equ *
 	ldx PA3_hlp
+	stx	small_HPOSP2
 ;;	stx HP2_VISIBLE
 ;;	stx HP2_HIDDEN
 	dex
@@ -971,8 +972,8 @@ plsSmallY	dta b(1)
 smallY	dta b(0)
 
 smallColors	equ *
-	dta b($10,$70,$d0,$30,$90,$f0,$50,$b0,$20,$80,$e0,$00,$a0,$60,$a0)
-	dta b($10,$70,$d0,$30,$90,$f0,$50,$b0,$20,$80,$e0,$40,$a0,$60,$a0)
+	dta b($10,$70,$d0,$30,$90,$f0,$50,$b0,$20,$80,$e0,$00,$70,$60,$a0)
+	dta b($10,$70,$d0,$30,$90,$f0,$50,$b0,$20,$80,$e0,$40,$70,$60,$a0)
 smallDelay	dta b(SMALL_DELAY,0)
 ;;HP2_VISIBLE dta b($ff)
 ;;HP2_HIDDEN	dta b($ff)	;$b0

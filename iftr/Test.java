@@ -36,18 +36,6 @@ public class Test extends Canvas implements Runnable {
 	private int t;
 
 	public Test(boolean writeMap) {
-		scr = new byte[SCREEN_HEIGHT][SCREEN_WIDTH];
-		buf = new byte[SCREEN_WIDTH * SCREEN_HEIGHT];
-		try {
-			pcx1 = new PCXImage(new FileInputStream("statek.pcx"));
-			pcx2 = new PCXImage(new FileInputStream("maszt.pcx"));
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		cx = new int[2];
-		cy = new int[2];
-		image = new BufferedImage(SCREEN_WIDTH, SCREEN_HEIGHT, BufferedImage.TYPE_BYTE_GRAY);
-
 		rtab = new byte[MAP_HEIGHT][MAP_WIDTH];
 		for (int y = 0; y < MAP_HEIGHT; y++) {
 			int y2 = y - MAP_HEIGHT / 2;
@@ -59,6 +47,8 @@ public class Test extends Canvas implements Runnable {
 			}
 		}
 		pal = new byte[2][PAL_SIZE];
+		cx = new int[2];
+		cy = new int[2];
 
 		if (writeMap) {
 			byte[][] v = new byte[PAL_SIZE][PAL_SIZE];
@@ -94,6 +84,17 @@ public class Test extends Canvas implements Runnable {
 			} catch (Exception e) {
 				System.err.println(e);
 			}
+		}
+		else {
+			scr = new byte[SCREEN_HEIGHT][SCREEN_WIDTH];
+			buf = new byte[SCREEN_WIDTH * SCREEN_HEIGHT];
+			try {
+				pcx1 = new PCXImage(new FileInputStream("statek.pcx"));
+				pcx2 = new PCXImage(new FileInputStream("einsrays.pcx"));
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			image = new BufferedImage(SCREEN_WIDTH, SCREEN_HEIGHT, BufferedImage.TYPE_BYTE_GRAY);
 		}
 
 		if (false) {

@@ -1,8 +1,8 @@
 include ../common.mak
 
-# .PHONY: run
-# run: musk.obx
-#	$(RUNOBX) $<
+.PHONY: run
+run: musk.obx
+	$(RUNOBX) $<
 
 musk.nex musk.obx: musk.gr9 musk.grA musk.grB
 

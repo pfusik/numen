@@ -4,10 +4,10 @@
 
 BRIGHTEN equ	1
 
-dl1	equ	$0500
-dl2	equ	$0900
-mod128	equ	$0d00
-screen	equ	$2000	$8c0
+dl1	equ	$1800
+dl2	equ	$1c00
+mod128	equ	$1700
+screen	equ	$3600	$8c0
 
 lim1	equ	$7ff7
 pro2	equ	$7200
@@ -31,16 +31,23 @@ t	equ	$ea
 
 md	equ	$80
 
-	org	$e70
-gr9	ins	'flaship.gr9'
+	org	$470
+gr9
+	ift	NUMEN
+	ins	'flaship.gr9'
+	els
+; sorry! no memory!
+	org	*+160
+	ins	'flaship.gr9',160
+	eif
 
-	org	$28c0
+	org	$2000
 dl	dta	$f0,$6f,a(screen),$0f
 :27	dta	$2f,$0f
 	dta	$41,a(dl)
 
 	ift	BRIGHTEN
-screenb	equ	$bc0
+screenb	equ	$16c0
 dlb	dta	$f0
 :28	dta	$6f,a(screenb),$cf,a(screenb)
 	dta	$41,a(dlb)
@@ -351,7 +358,7 @@ mcod_nvsc
 	mva	#{rts}	(li),0
 	rts
 
-	org	$2e70
+	org	$2470
 grA	ins	'flaship.grA'
 bak	equ	$70
 colors  dta	bak,bak+2,bak+4,bak+6,bak+8,bak+10,bak+12,bak+14,bak,$40

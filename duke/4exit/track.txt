@@ -56,8 +56,8 @@ after 0.8 a=$10
 wait 0.2
 after 0.5 a=$f8 h -4
 # hop!
-after 1.0 go $a0 z -24 h=12
-after 1.0 go $a0 z +32
+after 0.8 go $a0 z -24 h=12	# party ver: 1.0
+after 0.8 go $a0 z +32	# party ver: 1.0
 wait 0.3
 after 0.5 a=$20
 wait 0.2
@@ -79,14 +79,14 @@ after 0.7 go $60 z -24
 after 0.7 go $60 z +16 a=$00
 wait 0.3
 # obejrzyj futryne
-after 0.5 h +4
+after 0.5 x +$40 h +4	# party ver: x +0
 after 0.3
 # obejrzyj basenik
-after 0.5 x +$b0 h -4
-after 0.5 a -$20
+after 0.5 x +$80 h -4	# party ver: x +$b0
+after 0.5 x +$50 a -$20	# party ver: x +0
 wait 0.5
 # idz do schodkow
-after 1.0 x +$60 a=$40 h +8
+after 1.0 a=$40 h +8	# party ver: x +$60
 after 1.0 y +$280 h=24
 after 1.0 y +$2a0 a=$20
 after 1.0 x +$140 a=$00
@@ -106,5 +106,6 @@ wait 0.5
 after 0.5 y -$70 z -6
 wait 1.0
 # hop!
-after 1.0 y -$180 z -24 h=12
+after 1.0 y -$180 z -24 h=11
 after 1.0 y -$180 z=$54 h=0
+wait 0.1

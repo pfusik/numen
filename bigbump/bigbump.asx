@@ -167,7 +167,7 @@ main    equ *
 	mwa	#Screen_displayListInterrupt	Dli_vector
 	mwa	#tunnel	Vbl_vector
 	ift	ENDTEXT
-	mwa	#-8*50	Vbl_clock
+	mwa	#-9*50	Vbl_clock
 	jsr	Idle
 	lda	#123
 	cmp:rne	^4b

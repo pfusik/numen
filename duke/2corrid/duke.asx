@@ -3,11 +3,11 @@
 	icl	'tiles.asx'
 	icl	'track.asx'
 
-Duke_DOOR1_WALL1	equ	28
-Duke_DOOR1_WALL2	equ	31
+Duke_DOOR1_WALL1	equ	83
+Duke_DOOR1_WALL2	equ	71
 Duke_DOOR1_OPEN_Y	equ	$280
 Duke_DOOR1_CLOSED_Y	equ	$380
-Duke_DOOR2_SECTOR	equ	11
+Duke_DOOR2_SECTOR	equ	8
 
 	ift	NUMEN
 Math_word	equ	$97

@@ -44,7 +44,7 @@ inflateDynamicBlock_nd  equ	zpage+9  ; 1 byte
 
 * code
 	opt	h-
-	dta	a($ffff,Inflate_toLoad,Inflate_toLoad+4+Inflate_end-1-Inflate)
+	dta	a($ffff,Inflate_toLoad,Inflate_toLoad+4+Inflate_end-1-Inflate+2)
 	dta	a(Inflate,Inflate_end-1)
 	org	Inflate
 
@@ -502,4 +502,6 @@ bitsPointer_h
 sortedCodes
 	org	*+256+1+29+30+2
 
+	opt	h-
+	dta	a(0)
 	end

@@ -1,0 +1,9 @@
+	icl	'../numendef.asx'
+
+	opt	h-
+; bank 3 == Banks_forEffect+2
+	dta	b(3),a(NextBlock-1)
+	opt	h+
+	org	$4000
+	ins	'tabc.dat'
+	end
