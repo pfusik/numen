@@ -1,0 +1,860 @@
+	icl	'../nex.asx'
+
+SHOW			equ	1
+DEBUG			equ	0
+BARS			equ	0
+
+Screen_COLOR		equ	$10
+Screen_HEIGHT		equ	96
+Screen_EMPS		equ	24
+
+Pos_CENTER		equ	38
+Pos_AMP			equ	38
+Pos_S1			equ	0
+Pos_S2			equ	$53
+Pos_V1			equ	9
+Pos_V2			equ	13
+Pos_FIRST		equ	$37
+
+Light_HEIGHT		equ	50
+Light_MUL		equ	$400
+Light_SPACE		equ	48
+Light_SIZE		equ	56
+Light_LIMIT1		equ	76
+Light_LIMIT2		equ	72
+
+Code_switchMode_FIRST	equ	40
+Code_switchMode_ADD	equ	57
+
+Light_begin1		equ	$0200
+Opt_mode9		equ	$0600
+Light_end1		equ	$2000
+Screen_screen9		equ	$2100	$1e00
+Code_split		equ	$7f90
+Map_map			equ	$8000
+Light_begin2		equ	$8000
+Program_begin		equ	$baf4
+Opt_modeA		equ	$bf00
+Light_end2		equ	$c800
+Screen_dl1e		equ	$c800	$300
+Pal_9			equ	$cac0	30
+Pal_a			equ	$cae0	30
+Sqr_l			equ	$cb00	$80
+Sqr_h			equ	$cb80	$80
+Screen_dl1o		equ	$cc00	$300
+Program_light1		equ	$ce70	$190
+Screen_dl2e		equ	$d800	$300
+Light_page		equ	$db00	$100
+Screen_dl2o		equ	$dc00	$300
+Program_light2		equ	$de70	$190
+Pos_sin			equ	$e000
+Screen_screenA		equ	$e100	$1e00
+
+Code_make_u		equ	$80	2
+Code_make_l		equ	$82	2
+Code_make_r		equ	$84	2
+Code_make_d		equ	$86	2
+Code_make_x		equ	$88	2
+Code_make_y		equ	$8a	2
+Code_make_p		equ	$8c	2
+Code_make_o		equ	$8e	2
+Code_make_lineCounter	equ	$90
+Code_make_xOffset	equ	$91
+Code_make_s		equ	$92	2
+Code_make_modeIndex	equ	$94
+Code_switchMode_lines	equ	$95
+Code_switchMode_cycles	equ	$96
+Code_switchMode_opcode	equ	$97
+
+Screen_makeDl_s		equ	$80	2
+Screen_makeDl_d		equ	$82	2
+
+Pal_make_t		equ	$80
+
+Light_make_lineNumber	equ	$80
+Light_make_y2		equ	$82	2
+Light_make_r2		equ	$84	2
+
+Memory_bank		equ	$80
+Pos_index1		equ	$82
+Pos_index2		equ	$83
+Screen_dli_x		equ	$84
+Screen_dli_y		equ	$85
+Screen_dlIndex		equ	$86
+	ift	SHOW
+Show_counter		equ	$87
+Show_ptr		equ	$88	2
+	eif
+
+	icl	'bumpopt.asx'
+
+	ift	!NUMEN
+	org	Map_map
+	ins	'bumpmap.gfx'
+	eif
+
+	org	Program_begin
+Screen_makeDl
+	sta	Screen_makeDl_s
+	stx	Screen_makeDl_s+1
+	mva	<Screen_dl1e	Screen_makeDl_d
+	sty	Screen_makeDl_d+1
+	ift	SHOW
+	iny:iny
+	tya
+	ldy	#Screen_EMPS+5
+	sta	(Screen_makeDl_d),y-
+	mva	<6+Screen_EMPS+6*Screen_HEIGHT-6	(Screen_makeDl_d),y-
+	mva	#$81	(Screen_makeDl_d),y-
+	mva	#$60	(Screen_makeDl_d),y-
+	lda	#$70
+	sta:rpl	(Screen_makeDl_d),y-
+	mva	#Screen_EMPS+6	Screen_makeDl_d
+	els
+	ldy	#2
+	lda	#$70
+	sta:rpl	(Screen_makeDl_d),y-
+	mva	#3	Screen_makeDl_d
+	eif
+	ldx	#Screen_HEIGHT
+Screen_makeDl_1
+	mva	#$4f	(Screen_makeDl_d),0
+	ldy	#3
+	cpx	#1
+	sne:lda	#$cf
+	sta	(Screen_makeDl_d),y
+	ldy	#1
+	mva	Screen_makeDl_s	(Screen_makeDl_d),y
+	ldy	#4
+	sta	(Screen_makeDl_d),y
+	add	#80
+	sta	Screen_makeDl_s
+	ldy	#2
+	mva	Screen_makeDl_s+1	(Screen_makeDl_d),y+
+	ldy	#5
+	eor	>Screen_screen9^Screen_screenA
+	sta	(Screen_makeDl_d),y
+	scc:inc	Screen_makeDl_s+1
+	lda	#6
+	add:sta	Screen_makeDl_d
+	scc:inc	Screen_makeDl_d+1
+	dex:bne	Screen_makeDl_1
+	mva	#$41	(Screen_makeDl_d),0
+;	mva	#$41	(Screen_makeDl_d),0+
+;	mva	#0	(Screen_makeDl_d),y+
+	rts
+
+Code_switchMode
+	ldx	Code_switchMode_lines
+	beq	Code_switchMode_1
+	add:sta	Code_switchMode_cycles
+	bcs	Code_switchMode_1
+	adc	#Code_switchMode_ADD	-
+Code_switchFirst
+	sta	Code_switchMode_cycles
+	mva	Code_switchMode_opcode	(Code_make_p),y+
+	eor	#{sty ^1b}^{ror ^1b}
+	sta	Code_switchMode_opcode
+	mva	<^1b	(Code_make_p),y+
+	mva	>^1b	(Code_make_p),y+
+	dec	Code_switchMode_lines
+Code_switchMode_1
+	tya
+	add:sta	Code_make_p
+	scc:inc	Code_make_p+1
+	rts
+
+Code_make_mode
+	stx	Code_make_modeIndex
+	mva	<Screen_screen9+1	Code_make_x
+	mva	<Screen_screen9+41	Code_make_y
+	mva	Code_make_screenH,x	Code_make_x+1
+	sta	Code_make_y+1
+	mva	Code_make_bank1,x	^31
+	mva	#Screen_HEIGHT	Code_make_lineCounter
+	txa
+	add	<Map_map+3
+	ldy	>Map_map+3
+
+Code_make_dxdyLline
+	sta	Code_make_u
+	sty	Code_make_u+1
+	add	#153
+	scc:iny
+	sta	Code_make_l
+	sty	Code_make_l+1
+	add	#2
+	scc:iny
+	sta	Code_make_r
+	sty	Code_make_r+1
+	add	#153
+	scc:iny
+	sta	Code_make_d
+	sty	Code_make_d+1
+
+	mvy	#0	Code_make_xOffset
+Code_make_dxdyLOne
+	lda	(Code_make_r),y
+	sub	(Code_make_l),y
+	ror	@
+	eor	#$80
+	sec
+	adc	Code_make_xOffset
+	cmp	#Light_LIMIT1
+	bcc	Code_make_dxdyLOk
+	sbc	Code_make_xOffset	+
+	bpl	Code_make_dxdyLRight
+	lda	#0
+	dta	{bit a:0}
+Code_make_dxdyLRight
+	lda	#Light_LIMIT2
+Code_make_dxdyLOk
+	sta	(Code_make_x,0)
+	inw	Code_make_x
+	lda	(Code_make_d),y
+	sub	(Code_make_u),y
+	add	#Screen_HEIGHT/2
+	sub	Code_make_lineCounter
+	tax
+	lda	Light_page,x
+	eor	Code_make_modeIndex
+	sta	(Code_make_y,0)
+	inw	Code_make_y
+:2	inc	Code_make_xOffset
+:4	iny
+	cpy	#152
+	bcc	Code_make_dxdyLOne
+
+	lda	#42
+	add:sta	Code_make_x
+	scc:inc	Code_make_x+1
+	lda	#42
+	add:sta	Code_make_y
+	scc:inc	Code_make_y+1
+	lda	Code_make_u
+	ldy	Code_make_u+1
+	add	#154
+	scc:iny
+	dec	Code_make_lineCounter
+	jne	Code_make_dxdyLLine
+
+	ldx	Code_make_modeIndex
+	mva	<Screen_screen9+1	Code_make_x
+	mva	Code_make_screenH,x	Code_make_x+1
+	mva	<Opt_mode9	Code_make_o
+	mva	Code_make_optH,x	Code_make_o+1
+	mwa	#$4000	Code_make_p
+	mva	#2*Screen_HEIGHT-1	Code_switchMode_lines
+	lda	#Code_switchMode_FIRST
+	ldy	#0
+	jsr	Code_switchFirst
+	mva	#Screen_HEIGHT	Code_make_lineCounter
+	txa
+	add	<Map_map+1
+	ldy	>Map_map+1
+
+Code_make_line
+	sta	Code_make_u
+	sty	Code_make_u+1
+	add	#153
+	scc:iny
+	sta	Code_make_l
+	sty	Code_make_l+1
+	add	#2
+	scc:iny
+	sta	Code_make_r
+	sty	Code_make_r+1
+	add	#153
+	scc:iny
+	sta	Code_make_d
+	sty	Code_make_d+1
+
+	ldy	#0
+Code_make_one
+	sty	Code_make_xOffset
+	lda	(Code_make_x),0
+	jmi	Code_make_next
+	mva	#{lda a:0,x}	(Code_make_p),y
+	lda	Code_make_xOffset
+	asl	@
+	tay
+	lda	(Code_make_d),y
+	sub	(Code_make_u),y
+	add	#Screen_HEIGHT/2
+	sub	Code_make_lineCounter
+	tax
+	lda	(Code_make_r),y
+	sub	(Code_make_l),y
+	ror	@
+	eor	#$80
+	add	Code_make_xOffset
+	cmp	#Light_LIMIT1
+	bcc	Code_make_lOk
+	sbc	Code_make_xOffset	+
+	bpl	Code_make_lRight
+	lda	#0
+	dta	{bit a:0}
+Code_make_lRight
+	lda	#Light_LIMIT2
+Code_make_lOk
+	add	#Light_SPACE+Light_SIZE
+	ldy	#1
+	sta	(Code_make_p),y+
+	lda	Light_page,x
+	eor	Code_make_modeIndex
+	sta	(Code_make_p),y+
+	mva	#{eor a:0,x}	(Code_make_p),y+
+	mva	(Code_make_x,0)	(Code_make_p),y+
+	ldy	#40
+	lda	(Code_make_x),y
+	ldy	#5
+	sta	(Code_make_p),y+
+	mva	#{sta a:0,y}	(Code_make_p),y+
+	lda	Code_make_x
+	sub	#$40
+	sta	(Code_make_p),y+
+	lda	Code_make_x+1
+	sbc	#0
+	sta	(Code_make_p),y+
+	lda	#-13
+	jsr	Code_switchMode
+Code_make_checkOpt
+	lda	Code_make_x
+	cmp	(Code_make_o),0
+	jne	Code_make_nOpt
+	iny	#1
+	lda	Code_make_x+1
+	cmp	(Code_make_o),y
+	bne	Code_make_nOpt
+	ldy	#3
+	lda	(Code_make_o),y-
+	cmp	Code_make_x+1
+	bmi	Code_make_optBoth
+	sta	Code_make_s+1
+	mva	(Code_make_o),y	Code_make_s
+	sub	#$40
+	ldy	#6
+	sta	(Code_make_p),y+
+	lda	Code_make_s+1
+	sbc	#0
+	sta	(Code_make_p),y
+	mva	#{and #$f0}	(Code_make_p),0+
+	mva	#$f0	(Code_make_p),y+
+	mva	#{eor a:0,x}	(Code_make_p),y+
+	lda	(Code_make_s),0
+	ldy	#3
+	sta	(Code_make_p),y
+	ldy	#40
+	lda	(Code_make_s),y
+	ldy	#4
+	sta	(Code_make_p),y+
+	mva	#{sta a:0,y}	(Code_make_p),y
+	ldy	#8
+	lda	#-11
+	bne	Code_make_optEnd	!
+Code_make_optBoth
+	eor	#$80
+	sta	Code_make_s+1
+	mva	(Code_make_o),y	Code_make_s
+	sub	#$40
+	dey	#1
+	sta	(Code_make_p),y+
+	lda	Code_make_s+1
+	sbc	#0
+	sta	(Code_make_p),y
+	mva	#{sta a:0,y}	(Code_make_p),0
+	ldy	#3
+	lda	#-5
+Code_make_optEnd
+	jsr	Code_switchMode
+	mva	#$ff	(Code_make_s),0
+	lda	#4
+	add:sta	Code_make_o
+	scc:inc	Code_make_o+1
+	jmp	Code_make_checkOpt
+
+Code_make_nOpt
+	lda	Code_make_p
+	cmp	<Code_split
+	lda	Code_make_p+1
+	sbc	>Code_split
+	bcc	Code_make_next
+	mva	#{rts}	(Code_make_p),0
+	ldx	Code_make_modeIndex
+:DEBUG	mva Code_make_p   $100,x
+:DEBUG	mva Code_make_p+1 $110,x
+	mva	Code_make_bank2,x	^31
+	mwa	#$4000	Code_make_p
+	mva	#2*Screen_HEIGHT-1	Code_switchMode_lines
+	lda	#Code_switchMode_FIRST
+	ldy	#0
+	jsr	Code_switchFirst
+
+Code_make_next
+	inw	Code_make_x
+	ldy	Code_make_xOffset
+:2	iny
+	cpy	#38*2
+	jcc	Code_make_one
+
+	lda	#42
+	add:sta	Code_make_x
+	scc:inc	Code_make_x+1
+	lda	Code_make_u
+	ldy	Code_make_u+1
+	add	#154
+	scc:iny
+	dec	Code_make_lineCounter
+	jne	Code_make_line
+
+	mva	#{rts}	(Code_make_p),0
+:DEBUG	ldx Code_make_modeIndex
+:DEBUG	mva Code_make_p   $102,x
+:DEBUG	mva Code_make_p+1 $112,x
+	rts
+
+* Start
+main
+	ift	NUMEN
+	jsr	Inflate
+	mva	Banks_forEffect	Code_make_bank1
+	mva	Banks_forEffect+1	Code_make_bank2
+	mva	Banks_forEffect+2	Code_make_bank1+1
+	mva	Banks_forEffect+3	Code_make_bank2+1
+	mwa	#-20	Vbl_clock
+	jsr	Idle
+	els
+	lda:rne	^4b
+	ldx	#29
+	sta:rpl	^00,x-
+	sta	^40
+	eif
+
+	lda	>Light_begin1
+	ldx	#0
+	ldy	#0
+Light_pageInit1
+	sta	Light_page,x
+	sta	Light_page,y
+	cmp	>Light_end2-$200
+	bcs	Light_pageInit2
+	adc	#2	-
+	cmp	>Light_end1
+	sne:lda	>Light_begin2
+Light_pageInit2
+	inx
+	dey
+	bmi	Light_pageInit1
+
+* Make code
+	mva	#{sty ^1b}	Code_switchMode_opcode
+; :NUMEN	lsr	^1a	mva #0 ^40
+	ldx	#0
+	jsr	Code_make_mode
+	ldx	#1
+	jsr	Code_make_mode
+
+* Make DL
+	lda	<Screen_screen9
+	ldx	>Screen_screen9
+	ldy	>Screen_dl1e
+	jsr	Screen_makeDl
+;	mva	>Screen_dl1o	(Screen_makeDl_d),y
+	lda	<Screen_screenA
+	ldx	>Screen_screenA
+	ldy	>Screen_dl1o
+	jsr	Screen_makeDl
+;	mva	>Screen_dl1e	(Screen_makeDl_d),y
+	lda	<Screen_screen9+40
+	ldx	>Screen_screen9+40
+	ldy	>Screen_dl2e
+	jsr	Screen_makeDl
+;	mva	>Screen_dl2o	(Screen_makeDl_d),y
+	lda	<Screen_screenA+40
+	ldx	>Screen_screenA+40
+	ldy	>Screen_dl2o
+	jsr	Screen_makeDl
+;	mva	>Screen_dl1o	(Screen_makeDl_d),y
+
+* Make light
+	ldx	#1
+	ldy	#0
+	sty	Sqr_l
+	sty	Sqr_h
+	clc
+Sqr_make
+	iny
+	tya
+	adc	Sqr_l-1,x	-
+	sta	Sqr_l,x
+	lda	#0
+	adc	Sqr_h-1,x
+	cpx	#$81
+	adc	#0
+	sta	Sqr_h,x
+	iny
+	inx
+	bpl	Sqr_make
+
+	ldx	#29
+Pal_make
+	txa
+	lsr	@
+	and	#$fe
+	sta	Pal_make_t
+	lsr	@
+	sta	Pal_a,x
+	txa
+	and	#3
+	add	Pal_make_t
+	sta	Pal_9,x-
+	bpl	Pal_make
+
+	ldx	#Light_HEIGHT
+	jmp	Program_light1
+
+Code_make_screenH
+	dta	h(Screen_screen9,Screen_screenA)
+Code_make_optH
+	dta	h(Opt_mode9,Opt_modeA)
+Code_make_bank1
+	ift	NUMEN
+	org	*+2
+Code_make_bank2
+	org	*+2
+	els
+	dta	$e2,$ea
+Code_make_bank2
+	dta	$e6,$ee
+	eif
+
+	org	Program_light1
+Light_make_line
+	stx	Light_make_lineNumber
+	ldy	Light_page,x
+	sty	Light_make_clear1+2
+	sty	Light_make_st09l+2
+	sty	Light_make_st09r+2
+	sty	Light_make_st90l+2
+	sty	Light_make_st90r+2
+	iny
+	sty	Light_make_clear2+2
+	sty	Light_make_st0Al+2
+	sty	Light_make_st0Ar+2
+	sty	Light_make_stA0l+2
+	sty	Light_make_stA0r+2
+
+	mva	#Light_SPACE+1	Light_make_st09l+1
+	mva	#Light_SPACE+Light_SIZE-1	Light_make_st09r+1
+	mva	#Light_SPACE+Light_SIZE+Light_SPACE+1	Light_make_st90l+1
+	mva	#Light_SPACE+Light_SIZE+Light_SPACE+Light_SIZE-1	Light_make_st90r+1
+	mva	#Light_SPACE	Light_make_st0Al+1
+	mva	#Light_SPACE+Light_SIZE-1	Light_make_st0Ar+1
+	mva	#Light_SPACE+Light_SIZE+Light_SPACE	Light_make_stA0l+1
+	mva	#Light_SPACE+Light_SIZE+Light_SPACE+Light_SIZE-1	Light_make_stA0r+1
+	mva	Sqr_l,x	Light_make_y2
+	mva	Sqr_h,x	Light_make_y2+1
+	lda:tay	#0
+Light_make_clear1
+	sta	a:0,y
+Light_make_clear2
+	sta	a:0,y
+	iny
+	bne	Light_make_clear1
+
+	ldy	#Light_SIZE-1
+Light_make_one
+	lda	Sqr_l,y
+	add	Light_make_y2
+	sta	Light_make_r2
+	lda	Sqr_h,y
+	adc	Light_make_y2+1
+	sta	Light_make_r2+1
+	ldx	#-1
+Light_make_calcSqrt
+	inx
+	lda	Light_make_r2
+	cmp	Light_rTabL,x
+	lda	Light_make_r2+1
+	sbc	Light_rTabH,x
+	bcc	Light_make_calcSqrt
+	tya
+	lsr	@
+	bcs	Light_make_storeA
+
+	lda	Pal_9,x
+Light_make_st09l
+	sta	a:0
+Light_make_st09r
+	sta	a:0
+:4	asl	@
+Light_make_st90l
+	sta	a:0
+Light_make_st90r
+	sta	a:0
+	inc	Light_make_st09l+1
+	dec	Light_make_st09r+1
+	inc	Light_make_st90l+1
+	dec	Light_make_st90r+1
+	bcc	Light_make_next	!
+
+Light_make_storeA
+	lda	Pal_a,x
+Light_make_st0Al
+	sta	a:0
+Light_make_st0Ar
+	sta	a:0
+:4	asl	@
+Light_make_stA0l
+	sta	a:0
+Light_make_stA0r
+	sta	a:0
+	inc	Light_make_st0Al+1
+	dec	Light_make_st0Ar+1
+	inc	Light_make_stA0l+1
+	dec	Light_make_stA0r+1
+
+Light_make_next
+	dey
+	bpl	Light_make_one
+
+	ldx	Light_make_lineNumber
+	dex
+	jpl	Light_make_line
+
+* Run
+	lda:tax	#0
+	ldy	#$1e
+Screen_cls1
+	sta	Screen_screen9,x
+Screen_cls2
+	sta	Screen_screenA,x
+	inx
+	bne	Screen_cls1
+	inc	Screen_cls1+2
+	inc	Screen_cls2+2
+	dey
+	bne	Screen_cls1
+	mva	Banks_forEffect+3	Screen_bank
+	mva	#$40+40	Screen_offset
+	mva	#Pos_S1	Pos_index1
+	mva	#Pos_S2	Pos_index2
+	mvx	#Pos_FIRST	Pos_x
+	ift	SHOW
+	sec
+	ldy	#3
+Show_drawFirst
+	sty	Memory_bank
+	mva	Banks_forEffect,y	^31
+	ldy	#$40
+	jsr	$4000
+	ldy	Memory_bank
+	dey
+	bpl	Show_drawFirst
+	mva	#Screen_HEIGHT-1	Show_counter
+	mwa	#Screen_dl1e+Screen_EMPS+6+6*Screen_HEIGHT-3	Show_ptr
+	eif
+	mvy	#3	Memory_bank
+	mva	#6	Screen_dlIndex
+	lda:rne	^4b
+	mva	#$22	^40
+	mwa	#Screen_dl1e+Screen_EMPS	^42
+	ldx	#9
+	mva:rpl	Screen_colors,x	^12,x-
+
+	ift	NUMEN
+	mwa	#Screen_dli	Dli_vector
+	mwa	#Screen_vbl	Vbl_vector
+	mwa	#-15*50	Vbl_clock
+	jsr	Idle
+	mva	#0	^40
+	jmp	NextBlock
+	els
+	mwa	#nmi	$fffa
+	mva	#$c0	^4e
+	jmp	*
+	eif
+
+Screen_vbl
+Screen_dl_lo	equ	*+1
+	mva	#Screen_EMPS	^42
+	ldx	Screen_dlIndex
+	mva	Screen_dlH,x	^43
+	dex
+	spl:ldx	#7
+	stx	Screen_dlIndex
+	rts
+
+	org	Program_light2
+	ift	!NUMEN
+nmi	pha
+	bit	^4f
+	spl
+	jmp	Screen_dli
+Dli_vector	equ	*-2
+	txa:pha
+	tya:pha
+	jsr	Screen_vbl
+	pla:tay
+	pla:tax
+	pla:rti
+	eif
+
+Screen_dli
+:SHOW	mva	<Screen_dli2	Dli_vector
+	stx	Screen_dli_x
+	sty	Screen_dli_y
+	lda:pha	^31
+	sta	^4a
+:SHOW	mva	#Screen_COLOR	^12
+:SHOW	sta	^1a
+	lda	#0
+Screen_bank	equ	*-1
+	sta	^4a
+	sta	^31
+	ldx	#0
+Pos_x	equ	*-1
+	ldy	#0
+Screen_offset	equ	*-1
+	sec
+:BARS	lsr ^1a
+	jsr	$4000
+:BARS	inc ^1a
+	dec	Memory_bank
+	bpl	Screen_dli_end
+	mva	#3	Memory_bank
+	lda	#40
+	eor:sta	Screen_offset
+	ldy	Pos_index1
+	lda	Pos_sin,y
+	ldy	Pos_index2
+	add	Pos_sin,y
+	lsr	@
+	sta	Pos_x
+	lda	#Pos_V1
+	add:sta	Pos_index1
+	lda	#Pos_V2
+	add:sta	Pos_index2
+Screen_dli_end
+	pla:sta	^31
+	ldx	Memory_bank
+	mva	Banks_forEffect,x	Screen_bank
+	ldy	Screen_dli_y
+	ldx	Screen_dli_x
+	pla
+	rti
+
+	ift	SHOW
+	ert	>Screen_dli2!=>Screen_dli
+Screen_dli2
+	txa:pha
+	tya:pha
+	mva	<Screen_dli	Dli_vector
+	sta	^4a
+	mva	#0	^12
+	sta	^1a
+	lda	Show_counter
+	beq	Show_noMoveTop
+	dec	Show_counter
+	lda	<-6
+	add:sta	Screen_dl1e+Screen_EMPS+4
+	sta	Screen_dl1o+Screen_EMPS+4
+	sta	Screen_dl2e+Screen_EMPS+4
+	sta	Screen_dl2o+Screen_EMPS+4
+	lda	>-6
+	adc:sta	Screen_dl1e+Screen_EMPS+5
+	add	>Screen_dl1o-Screen_dl1e
+	ert	>Screen_dl1e>+>Screen_dl1o
+	sta	Screen_dl1o+Screen_EMPS+5
+	adc	>Screen_dl2e-Screen_dl1o	-
+	ert	>Screen_dl1o>+>Screen_dl2e
+	sta	Screen_dl2e+Screen_EMPS+5
+	adc	>Screen_dl2o-Screen_dl2e	-
+	ert	>Screen_dl2e>+>Screen_dl2o
+	sta	Screen_dl2o+Screen_EMPS+5
+	jmp	Show_noMoveBottom
+Show_noMoveTop
+	ift	NUMEN
+	lda	Vbl_clock+1
+	cmp	>-Screen_HEIGHT
+	bcc	Show_noMoveBottom
+	lda	Vbl_clock
+	cmp	<-Screen_HEIGHT
+	bcc	Show_noMoveBottom
+	eif
+	lda	Show_ptr
+	ldy	Show_ptr+1
+	cpy	>Screen_dl1e+6+Screen_EMPS+3
+	bne	Show_moveBottom
+	cmp	<Screen_dl1e+6+Screen_EMPS+3
+	beq	Show_noMoveBottom
+Show_moveBottom
+	sbc	#6	+
+	sta	Show_ptr
+	scs:dec	Show_ptr+1
+	ldx	#3
+Show_moveJvb
+	mva	#$cf	(Show_ptr),0
+	ldy	#3
+	mva	#$41	(Show_ptr),y
+	lda	Show_dlAdd,x
+	add:sta	Show_ptr+1
+	dex
+	bpl	Show_moveJvb
+	lda	Screen_dl1e+Screen_EMPS+2
+	add	#$20
+	bpl	Show_moveEmp_1
+	dec	Screen_dl_lo
+	lda	#0
+Show_moveEmp_1
+	sta	Screen_dl1e+Screen_EMPS+2
+	sta	Screen_dl1o+Screen_EMPS+2
+	sta	Screen_dl2e+Screen_EMPS+2
+	sta	Screen_dl2o+Screen_EMPS+2
+Show_noMoveBottom
+	pla:tay
+	pla:tax
+	pla
+	rti
+	eif
+
+	ift	!NUMEN
+Banks_forEffect
+	dta	$e2,$e6,$ea,$ee
+	eif
+
+Light_rTabl
+	dta	l(30*30*Light_MUL/$100,29*29*Light_MUL/$100)
+	dta	l(28*28*Light_MUL/$100,27*27*Light_MUL/$100,26*26*Light_MUL/$100,25*25*Light_MUL/$100)
+	dta	l(24*24*Light_MUL/$100,23*23*Light_MUL/$100,22*22*Light_MUL/$100,21*21*Light_MUL/$100)
+	dta	l(20*20*Light_MUL/$100,19*19*Light_MUL/$100,18*18*Light_MUL/$100,17*17*Light_MUL/$100)
+	dta	l(16*16*Light_MUL/$100,15*15*Light_MUL/$100,14*14*Light_MUL/$100,13*13*Light_MUL/$100)
+	dta	l(12*12*Light_MUL/$100,11*11*Light_MUL/$100,10*10*Light_MUL/$100,9*9*Light_MUL/$100)
+	dta	l(8*8*Light_MUL/$100,7*7*Light_MUL/$100,6*6*Light_MUL/$100,5*5*Light_MUL/$100)
+	dta	l(4*4*Light_MUL/$100,3*3*Light_MUL/$100,2*2*Light_MUL/$100,0)
+Light_rTabh
+	dta	h(30*30*Light_MUL/$100,29*29*Light_MUL/$100)
+	dta	h(28*28*Light_MUL/$100,27*27*Light_MUL/$100,26*26*Light_MUL/$100,25*25*Light_MUL/$100)
+	dta	h(24*24*Light_MUL/$100,23*23*Light_MUL/$100,22*22*Light_MUL/$100,21*21*Light_MUL/$100)
+	dta	h(20*20*Light_MUL/$100,19*19*Light_MUL/$100,18*18*Light_MUL/$100,17*17*Light_MUL/$100)
+	dta	h(16*16*Light_MUL/$100,15*15*Light_MUL/$100,14*14*Light_MUL/$100,13*13*Light_MUL/$100)
+	dta	h(12*12*Light_MUL/$100,11*11*Light_MUL/$100,10*10*Light_MUL/$100,9*9*Light_MUL/$100)
+	dta	h(8*8*Light_MUL/$100,7*7*Light_MUL/$100,6*6*Light_MUL/$100,5*5*Light_MUL/$100)
+	dta	h(4*4*Light_MUL/$100,3*3*Light_MUL/$100,2*2*Light_MUL/$100,0)
+Screen_dlH
+	dta	h(Screen_dl2o,Screen_dl2e,Screen_dl2o,Screen_dl2e,Screen_dl1o,Screen_dl1e,Screen_dl1o,Screen_dl1e)
+Screen_colors
+	ift	SHOW
+	dta	0,Screen_COLOR+2,Screen_COLOR+4,Screen_COLOR+6,Screen_COLOR+8,Screen_COLOR+10,Screen_COLOR+12,Screen_COLOR+14,0,$40
+Show_dlBegin
+	dta	$70,$70,$60,$81,l(6+6*Screen_HEIGHT-6)
+Show_dlAdd
+	dta	h(Screen_dl1e-Screen_dl2o,Screen_dl2o-Screen_dl2e,Screen_dl2e-Screen_dl1o,Screen_dl1o-Screen_dl1e)
+	els
+	dta	Screen_COLOR,Screen_COLOR+2,Screen_COLOR+4,Screen_COLOR+6,Screen_COLOR+8,Screen_COLOR+10,Screen_COLOR+12,Screen_COLOR+14,Screen_COLOR,$40
+	eif
+
+	org	Pos_sin
+	dta	sin(Pos_CENTER,Pos_AMP,256)
+
+	end

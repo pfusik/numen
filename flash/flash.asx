@@ -1,0 +1,378 @@
+; flash by fox
+
+	icl	'../nex.asx'
+
+BRIGHTEN equ	1
+
+dl1	equ	$0500
+dl2	equ	$0900
+mod128	equ	$0d00
+screen	equ	$2000	$8c0
+
+lim1	equ	$7ff7
+pro2	equ	$7200
+lim2	equ	$7526
+lim3	equ	$7053
+texhi	equ	$8000
+texlo	equ	$8080
+
+si	equ	$80
+di	equ	$82
+ai	equ	$84
+ri	equ	$86
+li	equ	$88
+vct	equ	$8a
+
+hp	equ	$20	$64
+lp	equ	$84	$64
+bk	equ	$e8
+ang	equ	$e9
+t	equ	$ea
+
+md	equ	$80
+
+	org	$e70
+gr9	ins	'flaship.gr9'
+
+	org	$28c0
+dl	dta	$f0,$6f,a(screen),$0f
+:27	dta	$2f,$0f
+	dta	$41,a(dl)
+
+	ift	BRIGHTEN
+screenb	equ	$bc0
+dlb	dta	$f0
+:28	dta	$6f,a(screenb),$cf,a(screenb)
+	dta	$41,a(dlb)
+	eif
+
+main
+:NUMEN	jsr	Inflate
+	mwa	#screen	si
+	mwa	#atab	ai
+	mwa	#rtab	ri
+	mva	Banks_forEffect	^31
+	lda	<lim1
+	ldx	>lim1
+	jsr	mcod_scr
+
+	mva	Banks_forEffect+1	^31
+	lda	<lim2
+	ldx	>lim2
+	ldy	>pro2
+	jsr	mcod_next
+	lda	<lim3
+	ldx	>lim3
+	jsr	mcod_scr
+
+	mva	#$70	dl1
+	sta	dl2
+	mwa	#gr9	si
+	mva	>dl1+1	di+1
+	mva	>dl2+1	li+1
+	lda	<dl1+1
+	ert	<dl1^<dl2
+	ldx	#2*56
+mdl1	sta	di
+	sta	li
+	mva	#$cf	(di),0
+	sta	(li),y
+	cpx	#2
+	lda	#$9e
+	ror	@
+	ldy	#3
+	sta	(di),y
+	sta	(li),y
+	ldy	#1
+	mva	si	(di),y
+	sta	(li),y
+	ldy	#4
+	sta	(di),y
+	sta	(li),y
+	adc	#40	-
+	sta	si
+	ldy	#2
+	mva	si+1	(di),y
+	eor	>gr9^grA
+	sta	(li),y
+	ldy	#5
+	sta	(di),y
+	eor	>gr9^grA
+	sta	(li),y
+	adc	#0
+	sta	si+1
+	lda	#6
+	adc	di
+	bcc	mdl2
+	inc	di+1
+	inc	li+1
+mdl2	dex
+	bne	mdl1
+	iny
+	mva	#$41	(di),y
+	sta	(li),y+
+	mva	<dl1	(di),y
+	sta	(li),y+
+	mva	>dl2	(di),y
+	mva	>dl1	(li),y
+
+	mva	Banks_table+Banks_MAIN_INDEX	^31
+	mwa	#ctab	si
+	mwa	#texhi	di
+	mwa	#texlo	li
+	ldx	#50
+utex1	ldy	#0
+utex2	lda	(si),y
+	eor	#13
+	sta	(di),y
+:4	lsr	@
+	eor	#13
+	sta	(li),y
+	iny
+	bpl	utex2
+	lda	#$80
+	add:sta	si
+	scc:inc	si+1
+	inc	di+1
+	inc	li+1
+	dex
+	bne	utex1
+imod	txa:sta	mod128,x
+	sta	mod128+128,x+
+	bpl	imod
+
+	ldx	#49*2
+izp	mwa	#texhi	hp,x
+	mwa	#texlo	lp,x
+	dex:dex
+	bpl	izp
+
+	lda:rne	^4b
+	mva	#$c0	^4e
+	mva	#$22	^40
+	ldx	#9
+	mva:rpl	colors,x	^12,x-
+	ift	BRIGHTEN
+	mwa	#dlb	^42
+	ift	NUMEN
+	mwa	#dlib	Dli_vector
+	els
+	mwa	#dlib	$fffa
+	mva	#$80	^4e
+	eif
+	lda	#0
+	clc
+brightl
+	ldx	#39
+	sta:rpl	screenb,x-
+	sta:sta	^4a
+	ldx:rne	^4b
+	add	#$11
+	bcc	brightl
+	eif
+	mwa	#dl	^42
+
+	mva	Banks_forEffect	bk
+	mva	#120	ang
+	mva	#0	t
+
+	ift	NUMEN
+	mwa	#dli	Dli_vector
+
+	mwa	#-81	Vbl_clock
+	jsr	Idle
+
+	lda:rne	^4b
+	mwa	#dl1	^42
+	mwa	#dlihip	Dli_vector
+	mva	#$40	md
+
+	mwa	#-52	Vbl_clock
+	jsr	Idle
+
+;	lda:rne	^4b
+;	sta	^40
+
+	jmp	NextBlock
+
+ els
+	mwa	#dli	$fffa
+	mva	#$80	^4e
+
+	lda	#40
+	cmp:rne	t
+
+	lda:rne	^4b
+	mwa	#dl1	^42
+	mwa	#dlihip	$fffa
+	mva	#$40	md
+	jmp	*
+	eif
+
+dlihip
+:!NUMEN	pha
+	lda	#$40^$80
+	eor:sta	md
+	sta	^4a
+	sta	^1b
+	pla
+	rti
+
+	ift	BRIGHTEN
+dlib
+:!NUMEN	pha
+	sta	^4a
+	mva	#13	^45
+	mva	#3	^45
+	pla:rti
+	eif
+
+dli
+:!NUMEN	pha
+	txa:pha
+	tya:pha
+	lda:pha	^31
+	ldx	ang
+	sta	^4a
+	mva	#13	^45
+	mva	#3	^45
+	mva	bk	^31
+	jsr	$4000
+	lda	Banks_forEffect+1
+	cmp	bk
+	beq	dli2
+	sta	^31
+; inc ^4e
+	jsr	pro2
+; lda ^4b
+; dta 2
+	lda	Banks_forEffect+1
+dlix
+	sta	bk
+	pla:sta	^31
+	pla:tay
+	pla:tax
+	pla
+	rti
+
+dli2
+	lda	t
+	cmp	#50
+	bcs	dli3
+	asl	@
+	tax
+	lda	t
+	add	>texlo
+setr	sta	hp+1,x
+	sta	lp+1,x
+	inx:inx
+	cpx	#2*50
+	bcc	setr
+	inc	t
+	lda	ang
+	beq	dli3
+	add	#-3
+	sta	ang
+dli3
+	lda	Banks_forEffect
+	jmp	dlix
+
+mcod_scr
+	mvy	#27	vct
+	ldy	>$4000
+mcod_next
+	sta	li
+	stx	li+1
+	lda	#0
+	ldx	#34
+mcod_byte
+	sta	di
+	sty	di+1
+	mva	#$ff	(si),0
+	mva	#{ldy mod128,x}	(di),y
+	mva	(ai),y+	(di),y+
+	mva	>mod128	(di),y+
+	mva	#{lda (),y}	(di),y
+	lda	(ri),0
+	asl	@
+	adc	#hp
+	ldy	#4
+	sta	(di),y+
+	dex
+	bne	mcod_nvsc
+	lda	vct
+	beq	mcod_nvsc
+	mva	#{sta ^45}	(di),y+
+	mva	<^45	(di),y+
+	mva	>^45	(di),y+
+	mva	#{ldy #}	(di),y+
+	mva	#3	(di),y+
+	mva	#{sty ^45}	(di),y+
+	mva	<^45	(di),y+
+	mva	>^45	(di),y
+	lda	#8
+	add:sta	di
+	scc:inc	di+1
+	ldx	#34
+	dec	vct
+	ldy	#5
+mcod_nvsc
+	mva	#{ldy mod128,x}	(di),y
+	ldy	#1
+	lda	(ai),y
+	ldy	#6
+	sta	(di),y+
+	mva	>mod128	(di),y+
+	mva	#{eor (),y}	(di),y
+	ldy	#1
+	lda	(ri),y
+	asl	@
+	adc	#lp
+	ldy	#9
+	sta	(di),y+
+	mva	#{sta screen}	(di),y+
+	mva	si	(di),y+
+	mva	si+1	(di),y+
+	inw	si
+	lda	#2
+	add:sta	ai
+	scc:inc	ai+1
+	lda	#2
+	add:sta	ri
+	scc:inc	ri+1
+	lda	#13
+	add	di
+	ldy	di+1
+	scc:iny
+	cpy	li+1
+	jcc	mcod_byte
+	cmp	li
+	jcc	mcod_byte
+	mva	#{rts}	(li),0
+	rts
+
+	org	$2e70
+grA	ins	'flaship.grA'
+bak	equ	$70
+colors  dta	bak,bak+2,bak+4,bak+6,bak+8,bak+10,bak+12,bak+14,bak,$40
+
+	ift	!NUMEN
+Banks_table
+Banks_forEffect
+	dta	$ea,$ee,$fe
+Banks_MAIN_INDEX	equ	2
+	eif
+
+	org	$8000
+	ift	NUMEN
+atab	org	*+4480
+rtab	org	*+4480
+	els
+atab	ins	'tunnelz.ang'
+rtab	ins	'tunnelz.ray'
+	eif
+
+	org	$e000
+ctab	ins	'flash.map'
+
+	end

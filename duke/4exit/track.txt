@@ -1,0 +1,110 @@
+start x=$80 y=$3a0 z=$80 a=$80 h=24
+
+# patrz na fotel
+after 1.0 x +$40 a=$28 h -12
+# idz do szafy
+after 1.0 y +$50 a=$08 h +6
+after 0.5 x +$80 h +3
+after 0.5 x +$c0 a=$f0 h +3
+wait 0.3
+# patrz na drzwi
+after 1.0 a=$d0
+wait 0.2
+# obniz szafe
+after 1.0 a=$f0
+after 1.0 code Duke_lowerCabinet
+after 0.5 go $80
+wait 0.2
+# obniz okno "T" i wejdz
+after 0.7 x +$40 y -$60 a=$00 code Duke_lowerT
+after 0.5 go $100 a=$04
+after 0.5 go $80
+wait 0.2
+# obroc sie
+after 0.5 a=$20 h -8
+after 0.5 x +$80 y -$80 a=$40 h -4
+after 0.5 a=$60
+after 0.5 a=$a0
+after 1.0 go -256 h -4
+wait 0.3
+after 0.5 a=$c0 h =0
+# lataj
+after 0.5 z -16 a=$00
+after 0.5 z -16 a=$40
+after 0.5 z -16 a=$80
+after 0.5 z -16 a=$c0
+after 0.5 z -16 a=$00 h +4
+after 0.5 z -16 a=$08 h=24
+wait 0.3
+# popatrz na odwrocone "N" na suficie
+after 1.0 h=48 a=$f8
+wait 0.2
+after 1.0 a=$e0 go -$80
+after 1.0 a=$10 h -4
+wait 0.2
+# do wyjscia
+after 1.0 h=24
+after 1.0 go $100 a=$08
+after 1.0 go $100
+wait 0.1
+after 0.5 go $80 a=$00
+# obejrzyj co na zewnatrz
+wait 0.2
+after 0.5 a=$e0
+wait 0.3
+after 0.8 a=$10
+wait 0.2
+after 0.5 a=$f8 h -4
+# hop!
+after 1.0 go $a0 z -24 h=12
+after 1.0 go $a0 z +32
+wait 0.3
+after 0.5 a=$20
+wait 0.2
+after 0.5 a=$10
+after 0.5 go $30
+wait 0.5
+# hop!
+after 0.7 go $80 z -24
+after 0.7 go $80 z +24
+wait 0.3
+after 0.5 a=$f8
+# hop!
+after 0.7 go $80 z -24
+after 0.7 go $80 z +32
+after 0.5 go $20
+wait 0.3
+# hop!
+after 0.7 go $60 z -24
+after 0.7 go $60 z +16 a=$00
+wait 0.3
+# obejrzyj futryne
+after 0.5 h +4
+after 0.3
+# obejrzyj basenik
+after 0.5 x +$b0 h -4
+after 0.5 a -$20
+wait 0.5
+# idz do schodkow
+after 1.0 x +$60 a=$40 h +8
+after 1.0 y +$280 h=24
+after 1.0 y +$2a0 a=$20
+after 1.0 x +$140 a=$00
+wait 0.3
+# spojrz na wode
+after 0.5 a=$c0 h -8
+after 0.3
+wait 0.3
+after 0.5 a=$00 h +8
+# idz po schodkach
+after 0.5 x +$100 z -6
+after 0.5 a=$c0
+after 0.2
+wait 0.3
+after 0.5 y -$40 z -6
+wait 0.5
+after 0.5 y -$70 z -6
+wait 1.0
+# hop!
+after 1.0 y -$180 z -24 h=12
+after 1.0 y -$180 z=$54 h=0

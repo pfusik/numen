@@ -1,0 +1,1052 @@
+* BigBump by eru
+* started @ 26.11.99
+* Strongly (!) based on TUNNEL3 also by Eru
+* Map 101x87 on 80x60 screen in 2 frames 
+* System procedures from FOX :)
+*
+* 2do: fix bump-map-generator-sizes
+*
+
+	icl	'../nex.asx'
+
+DEBUG	equ	0	; start/select = stop, zmiana kolcow
+BARZ	equ	0	; ile wolnego
+PASKI	equ	0	; przy inicie
+ENDTEXT	equ	NUMEN	; napis koncowy
+ENDBRIGHT equ	12	; jasnosc
+ENDDELAY equ	100	; opoznienie
+ENDTIME	equ	0 250	; czas napisu (0 = do bolu)
+
+* Main constants
+SCR_WIDTH   equ 40      ;32
+SCR_HEIGHT  equ 59      ;60
+MAP_HEIGHT  equ 87
+MAP_WIDTH   equ 101
+
+* Main variables
+dl1	equ	$c400	$100
+dl2	equ	$c500	$100
+scr	equ	$1400      ;2*50*87=8700=$21fc...lepiej 2x64x87=$2b80 <$4000
+code	equ	$4000      ;autopised, 6bankow po <$4000
+
+sqrHi	equ	$a900
+sqrLo	equ	$a980
+
+bumpmap	equ	$8000   ;40 stron + 1
+
+* Loaded data
+mapa  equ $8000 ;'mapa.dat' - x=0..102,y=0..88
+
+LXSinus	equ	$c000
+LYSinus	equ	$c100
+Xsinus	equ	$c200                           DATA
+Ysinus	equ	$c300                           DATA
+
+* Self-made arrays and procedures
+jumplo  equ $aa00   ;adresy i banki (#) skoku dla poszczegolnych Y
+jumphi  equ $aa80
+adclo   equ $ab00   ;ile dodac do adresu z jump w zal. od X
+adchi   equ $ab80   
+
+pisz0	equ $ac00   ;<$400
+yconv   equ $b000
+scr1lo  equ $b100   ;adresy linii na ekranie
+scr1hi  equ $b180
+piszdl1  equ $b200  ;proc tworzaca DL (18b*SCR_HEIGHT) <$500
+piszdl2  equ $b500  ;----------------------------------<$500
+
+kasuj	equ	$c600   ;wstawianie RTS<->LDY#.. <$100
+wywolajLo   equ $b800
+wywolajHi   equ $b880
+wywolaj equ $b900   ;wywolanie kodu <$400
+
+dxtab	equ	$bc00
+dytab	equ	$bd00
+
+stack   equ $180
+
+* 0 page
+zpv	equ	$18
+hlp  equ $e0
+hlp1 equ $e1
+cptr equ $e2
+zer  equ $e4
+zer1 equ $e6
+zer2 equ $e8
+zer3 equ $ea
+zer4 equ $ec
+zer5 equ $ee
+
+	ift	!NUMEN
+bnk1 equ $82    ;$82
+bnk2 equ $86    ;$86
+bnk3 equ $8a    ;$8a
+bnk4 equ $8e    ;$8e
+bnk5 equ $e2    ;$f2
+bnk6 equ $e6    ;$f6
+	eif
+
+    org LXSinus
+    dta b(sin(50,50,256)) ;
+
+    org LYSinus
+    dta b(sin(43,43,256)) ;
+
+    org XSinus  
+XAmp    equ MAP_WIDTH-2*SCR_WIDTH & $fe
+    dta b(sin(Xamp,XAmp,256))
+
+    org YSinus  
+YAmp    equ MAP_HEIGHT-SCR_HEIGHT & $fe
+    dta b(sin(YAmp,YAmp,256))
+
+	org	dl1
+	dta	$90
+:29	dta	$6f,$cf,$cf,$cf,$cf,$cf
+	dta	$6f,$cf,$cf
+	dta	$41,a(dl1)
+
+	org	dl2
+	dta	$90
+:29	dta	$6f,$cf,$cf,$cf,$cf,$cf
+	dta	$6f,$cf,$cf
+	dta	$41,a(dl2)
+
+	org	kasuj
+:29*3	dta	{sta a:}
+	rts
+
+	ift	ENDTEXT
+endscr	ins	'endtext.gr8'
+enddl
+:27	dta	$70
+	dta	$4f,a(endscr)
+:7	dta	$0f
+	dta	$41,a(enddl)
+	eif
+    
+main    equ *
+ ift !NUMEN
+    sei
+    inc $d40e
+    lda $d40b
+    bne *-3
+    ldx #29
+    sta $d000,x
+    dex
+    bpl *-4
+    lda #$fe
+    sta $d301
+    lda #0
+    sta $d400
+ eif
+   
+* start!
+    jsr prp_code
+    jsr prp_bump
+    jsr prp_piszdl
+    jsr prp_wywolaj
+    jsr prp_tabs
+;    jsr tunstuff
+    jsr prp_pisz0
+
+	jsr	tunnel
+
+	lda:rne	^4b
+    lda #$40
+    sta $d01b
+    lda #$22
+    sta $d400
+    lda #$a0
+    sta $d01a
+    lda <dl1
+    sta $d402
+    lda >dl1
+    sta $d403
+	ift	NUMEN
+	mwa	#Screen_displayListInterrupt	Dli_vector
+	mwa	#tunnel	Vbl_vector
+	ift	ENDTEXT
+	mwa	#-8*50	Vbl_clock
+	jsr	Idle
+	lda	#123
+	cmp:rne	^4b
+	mwa	#rts	Vbl_vector
+	lda:rne	^4b
+	mwa	#enddl	^42
+	mva	#0	^1b
+	sta	^1a
+	sta	^17
+	sta	^18
+
+	mwa	#-ENDDELAY	Vbl_clock
+	jsr	Idle
+	ldx	#ENDTIME
+endloop
+	lda:rne	^4b
+	sta:sta	^4a
+	ift	ENDTIME==0
+	stx	^17
+	inx
+	cpx	#ENDBRIGHT+1
+	bcc	endloop
+	els	; ENDTIME==0
+	txa
+	cmp	#ENDBRIGHT
+	bcc	endset
+	eor	#$ff
+	adc	#ENDTIME	+
+	cmp	#ENDBRIGHT
+	scc:lda	#ENDBRIGHT
+endset	sta	^17
+	dex
+	bne	endloop
+	eif	; ENDTIME==0
+	eif	; ENDTEXT
+loop
+	mwa	#$8000	Vbl_clock
+	jsr	Idle
+	jmp	loop
+	els	; NUMEN
+	mwa	#Screen_displayListInterrupt	$fffa
+	mva	#$80	^4e
+loop	lda	#124
+	cmp:rne	^4b
+:BARZ	inc	^1a
+	jsr	tunnel
+:BARZ	lsr	^1a
+
+ ift DEBUG
+    inc cnt
+    bne loop
+    lda 53770
+    and #$f0
+    sta $d01a
+ eif
+	ift	!ENDTEXT
+	jmp loop
+	els
+	mwa	#enddl	^42
+	mva	#0	^1b
+	sta	^1a
+	sta	^17
+	sta	^18
+
+	ldx	#ENDDELAY
+endwait
+	lda:rne	^4b
+	sta:sta	^4a
+	dex
+	bne	endwait
+
+	ldx	#ENDTIME
+endloop
+	lda:rne	^4b
+	sta:sta	^4a
+	ift	ENDTIME==0
+	stx	^17
+	inx
+	cpx	#ENDBRIGHT+1
+	bcc	endloop
+	els	; ENDTIME==0
+	txa
+	cmp	#ENDBRIGHT
+	bcc	endset
+	eor	#$ff
+	adc	#ENDTIME	+
+	cmp	#ENDBRIGHT
+	scc:lda	#ENDBRIGHT
+endset	sta	^17
+	dex
+	bne	endloop
+	eif	; ENDTIME==0
+	jmp	*
+	eif	; ENDTEXT
+
+	eif	; NUMEN
+      
+ ift DEBUG
+cnt     dta b(0) ;
+ eif
+
+rxpl    dta b(7,4)
+rypl    dta b(5,3)
+rxak    dta c'er'
+ryak    dta c'u '
+xak     dta c'su'
+yak     dta c'x!'
+rayX    dta b(0)
+rayY    dta b(0)
+xpl     dta b(7,5)
+ypl     dta b(3,4)
+aktX    dta b(0)
+aktY    dta b(0)
+                       
+tunstuff    equ *
+ ift DEBUG
+    lda 53279
+    and #1
+    beq noMapMove
+ eif
+
+;ustawienie aktX, aktY
+
+    lda xak
+    clc
+    adc xpl
+    sta xak
+    tax
+    lda xak+1
+    clc
+    adc xpl+1
+    sta xak+1
+    tay
+    lda XSinus,y
+;    clc                 ;
+;    adc XSinus,x        ;
+;    lsr @               ;
+    lsr @
+    sta aktX
+    
+    lda yak
+    clc
+    adc ypl
+    sta yak
+    tax
+    lda yak+1
+    clc
+    adc ypl+1
+    sta yak+1
+    tay
+    lda YSinus,y
+;    clc                 ;
+;    adc YSinus,x        ;
+;    lsr @               ;
+    lsr @
+    sta aktY
+
+noMapMove   equ *
+ ift DEBUG
+    lda 53279
+    and #2
+    bne *+3
+    rts
+ eif
+
+    lda rxak
+    clc
+    adc rxpl
+    sta rxak
+    tax
+    lda rxak+1
+    clc
+    adc rxpl+1
+    sta rxak+1
+    tay
+    lda LXSinus,y
+    clc
+    adc LXSinus,x
+    lsr @
+    sta rayX
+
+    lda ryak
+    clc
+    adc rypl
+    sta ryak
+    tax
+    lda ryak+1
+    clc
+    adc rypl+1
+    sta ryak+1
+    tay
+    lda LYSinus,y
+    clc
+    adc LYSinus,x
+    lsr @
+    sta rayY
+
+    rts
+
+xhlp3   dta b(0)
+xhlp2   dta b(0)
+xhlp1   dta b(0)
+
+tunnel  equ *
+:NUMEN	mva	#{rts}	tunnel
+    jsr FRAMECHNG
+
+    jsr tunstuff
+
+;przygotowanie 0page
+    ldx rayX
+    ldy rayY
+    jsr pisz0
+
+;przygotowanie kodu
+    lda aktx
+;    tax
+    and #1
+	cmp	#1
+	rol	@
+    sta xhlp1    ;bank
+
+    lda aktx
+    lsr @
+    tay
+    lda adclo,y
+    sta zzer1+1     ;dodac do adresu ile
+    lda adchi,y
+    sta zzer2+1
+
+;    jsr mark
+;FRAME_DLADRES   lda >dl1
+;    jsr RETRACE
+
+    ldy xhlp1 ;bank
+    lda pc_bnks,y
+    sta $d301
+    lda #29
+    sec
+    sbc akty
+    tay         ;ile w pierwszym
+    ldx akty    ;od ktorego
+;    ldy #20
+     jsr TEST
+    ldy xhlp1
+    lda pc_bnks+1,y
+    sta $d301
+    ldy #29
+    ldx #0
+;    ldy #20
+     jsr TEST
+    ldy xhlp1
+    lda pc_bnks+2,y
+    sta $d301
+	ldy:iny	akty
+    ldx #0
+;    ldy #10
+     jsr TEST
+
+;    jsr mark
+
+; poprawa DL
+    ldy akty
+    lda aktx
+    lsr @
+    clc
+    adc scr1lo,y
+    ldx scr1hi,y
+FRAME_ORA       ora #$40
+FRAME_PISZDL    jsr piszdl1 ;)
+;    jsr mark
+:NUMEN	mva	#{lda #}	tunnel
+    rts
+
+FRAMECHNG
+ ift 1
+	ldx	>piszdl2
+	ldy	>dl1
+	lda	#$40
+	eor:sta	FRAME_ORA+1
+	sta	FRAME_XPLUS+1
+	bne	FRAME0
+	ldx	>piszdl1
+	ldy	>dl2
+FRAME0	stx	FRAME_PISZDL+2
+	sty	^43
+	rts
+ els
+   lda #0
+    eor #1
+    sta FRAMECHNG+1
+    bne FRAME1
+FRAME0  lda >piszdl2
+    sta FRAME_PISZDL+2
+    lda #$40
+    sta FRAME_ORA+1
+;    lda #$40
+    sta FRAME_XPLUS+1
+    lda >dl1
+    sta FRAME_DLADRES+1
+    rts
+FRAME1  lda >piszdl1
+    sta FRAME_PISZDL+2
+    lda #$00
+    sta FRAME_ORA+1
+;    lda #$00
+    sta FRAME_XPLUS+1
+    lda >dl2
+    sta FRAME_DLADRES+1
+    rts
+ eif
+
+TEST    equ *
+    lda <powrot-1
+    sta $182
+    lda >powrot-1
+    sta $183
+    tya
+    asl @
+    sta xhlp3
+    lda <$181
+    sec
+    sbc xhlp3
+;    lda <$181-20*2
+    sta wywolaj+25*29+1
+FRAME_XPLUS lda #0  ;odchylenie
+    sta wywolaj+25*29+6
+    tya
+    clc
+    adc xhlp3
+    sta xhlp3
+    lda #87
+    sec
+    sbc xhlp3
+;    lda <kasuj+3*9
+    sta wywolaj+25*29+8
+    sta wyw_kas+1
+    lda >kasuj+3*9
+    sta wywolaj+25*29+9
+    sta wyw_kas+2
+
+    lda wywolajLo,y
+    sta wyw_ad+1
+    lda wywolajHi,y
+    sta wyw_ad+2
+   
+    sty xhlp2
+    lda #29
+    sec 
+    sbc xhlp2
+    tay
+    lda jumplo,x
+    clc
+zzer1 adc #0
+    sta xhlp2
+    lda jumphi,x
+zzer2 adc #0
+    tay         ;
+    lda xhlp2
+
+    tsx
+    stx powrot+1
+;    ldx #$81
+;    txs
+    clc
+;    jmp *
+wyw_ad  jmp wywolaj+9*25        ;29-9
+powrot  ldx #$00
+    txs
+    lda #$a0
+wyw_kas jmp kasuj
+   
+prp_wywolaj equ *
+    lda <wywolaj
+    sta pw+1
+    lda >wywolaj
+    sta pw+2
+    ldy #28             ;i=28..0
+pw0 lda #$8d            ;sta stack-i*2
+    jsr pw
+    tya
+    asl @
+    sta hlp
+    lda <stack
+    sec
+    sbc hlp
+    sta hlp
+    jsr pw
+    lda >stack
+    jsr pw
+    lda #$8c            ;sty stack-i*2+1
+    jsr pw
+    lda hlp
+    clc
+    adc #1
+    jsr pw
+    lda >stack
+    jsr pw
+    lda #$69            ;adc #..
+    jsr pw
+    lda <40*11+1        ;SCR_WIDTH*11
+    jsr pw
+    lda #$90            ;BCC *+4
+    jsr pw
+    lda #$02
+    jsr pw
+    lda #$18            ;CLC
+    jsr pw
+    lda #$c8            ;iny
+    jsr pw
+    lda #$c8            ;iny
+    jsr pw
+    lda #$8d            ;sta kasuj+(28-i)*3+1
+    jsr pw
+    tya
+    sta hlp
+    asl @
+    adc hlp
+    sta hlp
+    lda <kasuj+85
+    sec
+    sbc hlp
+    sta hlp
+    jsr pw
+    lda >kasuj
+    jsr pw
+    lda #$8c            ;sty ---""--- +1
+    jsr pw
+    lda hlp
+    clc
+    adc #1
+    jsr pw
+    lda >kasuj
+    jsr pw
+    lda #$69            ;adc #..
+    jsr pw
+    lda <10*11-1        ;(MAP_WIDTH-SCR_WIDTH)*11
+    jsr pw
+    lda #$90            ;bcc *+4
+    jsr pw
+    lda #$02    
+    jsr pw
+    lda #$18            ;clc
+    jsr pw
+    lda #$c8            ;iny
+    jsr pw
+    dey
+    bmi *+5
+    jmp pw0
+    lda #$a2            ;ldx #..
+    jsr pw
+    lda #$81
+    jsr pw
+    lda #$9a            ;txs
+    jsr pw
+    lda #$a9            ;lda #$60
+    jsr pw
+    lda #$60
+    jsr pw
+    lda #$a2            ;ldx #..
+    jsr pw
+    lda #$00
+    jsr pw
+    lda #$4c            ;jmp kasuj
+    jsr pw
+    lda <kasuj
+    jsr pw
+    lda >kasuj
+pw  sta wywolaj
+    inc pw+1
+    bne *+5
+    inc pw+2
+    rts
+
+prp_pisz0   equ *
+	mwa	#pisz0	zer1
+	ldx	#0
+
+pp01	mva	#{stx z:}	(zer1),0+
+	txa
+	asl	@
+	adc	#zpv	-
+	sta	(zer1),y+
+	mva	#{lda a:,y}	(zer1),y+
+	txa
+	add	#30
+	sta	(zer1),y+
+	mva	>yconv	(zer1),y+
+	mva	#{sta z:}	(zer1),y+
+	txa
+	asl	@
+	adc	#zpv+1	-
+	sta	(zer1),y+
+	lda	#7
+	add:sta	zer1
+	scc:inc	zer1+1
+	inx
+	cpx	#116
+	bcc	pp01
+	mva	#{rts}	(zer1),0
+	rts
+
+prp_tabs    equ *
+    MVA <code-1 zer
+    MVA >code-1 zer+1
+    ldy #0
+pt_0    lda zer+1
+    sta jumphi,y
+    sta jumphi+29,y
+    sta jumphi+58,y
+    lda zer
+    sta jumplo,y
+    sta jumplo+29,y
+    sta jumplo+58,y
+    clc
+    adc <550
+    sta zer
+    lda zer+1
+    adc >550
+    sta zer+1
+    iny
+    cpy #29
+    bne pt_0
+        
+    ldx #0
+    stx zer
+    stx zer+1
+pt_1    lda zer+1
+    sta adchi,x
+    lda zer
+    sta adclo,x    
+    clc
+    adc #11
+    sta zer
+    bcc *+4
+    inc zer+1
+    inx
+    cpx #50
+    bne pt_1
+
+    ldy #0
+    lda <scr
+    sta zer
+    lda >scr
+    sta zer+1
+pt_2    lda zer+1
+    sta scr1hi,y 
+    lda zer
+    sta scr1lo,y
+    clc
+    adc #$80   
+    sta zer
+    bcc *+4
+    inc zer+1
+    iny
+    cpy #MAP_HEIGHT
+    bne pt_2
+
+    lda >wywolaj
+    sta zer+1
+    lda <wywolaj
+    ldy #29
+    clc
+pt_6    sta wywolajLo,y
+    adc #25
+    sta zer
+    lda zer+1
+    sta wywolajHi,y
+    adc #0
+    sta zer+1
+    lda zer
+    dey
+    bpl pt_6
+
+    ldy #0
+    lda >bumpmap
+pt_7    sta yconv,y
+    dey
+    bne pt_7
+    ldy #39
+    ldx #0
+    lda >bumpmap
+pt_8    sta yconv+88+40,y
+    sta yconv+88,x
+    clc
+    adc #1
+    inx
+    dey
+    bpl pt_8
+
+    rts     ;prp_tabs
+
+
+prp_piszdl  equ *
+	mwa	#piszdl1	zer1
+	mwa	#piszdl2	zer2
+	ldx	#1
+ppdl1
+	inx
+	mva	#{sta a:}	(zer1),0
+	sta	(zer2),y+
+	txa:sta	(zer1),y
+	sta	(zer2),y+
+	mva	>dl1	(zer1),y
+	mva	>dl2	(zer2),y+
+	inx
+	mva	#{stx a:}	(zer1),y
+	sta	(zer2),y+
+	txa:sta	(zer1),y
+	sta	(zer2),y+
+	mva	>dl1	(zer1),y
+	mva	>dl2	(zer2),y+
+	inx
+	mva	#{eor #$80}	(zer1),y
+	sta	(zer2),y+
+	mva	#$80	(zer1),y
+	sta	(zer2),y+
+	mva	#{bmi}	(zer1),y
+	sta	(zer2),y+
+	mva	#1	(zer1),y
+	sta	(zer2),y+
+	mva	#{inx}	(zer1),y
+	sta	(zer2),y
+	lda	#11
+	add:sta	zer1
+	sta	zer2
+	bcc	ppdl2
+	inc	zer1+1
+	inc	zer2+1
+ppdl2
+	cpx	#1+59*3
+	bcc	ppdl1
+	mva	#{rts}	(zer1),0
+	sta	(zer2),y
+	rts	;prp_piszdl
+
+
+pc_hlp  dta b(0)
+	ift	NUMEN
+pc_bnks	equ	Banks_forEffect
+	els
+pc_bnks dta b(bnk1,bnk2,bnk3,bnk4,bnk5,bnk6)
+	eif
+scrx    equ scr ;-18 ;przesuniete w lewo
+pc_scrl dta l(scrx,scrx+29*128,scrx+58*128,scrx,scrx+29*128,scrx+58*128)
+pc_scrh dta h(scrx,scrx+29*128,scrx+58*128,scrx,scrx+29*128,scrx+58*128)
+pc_yadd dta b(15,15+29,15+58,15,15+29,15+58)
+pc_mapl dta l(mapa+1,mapa+103*29+1,mapa+103*58+1,mapa+2,mapa+103*29+2,mapa+103*58+2)
+pc_maph dta h(mapa+1,mapa+103*29+1,mapa+103*58+1,mapa+2,mapa+103*29+2,mapa+103*58+2)
+
+prp_code
+	ldx	#76	; [256-102]/2-1
+pdx2	mva	#0	dxtab+102+77,x
+	mva	#101	dxtab+102,x
+	dex:bpl	pdx2
+	tax	#101
+pdx1	txa:sta	dxtab,x
+	dex:bpl	pdx1
+
+	ldx	#69
+pdy2	mva	#zpv	dytab+$74+70,x
+	mva	#zpv+2*$73	dytab+$74,x
+	dex:bpl	pdy2
+	ldx	#$73
+;	lda	#zpv+2*$73
+	sec
+pdy1	sta	dytab,x
+	sbc	#2	+
+	dex:bpl	pdy1
+	
+	ldy	#5
+pc_0
+	sty	pc_hlp
+	mwa	#code	cptr
+	mva	pc_bnks,y	^31
+	mva	pc_scrl,y	zer1
+	mva	pc_scrh,y	zer1+1
+
+	lda:tax	pc_yadd,y
+	add	#29
+	sta	pc_cpx+1
+	lda:pha	pc_mapl,y
+	lda:tay	pc_maph,y
+	pla
+pc1
+	sta	zer2
+	sty	zer2+1
+	adc	#102	-
+	bcc	*+4
+	iny:clc
+	sta	zer4
+	sty	zer4+1
+	adc	#2	-
+	bcc	*+4
+	iny:clc
+	sta	zer5
+	sty	zer5+1
+	adc	#102	-
+	bcc	*+4
+	iny:clc
+	sta	zer3
+	sty	zer3+1
+	ldy	#0
+pc2
+;LDY #(x+mapa[x+2,y+1]-mapa[x,y+1])
+	tya
+	adc	(zer5),y	-
+	sbc	(zer4),y
+	sta	pc_dx1+1
+;LDA (15+y+mapa[x+1,y+2]-mapa[x+1,y]),y
+	txa
+	add	(zer3),y
+	sbc	(zer2),y
+	sta	pc_dy1+1
+	iny
+;LDY #(x+mapa[x+2,y+1]-mapa[x,y+1])
+	tya
+	add	(zer5),y
+	sbc	(zer4),y
+	sta	pc_dx2+1
+;ORA (15+y+mapa[x+1,y+2]-mapa[x+1,y]),y
+	txa
+	add	(zer3),y
+	sbc	(zer2),y
+	sta	pc_dy2+1
+
+	sty	hlp
+	ldy	#4
+	mva	#{ldy #}	(cptr),y
+	sta	(cptr),0+
+pc_dx1	lda	dxtab
+	ora	#$80
+	sta	(cptr),y+
+	mva	#{lda (),y}	(cptr),y+
+pc_dy1	mva	dytab	(cptr),y
+	ldy	#5
+pc_dx2	mva	dxtab	(cptr),y+
+	mva	#{ora (),y}	(cptr),y+
+pc_dy2	mva	dytab	(cptr),y+
+	mva	#{sta scr,x}	(cptr),y+
+	mva	zer1	(cptr),y+
+	mva	zer1+1	(cptr),y
+	inc	zer1
+	lda	#11
+	add:sta	cptr
+	scc:inc	cptr+1
+	ldy	hlp
+	iny
+	cpy	#100
+	bcc	pc2
+	lda	#$80-50-1	+
+	adc:sta	zer1
+	scc:inc	zer1+1
+	lda	zer2
+	ldy	zer2+1
+	add	#103
+	scc:iny
+:PASKI	stx	$d01a
+	inx
+pc_cpx	cpx	#0
+	jcc	pc1
+
+	mva	#{rts}	(cptr),0
+
+	ldy	pc_hlp
+	dey
+	jpl	pc_0
+	rts
+
+prp_bump    equ *
+; przygotuj pierwiastki - poprawne do ca.127*127
+    ldx #0
+    stx sqrHi
+    stx sqrLo
+    ldy #1
+    clc
+pb0 tya
+    adc sqrLo,x	-
+    sta sqrLo+1,x
+    lda #0
+    adc sqrHi,x
+    sta sqrHi+1,x
+    iny
+    iny
+    inx
+    cpx	#55
+    bcc	pb0
+
+; zrob mape bumpa
+    lda <bumpmap+$80+61
+    sta zer3
+    lda >bumpmap
+    sta zer+1
+    sta zer3+1
+    ldy #39
+pb2 sty hlp
+    ldy #0  ;klir
+    tya
+    sta zer
+pb22    sta (zer),y
+    iny
+    bne pb22
+    lda <bumpmap+$00+61
+    sta zer
+    ldy #39
+pb3 sty hlp1
+    ldx hlp
+    lda sqrLo,x
+    clc
+    adc sqrLo,y
+    sta zer2
+    lda sqrHi,x
+    adc sqrHi,y
+    sta zer2+1
+    ldx #55     ;na wszelki wypadek, docelowo SQRT(x*x+y*y)+1
+pb4 dex
+    lda zer2
+    cmp sqrLo,x
+    lda zer2+1
+    sbc sqrHi,x
+    bcc pb4
+    lda #39
+;    sec
+    sbc hlp1
+    tay
+    lda bumpConv,x
+    tax
+;    txa
+    sta (zer),y
+    lda Lo2Hi,x
+    sta (zer3),y
+    lda #39
+    clc
+    adc hlp1
+    tay
+    txa
+    sta (zer),y
+    lda Lo2Hi,x
+    sta (zer3),y
+    ldy hlp1
+    dey
+    bpl pb3
+
+    inc zer+1
+    inc zer3+1
+
+    ldy hlp
+    dey
+    bpl pb2
+    ldy #0
+    tya
+    sta zer
+pb5 sta (zer),y
+    iny
+    bne pb5
+    rts
+ 
+Screen_displayListInterrupt
+:!NUMEN	pha
+	sta	^4a
+	mva	#13	^45
+	mva	#3	^45
+	pla
+	rti
+
+bumpConv    equ *
+    dta $0f,$0f,$0e,$0d,$0d
+    dta $0c,$0c,$0b,$0b,$0a,$0a
+    dta $09,$09,$08,$07,$07
+    dta $06,$06,$05,$05,$04,$04
+    dta $03,$03,$02,$01,$01
+:60 dta 0
+Lo2Hi   equ *
+    dta $00,$10,$20,$30,$40,$50,$60,$70
+    dta $80,$90,$a0,$b0,$c0,$d0,$e0,$f0
+
+	org	mapa
+	ins	'theend.raw'
+;	ins	'end2.raw'
+;	ins	'end5.raw'
+
+    end

@@ -1,0 +1,1578 @@
+* modules
+; World
+; - stores level: sectors, walls and sprites
+; Screen
+; - display list
+; - "++" mode
+; - double buffering
+; Gun
+; - draws player's gun
+; Move
+; - moves sprites and player
+; Key
+; - handles keyboard
+; Input
+; - handles controllers
+; Player
+; - stores player's state
+
+* const
+numen                           equ	0
+
+Screen_GTIA_9                   equ	0
+
+Sound_ENABLED                   equ	0
+
+Gun_ENABLED                     equ	0
+
+Picture_PIG_COP                 equ	0
+Picture_FIRST_AID               equ	1
+
+; horizontal move
+Move_WALL_DISTANCE              equ	64
+Move_pushMove_OUTER_MAX         equ	32
+Move_pushMove_INNER_MAX         equ	16
+Move_pushMove_MAX_SECTORS       equ	32
+Move_pushMove_PUSH_AWAY_SHIFT   equ	2
+; vertical move
+Move_pushMove_CEILING_DISTANCE  equ	8
+Move_pushMove_FLOOR_DISTANCE    equ	8
+
+; vertical move - general
+Move_MIN_Z                      equ	$04
+Move_MIN_CEILING_DISTANCE       equ	$04
+Move_MIN_FLOOR_DISTANCE         equ	$04
+; vertical move - flying
+Move_FLY_VERTICAL_SPEED         equ	$40
+Move_FLY_VERTICAL_INERTIA       equ	$c0
+; vertical move - walking
+Move_STAND_HEIGHT               equ	$20
+Move_CAN_JUMP_HEIGHT            equ	$24
+Move_JUMP_HEIGHT                equ	$54
+Move_DUCK_HEIGHT                equ	$08
+Move_GRAVITY                    equ	$c0
+Move_STAND_INERTIA              equ	$c0
+; vertical move - swimming
+Move_SWIM_HEIGHT                equ	$04
+Move_CAN_DIVE_HEIGHT            equ	$04
+Move_DIVE_VELOCITY              equ	$800
+Move_DIVE_DEPTH                 equ	$04
+; vertical move - diving
+Move_DIVE_VERTICAL_SPEED        equ	$30
+Move_DIVE_INERTIA               equ	$c0
+
+Move_checkTouchSprite_DISTANCE  equ	1
+
+Key_0 equ	$32
+Key_1 equ	$1f
+Key_2 equ	$1e
+Key_3 equ	$1a
+Key_4 equ	$18
+Key_5 equ	$1d
+Key_6 equ	$1b
+Key_7 equ	$33
+Key_8 equ	$35
+Key_9 equ	$30
+
+Key_A equ	$3f
+Key_B equ	$15
+Key_C equ	$12
+Key_D equ	$3a
+Key_E equ	$2a
+Key_F equ	$38
+Key_G equ	$3d
+Key_H equ	$39
+Key_I equ	$0d
+Key_J equ	$01
+Key_K equ	$05
+Key_L equ	$00
+Key_M equ	$25
+Key_N equ	$23
+Key_O equ	$08
+Key_P equ	$0a
+Key_Q equ	$2f
+Key_R equ	$28
+Key_S equ	$3e
+Key_T equ	$2d
+Key_U equ	$0b
+Key_V equ	$10
+Key_W equ	$2e
+Key_X equ	$16
+Key_Y equ	$2b
+Key_Z equ	$17
+
+Key_LESS    equ	$36
+Key_GREATER equ	$37
+Key_UP      equ	$0e
+Key_DOWN    equ	$0f
+Key_LEFT    equ	$06
+Key_RIGHT   equ	$07
+Key_TAB     equ	$2c
+Key_SPACE   equ	$21
+Key_COMMA   equ	$20
+Key_DOT     equ	$22
+
+Input_CONTROL1_FORWARD          equ	$01
+Input_CONTROL1_BACKWARD         equ	$02
+Input_CONTROL1_TURNLEFT         equ	$04
+Input_CONTROL1_TURNRIGHT        equ	$08
+Input_CONTROL1_GOUP             equ	$10
+Input_CONTROL1_GODOWN           equ	$20
+Input_CONTROL1_STRAFELEFT       equ	$40
+Input_CONTROL1_STRAFERIGHT      equ	$80
+Input_CONTROL2_LOOKUP           equ	$01
+Input_CONTROL2_LOOKDOWN         equ	$02
+Input_CONTROL2_FIRE             equ	$04
+Input_CONTROL2_PUSH             equ	$08
+Input_CONTROL2_LOOKSTRAIGHT     equ	$10
+Input_CONTROL2_RUN              equ	$20
+Input_CONTROL3_ZOOMIN           equ	$01
+Input_CONTROL3_ZOOMOUT          equ	$02
+Input_CONTROL3_TOGGLEMAP        equ	$04
+Input_CONTROL3_TOGGLEFLY        equ	$08
+Input_CONTROL3_GUN_1            equ	$10
+Input_CONTROL3_GUN_2            equ	$20
+Input_CONTROL3_GUN_3            equ	$40
+
+Input_TURN_SPEED                equ	2
+Input_FALL_SPEED                equ	1
+Input_HORIZON_MIN               equ	0
+Input_HORIZON_MAX               equ	Screen_HEIGHT
+
+Player_FLAG_FLY                 equ	$01
+Player_FLAG_DIVE                equ	$02
+Player_FLAG_PUSH                equ	$04	; user pressed SPACE BAR
+
+* arrays
+Screen_screen1                  equ	$1000	(Screen_WIDTH*Screen_HEIGHT/2)
+Screen_screen2                  equ	$1800	(Screen_WIDTH*Screen_HEIGHT/2)
+Screen_lineOffset_lo            equ	$1780	(Screen_HEIGHT)
+Screen_lineOffset_hi            equ	$17b0	(Screen_HEIGHT)
+
+Gun_mask                        equ	$0600	($100)
+
+Move_pushMove_sectorList        equ	$3200	(Move_pushMove_MAX_SECTORS)
+
+* variables
+;                                  	$00-$0f
+Time_tickCount                  equ	$f6
+
+Player_flags                    equ	$f0
+Player_horizon                  equ	$f1
+Player_gun                      equ	$10
+Player_x                        equ	$11 (2)
+Player_y                        equ	$13 (2)
+Player_z                        equ	$15
+Player_angle                    equ	$16
+Player_sector                   equ	$17
+
+Move_checkTouchSprite_wallEnd   equ	$d0
+Move_pushMoveWall_wall          equ	$d0
+Move_pushMoveWall_dx            equ	$d1
+Move_pushMoveWall_dy            equ	$d2
+Move_pushMove_outerCount        equ	$d3
+Move_pushMove_bad               equ	$d4
+Move_pushMove_sectorIndex       equ	$d5
+Move_pushMove_sectorCount       equ	$d6
+Move_pushMove_wallEnd           equ	$d7
+Move_checkTouchSprite_sector    equ	$e5
+Move_x                          equ	$eb	(2)
+Move_y                          equ	$ed	(2)
+Move_z                          equ	$ef
+;                                  	$f7-$ff
+
+Input_control1                  equ	$f2
+Input_control2                  equ	$f3
+Input_control3                  equ	$f4
+Input_control4                  equ	$f5
+
+Screen_nextColor                equ	$1f80
+
+Gun_no                          equ	$1f81
+Gun_lines                       equ	$1f82
+
+Input_previousControl1          equ	$1f84
+Input_previousControl2          equ	$1f85
+Input_previousControl3          equ	$1f86
+Input_previousControl4          equ	$1f87
+Move_playerZFraction            equ	$1f8a
+Move_playerVerticalVelocity     equ	$1f8b	(2)
+Input_word                      equ	$1f8d	(2)
+Player_xFraction                equ	$1f88
+Player_yFraction                equ	$1f89
+Player_velocityX                equ	$1f90	(2)
+Player_velocityY                equ	$1f92	(2)
+
+* Sound
+	ift	Sound_ENABLED
+	icl	'../mptplfox.asx'
+	eif
+
+* Engine
+	icl	'../engine.asx'
+
+	icl	'../animate.asx'
+
+	icl	'../upsector.asx'
+
+	org	$8800
+* Screen
+Debug_statusLine
+	dta	d' X=0000 Y=0000 Z=00 A=00 S=00 H=00 F=00 '
+
+Screen_displayList
+	dta	$70,$42,a(Debug_statusLine)
+
+	dta	$f0,$6f,a(Screen_screen2)
+Screen_displayPage	equ	*-1
+:23	dta	$8f,$2f
+	dta	$8f
+
+	dta	$41,a(Screen_displayList)
+
+Screen_colors	equ	World_colors
+;:level==1	dta	$00,$f6,$ea,$24,$12,$74,$d4,$c6,$b4,$81
+;:level==2	dta	$00,$04,$08,$0c,$12,$74,$76,$a6,$a8,$81
+;:level==3	dta	$00,$f6,$ea,$24,$12,$74,$d4,$c6,$b4,$81
+
+* Screen_init
+; Initialize Screen module
+Screen_init	| PROFILE
+	lda:rne	^4b
+	ldx	#29
+	sta:rpl	^00,x-
+	ift	Screen_GTIA_9
+	stx	^08
+	stx	^09
+	stx	^0d
+	stx	^0e
+	mva	#$10	^00
+	mva	#$d0	^01
+	eif
+
+	mva	#$22	^40
+	mwa	#Screen_displayList	^42
+	mva	#$a6	^18
+	mwa	#Screen_verticalBlankInterrupt	$222
+	mwa	#Screen_displayListInterrupt	$200
+	dec	^4e
+
+	lda	#0
+	tax
+	tay
+Screen_init_lineOffset
+	sta	Screen_lineOffset_lo,y
+	txa:sta	Screen_lineOffset_hi,y
+	lda	Screen_lineOffset_lo,y
+	add	#Screen_WIDTH/2
+	scc:inx
+	iny
+	cpy	#Screen_HEIGHT
+	bcc	Screen_init_lineOffset
+
+	mva	>Screen_screen1	Screen_drawnPage
+	rts
+
+* Screen_verticalBlankInterrupt
+; Executed every 1/50s (PAL) or 1/60s (NTSC)
+Screen_verticalBlankInterrupt	| PROFILE
+	mva	#1	^1b
+	mva	Screen_colors	^12
+	mva	Screen_colors+1	^13
+	mva	Screen_colors+2	^14
+	mva	Screen_colors+3	^15
+	mva	Screen_colors+4	^16
+	mva	#$f	^17
+	mva	Screen_colors+6	^18
+	mva	Screen_colors+7	^19
+
+
+:Sound_ENABLED	jsr	Sound_player
+
+	lda	^30
+	eor	#$0f
+	and	#$0f
+	sta	Input_control1
+	mva	#0	Input_control2
+	sta	Input_control3
+	sta	Input_control4
+	lda	#8
+	bit	^2f
+	sne:mva	#Input_CONTROL2_RUN	Input_control2
+	lda	#4
+	bit	^2f
+	bne	Screen_verticalBlankInterrupt_noKey
+	lda	^29
+	and:tax	#$3f
+	jsr	Key_handle
+Screen_verticalBlankInterrupt_noKey
+	jsr	Input_frame
+
+	inc	Time_tickCount
+	jsr	Debug_printStatus
+	pla:tay
+	pla:tax
+	pla:rti
+
+* Screen_displayListInterrupt
+; Toggle VSCROL to keep "++" mode
+Screen_displayListInterrupt
+	pha
+	lda	^4b
+	cmp	#111
+	bcs	Screen_displayListInterrupt_panel
+	mva	Screen_colors+5	^17
+;:Screen_GTIA_9	mva	#$41	^1b
+;:!Screen_GTIA_9	mva	#$81	^1b
+	mva	Screen_colors+9	^1b
+	sta	^4a
+	mva	#13	^45
+	mva	#3	^45
+	ift Screen_GTIA_9
+Screen_color	equ	*+1
+	mva	#$00	^1a
+	els
+	mva	Screen_colors+8	^1a
+	eif
+	pla
+	rti
+Screen_displayListInterrupt_panel
+	mva	#0	^1a
+	pla
+	rti
+
+	ift	Gun_ENABLED
+* Gun_init
+; Initialise Gun module
+Gun_init
+	ldx	#0
+Gun_init_mask
+	txa
+	and	#$f
+	seq:lda	#$f
+:!Picture_REVERSE_TRANSPARENCY	eor	#$f
+	cpx	#16
+:!Picture_REVERSE_TRANSPARENCY	scs
+:Picture_REVERSE_TRANSPARENCY	scc
+	eor	#$f0
+	sta	Gun_mask,x
+	inx
+	bne	Gun_init_mask
+	stx	Gun_no
+	stx	Gun_lines
+	rts
+
+* Gun_draw
+; Draw gun on screen
+Gun_draw	| PROFILE
+	lda	Gun_lines
+	ldx	Gun_no
+	cpx	Player_gun
+	beq	Gun_draw_raiseGun
+; hide current weapon
+	sub	Time_ticks
+	bcs	Gun_draw_setLines
+	mvx	Player_gun	Gun_no
+	eor	#$ff
+	bcc	Gun_draw_checkLines	!
+Gun_draw_raiseGun
+	add	Time_ticks
+	bcs	Gun_draw_maxLines
+Gun_draw_checkLines
+	cmp	Gun_height,x
+	scc
+Gun_draw_maxLines
+	lda	Gun_height,x
+Gun_draw_setLines
+	sta	Gun_lines
+	tay
+	beq	Gun_draw_return
+	sta	Math_word+1
+	eor	#$ff
+	sec:adc	#Screen_HEIGHT
+	tay
+	mva	Gun_lineOffset,x	Math_word2
+	lda	Gun_column,x
+	add	Screen_lineOffset_lo,y
+	sta	Fill_pointer
+	lda	Screen_drawnPage
+	adc	Screen_lineOffset_hi,y
+	sta	Fill_pointer+1
+	mva	Gun_width,x	Math_word
+Gun_draw_line
+	ldx	Math_word2
+	mva	Gun_lineAddress,x+	Gun_draw_textureAddress
+	mva	Gun_lineAddress,x+	Gun_draw_textureAddress+1
+	stx	Math_word2
+	ldy	Math_word
+Gun_draw_byte
+	ldx	a:0,y
+Gun_draw_textureAddress	equ	*-2
+	lda	(Fill_pointer),y
+:!Picture_REVERSE_TRANSPARENCY	and	Gun_mask,x
+:Picture_REVERSE_TRANSPARENCY	ora	Gun_mask,x
+	eor	Math_idTable,x
+	sta	(Fill_pointer),y
+	dey
+	bpl	Gun_draw_byte
+	lda	#40
+	add:sta	Fill_pointer
+	scc:inc	Fill_pointer+1
+	dec	Math_word+1
+	bne	Gun_draw_line
+Gun_draw_return
+	rts
+	eif	; Gun_ENABLED
+
+* Move_clipWall
+; Check if point (Move_x,Move_y) is closer than Move_WALL_DISTANCE to wall X
+; input: X - wall
+; return: 0 - far from wall, 1 - near front of wall, 2 - near back of wall
+Move_clipWall
+	ldy	World_wallNext,x
+	lda	World_wallX_lo,x
+	sub	Move_x
+	sta	Math_word
+	lda	World_wallX_hi,x
+	sbc	Move_x+1
+	sta	Math_word+1
+	lda	World_wallX_lo,y
+	sub	Move_x
+	sta	Math_word4
+	lda	World_wallX_hi,y
+	sbc	Move_x+1
+	sta	Math_word4+1
+	lda	Math_word
+	cmp	#<-Move_WALL_DISTANCE
+	lda	Math_word+1
+	sbc	#>-Move_WALL_DISTANCE
+	bpl	Move_clipWall_notLeft
+	lda	Math_word4
+	cmp	#<-Move_WALL_DISTANCE
+	lda	Math_word4+1
+	sbc	#>-Move_WALL_DISTANCE
+	bmi	Move_clipWall_return0
+Move_clipWall_notLeft
+	lda	Math_word
+	cmp	#<Move_WALL_DISTANCE
+	lda	Math_word+1
+	sbc	#>Move_WALL_DISTANCE
+	bmi	Move_clipWall_notRight
+	lda	Math_word4
+	cmp	#<Move_WALL_DISTANCE
+	lda	Math_word4+1
+	sbc	#>Move_WALL_DISTANCE
+	bpl	Move_clipWall_return0
+Move_clipWall_notRight
+	lda	World_wallY_lo,x
+	sub	Move_y
+	sta	Math_word3
+	lda	World_wallY_hi,x
+	sbc	Move_y+1
+	sta	Math_word3+1
+	lda	World_wallY_lo,y
+	sub	Move_y
+	sta	Math_word2
+	lda	World_wallY_hi,y
+	sbc	Move_y+1
+	sta	Math_word2+1
+	lda	Math_word3
+	cmp	#<-Move_WALL_DISTANCE
+	lda	Math_word3+1
+	sbc	#>-Move_WALL_DISTANCE
+	bpl	Move_clipWall_notTop
+	lda	Math_word2
+	cmp	#<-Move_WALL_DISTANCE
+	lda	Math_word2+1
+	sbc	#>-Move_WALL_DISTANCE
+	bmi	Move_clipWall_return0
+Move_clipWall_notTop
+	lda	Math_word3
+	cmp	#<Move_WALL_DISTANCE
+	lda	Math_word3+1
+	sbc	#>Move_WALL_DISTANCE
+	bmi	Move_clipWall_notBottom
+	lda	Math_word2
+	cmp	#<Move_WALL_DISTANCE
+	lda	Math_word2+1
+	sbc	#>Move_WALL_DISTANCE
+	bmi	Move_clipWall_notBottom
+Move_clipWall_return0
+	lda	#0
+	rts
+Move_clipWall_notBottom
+	lda	Math_word4
+	sub	Math_word
+	sta	Math_word4
+	lda	Math_word4+1
+	sbc	Math_word+1
+	sta	Math_word4+1
+	lda	Math_word2
+	sub	Math_word3
+	sta	Math_word2
+	lda	Math_word2+1
+	sbc	Math_word3+1
+	sta	Math_word2+1
+	jsr	Math_mulCmp
+	bmi	Move_clipWall_back
+; front
+	lda	#<-Move_WALL_DISTANCE
+	ldy	#>-Move_WALL_DISTANCE
+	bit	Math_word4+1
+	bpl	Move_clipWall_front1
+	lda	#<Move_WALL_DISTANCE
+	ldy	#>Move_WALL_DISTANCE
+Move_clipWall_front1
+	sub:sta	Math_word3
+	tya
+	sbc:sta	Math_word3+1
+	lda	#<Move_WALL_DISTANCE
+	ldy	#>Move_WALL_DISTANCE
+	bit	Math_word2+1
+	bpl	Move_clipWall_front2
+	lda	#<-Move_WALL_DISTANCE
+	ldy	#>-Move_WALL_DISTANCE
+Move_clipWall_front2
+	sub:sta	Math_word
+	tya
+	sbc:sta	Math_word+1
+	jsr	Math_mulCmp
+	bmi	Move_clipWall_return0
+	lda	#1
+	rts
+; back
+Move_clipWall_back
+	lda	#<Move_WALL_DISTANCE
+	ldy	#>Move_WALL_DISTANCE
+	bit	Math_word4+1
+	bpl	Move_clipWall_back1
+	lda	#<-Move_WALL_DISTANCE
+	ldy	#>-Move_WALL_DISTANCE
+Move_clipWall_back1
+	sub:sta	Math_word3
+	tya
+	sbc:sta	Math_word3+1
+	lda	#<-Move_WALL_DISTANCE
+	ldy	#>-Move_WALL_DISTANCE
+	bit	Math_word2+1
+	bpl	Move_clipWall_back2
+	lda	#<Move_WALL_DISTANCE
+	ldy	#>Move_WALL_DISTANCE
+Move_clipWall_back2
+	sub:sta	Math_word
+	tya
+	sbc:sta	Math_word+1
+	jsr	Math_mulCmp
+	jpl	Move_clipWall_return0
+	lda	#2
+	rts
+
+* Move_pushMoveWall
+; Do Move_pushMove to wall X
+; input: X - wall
+Move_pushMoveWall
+	stx	Move_pushMoveWall_wall
+	jsr	Move_clipWall
+	ldx	Move_pushMoveWall_wall
+	cmp	#1
+	seq:rts
+	ldy	World_wallSector,x
+	bmi	Move_pushMoveWall_clip	; wall
+; portal
+	lda	World_ceilingZ,y
+;	cmp	World_ceilingZ,x
+;	bcc:beq	Move_pushMoveWall_noClipCeiling
+	add	#Move_pushMove_CEILING_DISTANCE
+	cmp	Move_z
+	bcs	Move_pushMoveWall_clip
+Move_pushMoveWall_noClipCeiling
+	lda	World_floorZ,y
+;	cmp	World_floorZ,x
+;	bcs	Move_pushMoveWall_portal
+	sub	#Move_pushMove_FLOOR_DISTANCE
+	cmp	Move_z
+	bcc	Move_pushMoveWall_clip
+Move_pushMoveWall_portal
+	ldy	Move_pushMove_sectorCount
+Move_pushMoveWall_searchSectorList
+	cmp	Move_pushMove_sectorList-1,y
+	beq	Move_pushMoveWall_return
+	dey
+	bne	Move_pushMoveWall_searchSectorList
+	ldy:inc	Move_pushMove_sectorCount
+	sta	Move_pushMove_sectorList,y
+Move_pushMoveWall_return
+	rts
+
+; have to push away from wall/portal
+Move_pushMoveWall_clip
+	ldy	World_wallNext,x
+	lda	World_wallX_lo,y
+	sub	World_wallX_lo,x
+	sta	Math_word
+	lda	World_wallX_hi,y
+	sbc	World_wallX_hi,x
+	sta	Math_word+1
+	lda	World_wallY_lo,y
+	sub	World_wallY_lo,x
+	sta	Math_word2
+	lda	World_wallY_hi,y
+	sbc	World_wallY_hi,x
+	sta	Math_word2+1
+	jsr	Math_getAngle
+	add	#$40
+	tay
+	lda	Math_cos,y
+	ift	Move_pushMove_PUSH_AWAY_SHIFT=1
+	cmp	#$80
+	ror	@
+	eli	Move_pushMove_PUSH_AWAY_SHIFT=2
+	cmp	#$80
+	ror	@
+	cmp	#$80
+	ror	@
+	eli	Move_pushMove_PUSH_AWAY_SHIFT=3
+:3	lsr	@
+	cmp	#$10
+	scc:eor	#$e0
+	els
+	ert	Move_pushMove_PUSH_AWAY_SHIFT!=0
+	eif
+	sta	Move_pushMoveWall_dx
+	lda	Math_sin,y
+	ift	Move_pushMove_PUSH_AWAY_SHIFT=1
+	cmp	#$80
+	ror	@
+	eli	Move_pushMove_PUSH_AWAY_SHIFT=2
+	cmp	#$80
+	ror	@
+	cmp	#$80
+	ror	@
+	eli	Move_pushMove_PUSH_AWAY_SHIFT=3
+:3	lsr	@
+	cmp	#$10
+	scc:eor	#$e0
+	els
+	ert	Move_pushMove_PUSH_AWAY_SHIFT!=0
+	eif
+	sta	Move_pushMoveWall_dy
+	mva	#Move_pushMove_INNER_MAX	Move_pushMove_bad
+Move_pushMoveWall_pushLoop
+	lda	Move_pushMoveWall_dx
+	spl:dec	Move_x+1
+	add:sta	Move_x
+	scc:inc	Move_x+1
+	lda	Move_pushMoveWall_dy
+	spl:dec	Move_y+1
+	add:sta	Move_y
+	scc:inc	Move_y+1
+	dec	Move_pushMove_bad
+	beq	Move_pushMoveWall_pushEnd
+	ldx	Move_pushMoveWall_wall
+	jsr	Move_clipWall
+	bne	Move_pushMoveWall_pushLoop
+Move_pushMoveWall_pushEnd
+	dec	Move_pushMove_outerCount
+	beq	Move_pushMoveWall_squish
+	mva	#-1	Move_pushMove_bad
+	ldy	Move_pushMove_sectorList
+	jsr	Move_updateSector
+	sty	Move_pushMove_sectorList
+	ldx	Move_pushMoveWall_wall
+	rts
+
+Move_pushMoveWall_squish
+	pla:pla	; pop return address to Move_pushMove
+	lda	#-1
+	rts	; return from Move_pushMove
+
+* Move_pushMove
+; Make sure a player or monster
+; (defined by Move_x, Move_y, Move_z, Y)
+; is not too close to a wall. If it is, then it attempts
+; to push it away. If it is unable to push it away,
+; it returns -1, in which case the thing should gib.
+; input: Y - sector
+; return: A=0 - ok, Y=sector; A=-1 - squish!
+Move_pushMove
+	sty	Move_pushMove_sectorList
+	mva	#Move_pushMove_OUTER_MAX	Move_pushMove_outerCount
+Move_pushMove_loop
+; forward
+	mvx	#1	Move_pushMove_sectorCount
+	dex:stx	Move_pushMove_bad
+Move_pushMove_forwardSectorLoop
+	stx	Move_pushMove_sectorIndex
+	ldy	Move_pushMove_sectorList,x
+	mvx	World_sectorWall+1,y	Move_pushMove_wallEnd
+	ldx	World_sectorWall,y
+Move_pushMove_forwardWallLoop
+	jsr	Move_pushMoveWall
+	inx
+	cpx	Move_pushMove_wallEnd
+	bcc	Move_pushMove_forwardWallLoop
+	ldx	Move_pushMove_sectorIndex
+	inx:cpx	Move_pushMove_sectorCount
+	bcc	Move_pushMove_forwardSectorLoop
+	lda	Move_pushMove_bad
+	beq	Move_pushMove_return
+; backward
+	mvx	#1	Move_pushMove_sectorCount
+	dex:stx	Move_pushMove_bad
+Move_pushMove_backwardSectorLoop
+	stx	Move_pushMove_sectorIndex
+	ldy	Move_pushMove_sectorList,x
+	mvx	World_sectorWall,y	Move_pushMove_wallEnd
+	ldx	World_sectorWall+1,y
+Move_pushMove_backwardWallLoop
+	dex
+	jsr	Move_pushMoveWall
+	cpx	Move_pushMove_wallEnd
+	bne	Move_pushMove_backwardWallLoop
+	ldx	Move_pushMove_sectorIndex
+	inx:cpx	Move_pushMove_sectorCount
+	bcc	Move_pushMove_backwardSectorLoop
+	lda	Move_pushMove_bad
+	bne	Move_pushMove_loop
+Move_pushMove_return
+	ldy	Move_pushMove_sectorList
+	rts
+
+* Move_checkTouchSprite
+; Check if player is close to a sprite.
+; If so, pick the sprite etc.
+Move_checkTouchSprite
+	ldy	World_sprites
+	sne:rts
+; check in current sector and its neighbors
+	jsr	Engine_clearGotSector
+	lda	#1
+	ldx	Move_checkTouchSprite_sector
+	sta	Engine_gotSector,x
+	mvy	World_sectorWall+1,x	Move_checkTouchSprite_wallEnd
+	ldy	World_sectorWall,x
+Move_checkTouchSprite_portalLoop
+	ldx	World_wallSector,y
+	smi:sta	Engine_gotSector,x
+	iny:cpy	Move_checkTouchSprite_wallEnd
+	bcc	Move_checkTouchSprite_portalLoop
+; check all sprites
+	ldy:dey	World_sprites
+Move_checkTouchSprite_spriteLoop
+	ldx	World_spriteSector,y
+	lda	Engine_gotSector,x
+	beq	Move_checkTouchSprite_spriteNext
+	lda	World_spriteX_lo,y
+	sub	Move_x
+	sta	Math_word
+	lda	World_spriteX_hi,y
+	sbc	Move_x+1
+	sta	Math_word+1
+	bcs	Move_checkTouchSprite_xPlus
+	lda	#0
+	sub:sta	Math_word
+	lda	#0
+	sbc:sta	Math_word+1
+Move_checkTouchSprite_xPlus
+	lda	World_spriteY_lo,y
+	sub	Move_y
+	sta	Math_word2
+	lda	World_spriteY_hi,y
+	sbc	Move_y+1
+	sta	Math_word2+1
+	bcc	Move_checkTouchSprite_yMinus
+	lda	Math_word
+	add	Math_word2
+	lda	Math_word+1
+	adc	Math_word2+1
+	jmp	Move_checkTouchSprite_check
+Move_checkTouchSprite_yMinus
+	lda	Math_word
+	cmp	Math_word2
+	lda	Math_word+1
+	sbc	Math_word2+1
+Move_checkTouchSprite_check
+	cmp	#Move_checkTouchSprite_DISTANCE
+	bcs	Move_checkTouchSprite_spriteNext
+; sprite touched
+Move_checkTouchSprite_touched
+	lda	#$b0
+	ldx	World_spritePicture,y
+	cpx	#Picture_PIG_COP
+	sne:lda	#$20
+	sta	Screen_nextColor
+
+Move_checkTouchSprite_spriteNext
+	dey:bpl	Move_checkTouchSprite_spriteLoop
+	rts
+
+* Move_push
+; This is what is done when user presses Space Bar
+Move_push
+	jsr	Engine_clearGotSector
+	ldx	Player_sector
+	ldy	World_sectorWall,x
+	lda	World_sectorFlags,x
+	eor	#World_SECTOR_DOOR_OPEN
+	ora	#World_SECTOR_ANIMATE
+	jsr	Animate_toggleEffect
+	mva	World_sectorWall+1,x	Math_word+1
+Move_push_loop
+	ldx	World_wallSector,y
+	bmi	Move_push_next
+	lda	Engine_gotSector,x
+	bne	Move_push_next
+	lda	World_sectorFlags,x
+	eor	#World_SECTOR_DOOR_OPEN
+	ora	#World_SECTOR_ANIMATE
+	sta	Engine_gotSector,x
+	sty	Math_word
+	ldy	World_sectorWall,x
+	jsr	Animate_toggleEffect
+	ldy	Math_word
+Move_push_next
+	iny:cpy	Math_word+1
+	bcc	Move_push_loop
+	rts
+
+* Key_handle
+; Set Input_control's according to scancode X
+Key_handle	| PROFILE
+	cpx	#Key_UP
+	bne	Key_handle_noForward
+	lda	#Input_CONTROL1_FORWARD
+	ora:sta	Input_control1
+	rts
+Key_handle_noForward
+
+	cpx	#Key_DOWN
+	bne	Key_handle_noBackward
+	lda	#Input_CONTROL1_BACKWARD
+	ora:sta	Input_control1
+	rts
+Key_handle_noBackward
+
+	cpx	#Key_LEFT
+	bne	Key_handle_noTurnLeft
+	lda	#Input_CONTROL1_TURNLEFT
+	ora:sta	Input_control1
+	rts
+Key_handle_noTurnLeft
+
+	cpx	#Key_RIGHT
+	bne	Key_handle_noTurnRight
+	lda	#Input_CONTROL1_TURNRIGHT
+	ora:sta	Input_control1
+	rts
+Key_handle_noTurnRight
+
+	cpx	#Key_COMMA
+	bne	Key_handle_noStrafeLeft
+	lda	#Input_CONTROL1_STRAFELEFT
+	ora:sta	Input_control1
+	rts
+Key_handle_noStrafeLeft
+
+	cpx	#Key_DOT
+	bne	Key_handle_noStrafeRight
+	lda	#Input_CONTROL1_STRAFERIGHT
+	ora:sta	Input_control1
+	rts
+Key_handle_noStrafeRight
+
+	cpx	#Key_A
+	bne	Key_handle_noGoUp
+	lda	#Input_CONTROL1_GOUP
+	ora:sta	Input_control1
+	rts
+Key_handle_noGoUp
+
+	cpx	#Key_Z
+	bne	Key_handle_noGoDown
+	lda	#Input_CONTROL1_GODOWN
+	ora:sta	Input_control1
+	rts
+Key_handle_noGoDown
+
+	cpx	#Key_S
+	bne	Key_handle_noLookUp
+	lda	#Input_CONTROL2_LOOKUP
+	ora:sta	Input_control2
+	rts
+Key_handle_noLookUp
+
+	cpx	#Key_X
+	bne	Key_handle_noLookDown
+	lda	#Input_CONTROL2_LOOKDOWN
+	ora:sta	Input_control2
+	rts
+Key_handle_noLookDown
+
+	cpx	#Key_W
+	bne	Key_handle_noLookStraight
+	lda	#Input_CONTROL2_LOOKSTRAIGHT
+	ora:sta	Input_control2
+	rts
+Key_handle_noLookStraight
+
+	cpx	#Key_SPACE
+	bne	Key_handle_noPush
+	lda	#Input_CONTROL2_PUSH
+	ora:sta	Input_control2
+Key_handle_noPush
+
+	cpx	#Key_TAB
+	bne	Key_handle_noToggleMap
+	lda	#Input_CONTROL3_TOGGLEMAP
+	ora:sta	Input_control3
+	rts
+Key_handle_noToggleMap
+
+	cpx	#Key_1
+	bne	Key_handle_noGun1
+	lda	#Input_CONTROL3_GUN_1
+	ora:sta	Input_control3
+	rts
+Key_handle_noGun1
+
+	cpx	#Key_2
+	bne	Key_handle_noGun2
+	lda	#Input_CONTROL3_GUN_2
+	ora:sta	Input_control3
+	rts
+Key_handle_noGun2
+
+	cpx	#Key_3
+	bne	Key_handle_noGun3
+	lda	#Input_CONTROL3_GUN_3
+	ora:sta	Input_control3
+	rts
+Key_handle_noGun3
+
+	cpx	#Key_J
+	bne	Key_handle_noToggleFly
+	lda	#Input_CONTROL3_TOGGLEFLY
+	ora:sta	Input_control3
+	rts
+Key_handle_noToggleFly
+	rts
+
+* Input_init
+; Initialize Input module
+Input_init
+	lda	#0
+	sta	Input_previousControl1
+	sta	Input_previousControl2
+	sta	Input_previousControl3
+	sta	Input_previousControl4
+	sta	Player_xFraction
+	sta	Player_xFraction
+	sta	Move_playerZFraction
+	sta	Move_playerVerticalVelocity
+	sta	Move_playerVerticalVelocity+1
+	rts
+
+* Input_frame
+; Process controllers.
+; Should be called on Vertical Blank Interrupt
+Input_frame
+
+; switch gun
+	lda	#Input_CONTROL3_GUN_1
+	bit	Input_control3
+	beq	Input_frame_noGun1
+	bit	Input_previousControl3
+	bne	Input_frame_noGun1
+	mva	#0	Player_gun
+Input_frame_noGun1
+	lda	#Input_CONTROL3_GUN_2
+	bit	Input_control3
+	beq	Input_frame_noGun2
+	bit	Input_previousControl3
+	bne	Input_frame_noGun2
+	mva	#1	Player_gun
+Input_frame_noGun2
+	lda	#Input_CONTROL3_GUN_3
+	bit	Input_control3
+	beq	Input_frame_noGun3
+	bit	Input_previousControl3
+	bne	Input_frame_noGun3
+	mva	#2	Player_gun
+Input_frame_noGun3
+
+; turn left/right
+	lda	#Input_CONTROL1_TURNLEFT
+	bit	Input_control1
+	beq	Input_frame_noTurnLeft
+	lda	#-Input_TURN_SPEED
+	add:sta	Player_angle
+Input_frame_noTurnLeft
+	lda	#Input_CONTROL1_TURNRIGHT
+	bit	Input_control1
+	beq	Input_frame_noTurnRight
+	lda	#Input_TURN_SPEED
+	add:sta	Player_angle
+Input_frame_noTurnRight
+
+; look up/down/straight
+	lda	#Input_CONTROL2_LOOKUP
+	bit	Input_control2
+	beq	Input_frame_noLookUp
+	lda	Player_horizon
+	cmp	#Input_HORIZON_MAX
+	beq	Input_frame_noLookUp
+	inc	Player_horizon
+Input_frame_noLookUp
+	lda	#Input_CONTROL2_LOOKDOWN
+	bit	Input_control2
+	beq	Input_frame_noLookDown
+	lda	Player_horizon
+	cmp	#Input_HORIZON_MIN
+	beq	Input_frame_noLookDown
+	dec	Player_horizon
+Input_frame_noLookDown
+	lda	#Input_CONTROL2_LOOKSTRAIGHT
+	bit	Input_control2
+	beq	Input_frame_noLookStraight
+	bit Input_previousControl2
+	bne	Input_frame_noLookStraight
+	mva	#Screen_CENTER_Y	Player_horizon
+Input_frame_noLookStraight
+
+; move horizontally
+	lda	#Input_CONTROL1_FORWARD|Input_CONTROL1_BACKWARD|Input_CONTROL1_STRAFELEFT|Input_CONTROL1_STRAFERIGHT
+	and	Input_control1
+	beq	Input_frame_noMove
+	ldx	#0
+	cmp	#Input_CONTROL1_FORWARD
+	beq	Input_frame_move
+	ldx	#$80
+	cmp	#Input_CONTROL1_BACKWARD
+	beq	Input_frame_move
+	ldx	#$c0
+	cmp	#Input_CONTROL1_STRAFELEFT
+	beq	Input_frame_move
+	ldx	#$40
+	cmp	#Input_CONTROL1_STRAFERIGHT
+	beq	Input_frame_move
+	ldx	#$e0
+	cmp	#Input_CONTROL1_FORWARD|Input_CONTROL1_STRAFELEFT
+	beq	Input_frame_move
+	ldx	#$20
+	cmp	#Input_CONTROL1_FORWARD|Input_CONTROL1_STRAFERIGHT
+	beq	Input_frame_move
+	ldx	#$a0
+	cmp	#Input_CONTROL1_BACKWARD|Input_CONTROL1_STRAFELEFT
+	beq	Input_frame_move
+	ldx	#$60
+	cmp	#Input_CONTROL1_BACKWARD|Input_CONTROL1_STRAFERIGHT
+	bne	Input_frame_noMove
+Input_frame_move
+	txa
+	add	Player_angle
+	tax
+	ldy	#{ror @}
+	lda	#Input_CONTROL2_RUN
+	bit	Input_control2
+	seq:ldy	#{nop}
+	sty	Input_frame_shrX
+	sty	Input_frame_shrY
+
+	lda	Math_cos,x
+	spl:dec	Player_velocityX+1
+	cmp	#$80
+Input_frame_shrX
+	ror	@	.
+	add:sta	Player_velocityX
+	scc:inc	Player_velocityX+1
+
+	lda	Math_sin,x
+	spl:dec	Player_velocityY+1
+	cmp	#$80
+Input_frame_shrY
+	ror	@	.
+	add:sta	Player_velocityY
+	scc:inc	Player_velocityY+1
+
+Input_frame_noMove
+
+; push
+	lda	#Input_CONTROL2_PUSH
+	bit	Input_control2
+	beq	Input_frame_noPush
+	bit	Input_previousControl2
+	bne	Input_frame_noPush
+	lda	#Player_FLAG_PUSH
+	ora:sta	Player_flags
+Input_frame_noPush
+
+; toggle fly
+	lda	#Input_CONTROL3_TOGGLEFLY
+	bit	Input_control3
+	beq	Input_frame_noToggleFly
+	bit	Input_previousControl3
+	bne	Input_frame_noToggleFly
+	lda	#Player_FLAG_FLY
+	eor:sta	Player_flags
+Input_frame_noToggleFly
+
+; move vertically
+	ldx	Player_sector
+	lda	#Player_FLAG_FLY|Player_FLAG_DIVE
+	bit	Player_flags
+	beq	Input_frame_noFly
+	ldy	#Move_FLY_VERTICAL_SPEED
+	lda	#Player_FLAG_FLY
+	bit	Player_flags
+	sne:ldy	#Move_DIVE_VERTICAL_SPEED
+; fly/dive up/down
+	lda	#Input_CONTROL1_GOUP
+	bit	Input_control1
+	beq	Input_frame_noFlyUp
+	tya
+	eor:sec	#$ff
+	adc:sta	Move_playerVerticalVelocity
+	scs:dec	Move_playerVerticalVelocity+1
+Input_frame_noFlyUp
+	lda	#Input_CONTROL1_GODOWN
+	bit	Input_control1
+	beq	Input_frame_noFlyDown
+	tya
+	add:sta	Move_playerVerticalVelocity
+	scc:inc	Move_playerVerticalVelocity+1
+Input_frame_noFlyDown
+	ert	Move_FLY_VERTICAL_INERTIA!=$c0
+	mva	Move_playerVerticalVelocity	Input_word
+	lda	Move_playerVerticalVelocity+1
+	cmp	#$80
+	ror	@
+	ror	Input_word
+	cmp	#$80
+	ror	@
+	ror	Input_word
+	sta	Input_word+1
+	ora	Input_word
+	beq	Input_frame_stop
+	lda	Move_playerVerticalVelocity
+	sub	Input_word
+	sta	Move_playerVerticalVelocity
+	lda	Move_playerVerticalVelocity+1
+	sbc	Input_word+1
+	sta	Move_playerVerticalVelocity+1
+	jmp	Input_frame_moveVertically
+Input_frame_stop
+	mwa	#0	Move_playerVerticalVelocity
+	jmp	Input_frame_moveVertically
+; stand/jump/duck
+Input_frame_noFly
+	lda	World_sectorEffect,x
+	cmp	#World_EFFECT_WATER
+	beq	Input_frame_swim
+	ldy	#-Move_STAND_HEIGHT
+	lda	#Input_CONTROL1_GOUP
+	bit	Input_control1
+	beq	Input_frame_noJump
+	lda	#-Move_CAN_JUMP_HEIGHT
+	add	World_floorZ,x
+	cmp	Player_z
+	bcs	Input_frame_noJump
+	ldy	#-Move_JUMP_HEIGHT
+	bcc	Input_frame_noDuck	!
+Input_frame_swim
+	ldy	#-Move_SWIM_HEIGHT
+Input_frame_noJump
+	lda	#Input_CONTROL1_GODOWN
+	bit	Input_control1
+	beq	Input_frame_noDuck
+	cpy	#-Move_STAND_HEIGHT
+	beq	Input_frame_duck
+	lda	#-Move_CAN_DIVE_HEIGHT
+	add	World_floorZ,x
+	cmp	Player_z
+	bcc	Input_frame_noDuck
+	mwa	#Move_DIVE_VELOCITY	Move_playerVerticalVelocity
+	jmp	Input_frame_moveVertically
+Input_frame_duck
+	ldy	#Move_DUCK_HEIGHT
+Input_frame_noDuck
+	tya
+	add	World_floorZ,x
+	cmp	Player_z
+	bcc	Input_frame_standUp
+	beq	Input_frame_stop
+	lda	#Move_GRAVITY
+	add:sta	Move_playerVerticalVelocity
+	scc:inc	Move_playerVerticalVelocity+1
+	jmp	Input_frame_moveVertically
+Input_frame_standUp
+	sub	Player_z
+:3	ror	@
+	sta	Move_playerVerticalVelocity+1
+	ror	@
+	and	#$f0
+	sta	Move_playerVerticalVelocity
+	lda	Move_playerVerticalVelocity+1
+	ora	#$e0
+	sta	Move_playerVerticalVelocity+1
+
+Input_frame_moveVertically
+	lda	#Move_MIN_CEILING_DISTANCE
+	add	World_ceilingZ,x
+	sta	Input_word
+	lda	#World_SECTOR_PARALLAXING
+	and	World_sectorFlags,x
+	beq	Input_frame_noParallaxing
+	mva	#Move_MIN_Z	Input_word
+Input_frame_noParallaxing
+	lda	World_floorZ,x
+	sub	#Move_MIN_FLOOR_DISTANCE
+	sta	Input_word+1
+
+	lda	Move_playerVerticalVelocity
+	add:sta	Move_playerZFraction
+	lda	Move_playerVerticalVelocity+1
+	adc	Player_z
+	cmp	Input_word
+	bcs	Input_frame_noHitCeiling
+	ldy	World_sectorEffect,x
+	cpy	#World_EFFECT_UNDERWATER
+	bne	Input_frame_noSurface
+	ldy	World_sectorParameter,x
+	sub	World_ceilingZ,x
+	cmp	#-Move_SWIM_HEIGHT
+	bcs	Input_frame_noSurface
+	add	World_floorZ,y
+	pha
+	lda	#~Player_FLAG_DIVE
+	and:sta	Player_flags
+	pla
+	jmp	Input_frame_changeSector
+Input_frame_noSurface
+	mwy	#0	Move_playerVerticalVelocity
+	sty	Move_playerZFraction
+	lda	Input_word
+Input_frame_noHitCeiling
+	cmp	Input_word+1
+	bcc	Input_frame_noHitFloor
+	ldy	World_sectorEffect,x
+	cpy	#World_EFFECT_WATER
+	bne	Input_frame_noDive
+	sub	World_floorZ,x
+	bcc	Input_frame_noDive
+	cmp	#Move_DIVE_DEPTH
+	bcc	Input_frame_noDive
+	ldy	World_sectorParameter,x
+	add	World_ceilingZ,y
+	pha
+	lda	#Player_FLAG_DIVE
+	ora:sta	Player_flags
+	pla
+Input_frame_changeSector
+	sta	Player_z
+	sty	Player_sector
+	ldy	World_sectorWall,x
+	lda	Player_x
+	sub	World_wallX_lo,y
+	sta	Player_x
+	lda	Player_x+1
+	sbc	World_wallX_hi,y
+	sta	Player_x+1
+	lda	Player_y
+	sub	World_wallY_lo,y
+	sta	Player_y
+	lda	Player_y+1
+	sbc	World_wallY_hi,y
+	sta	Player_y+1
+	ldy	Player_sector
+	ldx	World_sectorWall,y
+	lda	World_wallX_lo,x
+	add:sta	Player_x
+	lda	World_wallX_hi,x
+	adc:sta	Player_x+1
+	lda	World_wallY_lo,x
+	add:sta	Player_y
+	lda	World_wallY_hi,x
+	adc:sta	Player_y+1
+	jmp	Input_frame_endVerticalMove
+Input_frame_noDive
+	mwy	#0	Move_playerVerticalVelocity
+	sty	Move_playerZFraction
+	lda	Input_word+1
+Input_frame_noHitFloor
+	sta	Player_z
+Input_frame_endVerticalMove
+
+; save previous controls
+	mva	Input_control1	Input_previousControl1
+	mva	Input_control2	Input_previousControl2
+	mva	Input_control3	Input_previousControl3
+	mva	Input_control4	Input_previousControl4
+	rts
+
+* main
+; Program starts here
+main	| PROFILE
+	sei
+	inc	^4e
+:Sound_ENABLED	mva	#3	^2f
+
+	jsr	Math_init
+	jsr	View_init
+	jsr	Project_init
+	jsr	Picture_init
+	jsr	Fill_init
+	jsr	Sprite_init
+
+:Gun_ENABLED	jsr	Gun_init
+	jsr	Animate_init
+	jsr	Input_init
+
+ ift 1
+	mwa	World_beginX	Player_x
+	mwa	World_beginY	Player_y
+	mva	World_beginZ	Player_z
+	mva	World_beginAngle	Player_angle
+	mva	World_beginSector	Player_sector
+ eli 1
+; 6box: Engine_MAX_WALLS_ON_SCREEN > 64
+	mwa	#$2c0	Player_x
+	mwa	#$2c0	Player_y
+	mva	#$84	Player_z
+	mva	#$20	Player_angle
+	mva	#0	Player_sector
+ eli 1
+	mwa	#$80	Player_x
+	mwa	#$80	Player_y
+	mva	#$80	Player_z
+	mva	#$00	Player_angle
+	mva	#$12	Player_sector
+ eli 1
+	mwa	#$80	Player_x
+	mwa	#$80	Player_y
+	mva	#$80	Player_z
+	mva	#$00	Player_angle
+	mva	#$00	Player_sector
+ eli 0
+; sprite przeswituje - poprawione
+	mwa	#$a37	Player_x
+	mwa	#$31c	Player_y
+	mva	#$64	Player_z
+	mva	#$80	Player_angle
+	mva	#$04	Player_sector
+ eli 1
+; pionowa kreska
+	mwa	#$1922	Player_x
+	mwa	#$21e	Player_y
+	mva	#$a0	Player_z
+	mva	#$9e	Player_angle
+	mva	#$1f	Player_sector
+ eli 0
+; backface cullling - czesciowo poprawione
+	mwa	#$dfb	Player_x
+	mwa	#$685	Player_y
+	mva	#$80	Player_z
+	mva	#$e0	Player_angle
+	mva	#$10	Player_sector
+ eli 1
+; sufit?
+	mwa	#$f01	Player_x
+	mwa	#$397	Player_y
+	mva	#$58	Player_z
+	mva	#$50	Player_angle
+	mva	#$12	Player_sector
+ els
+; bug po poprawce krzywych linii
+	mwa	#$a0d	Player_x
+	mwa	#$8a7	Player_y
+	mva	#$68	Player_z
+	mva	#$c0	Player_angle
+	mva	#$07	Player_sector
+ eif
+	mva	#Screen_CENTER_Y	Player_horizon
+	mva	#0	Player_flags
+	mva	#0	Player_gun
+
+	jsr	Screen_init
+
+	lda	#0
+
+main_loop
+	sta	Time_ticks
+	mva	#0	Time_tickCount
+
+; animate doors, lifts, etc.
+	jsr	Animate_update
+
+; move player
+	mwa	Player_x	Move_x
+	mwa	Player_y	Move_y
+	mva	Player_z	Move_z
+
+	ldy	Player_sector
+	lda	Player_velocityX
+	ora	Player_velocityX+1
+	ora	Player_velocityY
+	ora	Player_velocityY+1
+	jeq	Player_notMove
+
+; sync with VBLK
+	lda	#123
+	cmp	^4b
+	bne	Player_waitVerticalBlank
+:3	sta	^4a
+Player_waitVerticalBlank
+
+	lda	Player_velocityX+1
+	ror	@
+	ror	Player_velocityX
+	ror	@
+	ror	Player_velocityX
+	ror	@
+	ror	Player_velocityX
+	sta	Player_velocityX+1
+	ror	@
+	and	#$e0
+	add:sta	Player_xFraction
+	lda	Player_velocityX
+	adc:sta	Move_x
+	lda	Player_velocityX+1
+	and	#$1f
+	bit	Math_idTable+$10
+	seq:eor	#$e0
+	adc:sta	Move_x+1
+
+	lda	Player_velocityY+1
+	ror	@
+	ror	Player_velocityY
+	ror	@
+	ror	Player_velocityY
+	ror	@
+	ror	Player_velocityY
+	sta	Player_velocityY+1
+	ror	@
+	and	#$e0
+	add:sta	Player_yFraction
+	lda	Player_velocityY
+	adc:sta	Move_y
+	lda	Player_velocityY+1
+	and	#$1f
+	bit	Math_idTable+$10
+	seq:eor	#$e0
+	adc:sta	Move_y+1
+
+	mwa	#0	Player_velocityX
+	sta	Player_velocityY
+	sta	Player_velocityY+1
+
+	jsr	Move_updateSector
+	cpy	#0
+	bmi	Player_squish
+
+Player_notMove
+	jsr	Move_pushMove
+	bpl	Player_noSquish
+
+Player_squish
+	mva	#$50	Screen_nextColor
+	jmp	Player_noGrab
+
+Player_noSquish
+	mwa	Move_x Player_x
+	mwa	Move_y Player_y
+	sty	Player_sector
+
+; grab sprites
+	sty	Move_checkTouchSprite_sector
+
+	ldy	#$00
+	lda	#Player_FLAG_DIVE
+	bit	Player_flags
+	seq:ldy	#$90
+	sty	Screen_nextColor
+
+	jsr	Move_checkTouchSprite
+Player_noGrab
+
+; handle space bar
+	lda	#Player_FLAG_PUSH
+	bit	Player_flags
+	beq	Player_notPush
+	lda	#~Player_FLAG_PUSH
+	and:sta	Player_flags
+	jsr	Move_push
+Player_notPush
+
+; draw 3D view
+	mwa	Player_x	View_x
+	mwa	Player_y	View_y
+	mva	Player_z	View_z
+	mva	Player_angle	View_angle
+	mva	Player_sector	View_sector
+	mva	Player_horizon	Project_horizon
+
+	jsr	Engine_draw
+	jsr	Sprite_draw
+
+; draw gun
+:Gun_ENABLED	jsr	Gun_draw
+
+; flip screen
+:Screen_GTIA_9	mva	Screen_nextColor	Screen_color
+	mva	Screen_drawnPage	Screen_displayPage
+	eor	>Screen_screen1^Screen_screen2
+	sta	Screen_drawnPage
+
+	lda	Time_tickCount
+	jmp	main_loop
+
+* Debug_printStatus
+; Print status line
+Debug_printStatus	| PROFILE
+	ldx	#3
+	lda	Player_x+1
+	jsr	Debug_printHexByte
+	lda	Player_x
+	jsr	Debug_printHexByte
+	ldx	#10
+	lda	Player_y+1
+	jsr	Debug_printHexByte
+	lda	Player_y
+	jsr	Debug_printHexByte
+	ldx	#17
+	lda	Player_z
+	jsr	Debug_printHexByte
+	ldx	#22
+	lda	Player_angle
+	jsr	Debug_printHexByte
+	ldx	#27
+	lda	Player_sector
+	jsr	Debug_printHexByte
+	ldx	#32
+	lda	Player_horizon
+	jsr	Debug_printHexByte
+	ldx	#37
+	lda	Time_ticks
+
+* Debug_printHexByte
+; Print hex byte on status line
+Debug_printHexByte
+	tay
+:4	lsr	@
+	jsr	Debug_printHexNibble
+	tya
+	and	#$f
+Debug_printHexNibble
+	cmp	#10
+	sed
+	adc	#$10
+	cld
+	sta	Debug_statusLine,x
+	inx
+	rts
+
+* World & Picture
+	icl	'map.asx'
+	icl	'tiles.asx'
+
+	run	main
+	end

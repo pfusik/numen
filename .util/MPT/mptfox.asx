@@ -1,0 +1,84 @@
+vf	equ	$18
+v2	equ	$82
+v4	equ	$84
+
+	opt	h-
+	ins	'mpt99.com'
+	opt	h+
+
+	org	$240a
+	dta	d'MPT 10.5'*,d' long tracks by Fox 15-07-2002'
+
+; sejwowanie trackow
+; trzeba przeksztalcic z "strona paternow, strona transpozycji"
+; na "bajt paternu, bajt transpozycji"
+; w $4c00-$4cff zapamietujemy paterny
+	org	$3139
+l1	mva	v4	$3eea,x
+	mva	v4+1	$3eee,x
+	mvy	$51c0,x	v2
+	sty	vf
+	mvy	$51c4,x	v2+1
+	iny
+	sty	vf+1
+	ldy	#0
+	mva:rne	(v2),y	$4d00,y+
+l2	mva	$4d00,y	(v2),y
+	and	(vf),y
+	cmp	#$ff
+	beq	q2
+	inw	v2
+	mva	(vf),y	(v2),y
+	iny:bne	l2
+q2	tya
+	asl	@
+	add:sta	v4
+	lda	v4+1
+	adc	#0
+	cpy	#$80
+	adc	#0
+	sta	v4+1
+	inx
+	cpx	#4
+	bcc	l1
+:$3192-* nop	no i mozna bylo krocej i lepiej :-P
+
+; czytanie trackow
+; trzeba przeksztalcic z "bajt paternu, bajt transpozycji"
+; na "strona paternow, strona transpozycji"
+; w $4e00-$4eff trzymamy transpozycje
+	org	$339d
+	lsr	$25bb
+	ror	$25ba
+	mvx	<$51ca	v2
+	stx	vf
+	ldx	>$51ca
+	ldy	#0
+r1	stx	v2+1
+	stx	vf+1
+r2	mva	(v2),y	(vf),y
+	inw	v2
+	lda	(v2),y
+	cpy	$25ba
+	bcc	r3
+	mva	#$ff	(vf),y
+r3	sta	$4e00,y
+	iny
+	bne	r2
+	mva:rne	$4e00,y	(v2),y+
+	inx:inx
+	cpx	>$51ca+$800
+	bcc	r1
+:$33e5-* nop	heheehe
+
+; zeby dalej jechac strzalka w dol
+	org	$f622
+	dta	$f5
+
+; shift+insert
+	org	$f657
+	dta	$fe
+
+; shift+delete
+	org	$f67d
+	dta	$ff

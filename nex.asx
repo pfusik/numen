@@ -1,0 +1,18 @@
+; NEX (NUMEN=1) or OBX (NUMEN=0) file header
+
+; NEX stands for "Numen executable" ;)
+; first byte: index of bank, where to load the file
+; 2nd and 3rd: run_address-1
+; then normal executable headers & data (without FF FF !)
+; OBX is normal executable, except it should be loaded with disabled ROM
+; (use xboot /p)
+
+	ift	NUMEN
+	icl	'../numendef.asx'
+	opt	h-
+	dta	b(Banks_MAIN_INDEX),a(main-1)
+	opt	h+
+	els
+	run	main
+	eif
+	end

@@ -1,0 +1,544 @@
+; tunnel5 and tunnel6 by fox
+
+	icl	'../nex.asx'
+
+BARS	equ	0
+
+dblo	equ	$be00	$200
+movetex	equ	$c000	$c01	move texture
+chraysh	equ	$ea00	<$200	change ray shape
+raypage	equ	$ebc0	<$40
+screen	equ	$3600	$8c0
+
+lim1	equ	$7ff7
+pro2	equ	$7200
+lim2	equ	$7526
+lim3	equ	$7053
+
+shape	equ	$0400	$3100
+
+si	equ	$80
+di	equ	$82
+ai	equ	$84
+ri	equ	$86
+li	equ	$88
+di2	equ	$8a
+li2	equ	$8c
+vct	equ	$8e
+tx	equ	$8f
+
+hp	equ	$24	2*43
+lp	equ	$84	2*43
+bk	equ	$e0
+an	equ	$e1
+saver	equ	$e2	2
+ct	equ	$e4
+div5	equ	$e5
+coli	equ	$e6
+id	equ	$e7
+px	equ	$e8
+py	equ	$e9
+vx	equ	$ea
+vy	equ	$eb
+i2	equ	$ec
+
+	ift	NUMEN
+	org	$0200
+	els
+	org	$e800
+	eif
+hi2	org	*+256
+;lo2	ins	'skosy.lot'
+lo2	ins	'kwadrati.lot'
+;lo2	ins 'kwadrat.lot'								;NEW
+
+	org	$3ec0
+dl	dta	$f0,$6f,a(screen),$0f
+:27	dta	$2f,$0f
+	dta	$41,a(dl)
+dli
+:!NUMEN	pha
+	txa:pha
+	tya:pha
+	lda:pha	^31
+:BARS	sta	^12
+	ldx	an
+	sta	^4a
+	mva	#13	^45
+	mva	#3	^45
+	mva	bk	^31
+	jsr	$4000
+	lda	Banks_forEffect+1
+	cmp	bk
+	beq	dli2
+	sta	^31
+	jsr	pro2
+	lda	Banks_forEffect+1
+dlix
+	sta	bk
+	pla:sta	^31
+	pla:tay
+	pla:tax
+	pla
+:BARS	sta	^12
+	rti
+
+dli2
+	mva	Banks_table+Banks_MAIN_INDEX	^31
+	lda:pha	saver+1
+	lda:pha	saver
+	rts
+frame	pla:sta	saver
+	pla:sta	saver+1
+
+ 	lda	Banks_forEffect
+	jmp	dlix
+
+spito
+	lda	an
+	add	id
+	bpl	spits
+:3	dec	id
+spits	and	#$7f
+	sta	an
+	jsr	frame
+	jmp	spito
+
+	org	$ce00
+div3
+hi1	org	*+256
+lo1	ins	'kwadrat.lot'
+	org	$ee00
+sin	dta	sin(0,48,256)
+
+; (i << 4) ^ 0xdd
+lo2hi	dta	$dd,$cd,$fd,$ed,$9d,$8d,$bd,$ad
+	dta	$5d,$4d,$7d,$6d,$1d,$0d,$3d,$2d
+
+main
+:NUMEN	jsr	Inflate
+
+	mwa	#movetex	di
+	ldx	#0
+
+mmovet
+	mva	#{ldx dblo,y}	(di),0+
+	txa:sta	(di),y+
+	mva	>dblo	(di),y+
+	mva	#{stx lo1}	(di),y+
+	txa:sta	(di),y+
+	mva	>lo1	(di),y+
+	mva	#{lda lo2hi,x}	(di),y+
+	mva	<lo2hi	(di),y+
+	mva	>lo2hi	(di),y+
+	mva	#{sta hi1}	(di),y+
+	txa:sta	(di),y+
+	mva	>hi1	(di),y
+	lda	#12
+	add:sta	di
+	scc:inc	di+1
+	inx
+	bne	mmovet
+	mva	#{rts}	(di,x)
+	mwa	#chraysh	di
+	ldx	#48
+
+mchray	mva	#{lda ctab,x}	(di),0
+	ldy	#3
+	mva	#{sta shape,y}	(di),y
+	ldy	#6
+	sta	(di),y+
+	mva	#128	(di),y
+	asl	@
+	ldy	#1
+	sta	(di),y
+	ldy	#4
+	sta	(di),y
+	txa:adc	>ctab-$100	-
+	ldy	#2
+	sta	(di),y
+	adc	>shape-ctab	-
+;	cmp	>shape1e
+;	scc:adc	>shape2-shape1e-$100
+	sta	raypage,x
+	ldy	#5
+	sta	(di),y
+	ldy	#8
+	sta	(di),y
+	lda	#9
+	add:sta	di
+	scc:inc	di+1
+	dex
+	bpl	mchray
+	mva	#{rts}	(di),0
+
+	lda	#hp-2
+	ldx	#0
+	clc
+mdiv3	adc	#2	-
+	sta	div3,x+
+	sta	div3,x+
+	sta	div3,x+
+	bpl	mdiv3
+	mwa	#screen	si
+	mwa	#atab	ai
+	mwa	#rtab	ri
+	mva	Banks_forEffect	^31
+	lda	<lim1
+	ldx	>lim1
+	jsr	mcod_scr
+
+	mva	Banks_forEffect+1	^31
+	lda	<lim2
+	ldx	>lim2
+	ldy	>pro2
+	jsr	mcod_next
+	lda	<lim3
+	ldx	>lim3
+	jsr	mcod_scr
+
+;	mva	Banks_table+Banks_MAIN_INDEX	^31
+	mwa	#ctab	si
+
+	ldy	#0
+initex	lda:tax	lo1,y
+	sta	dblo,y
+	sta	dblo+$100,y
+	mva	lo2hi,x	hi1,y
+	ldx	lo2,y
+	mva	lo2hi,x	hi2,y
+	iny
+	bne	initex
+
+	lda:rne	^4b
+	sta	^40
+	mva	Banks_table+Banks_MAIN_INDEX	^31
+	ldx	#0
+	ldy	#0
+firsh	jsr	chraysh
+	inx
+	iny
+	bpl	firsh
+
+	ldx	#42*2
+izp	mwa	#hi1	hp,x
+	mwa	#lo1	lp,x
+	dex:dex
+	bpl	izp
+
+	mwa	#director-1	saver
+	mvx	#0	an
+
+	mva	Banks_forEffect	^31
+	jsr	$4000
+	mva	Banks_forEffect+1	^31
+	jsr	pro2
+	jsr	$4000
+
+	lda:rne	^4b
+	mva	#$22	^40
+	mwa	#dl	^42
+	ldx	#9
+	mva:rpl	colors,x	^12,x-
+	mva	Banks_forEffect	bk
+
+	ift	NUMEN
+	mwa	#dli	Dli_vector
+
+	mwa	#-10*50	Vbl_clock
+	jsr	Idle
+
+;	mva	#0	^40
+ 
+	jmp	NextBlock
+
+	els
+	mwa	#dli	$fffa
+	mva	#$80	^4e
+
+	jmp	*
+	eif
+
+mcod_scr
+	mvy	#27	vct
+	ldy	>$4000
+mcod_next
+	sta	li
+	stx	li+1
+	mva	#34	tx
+	lda	#0
+mcod_byte
+	sta	di
+	sty	di+1
+	mva	#{ldy shape,x}	(di),0
+	mva:tax	(ai),y+	(di),y-
+	lda:tay	(ri),y
+	lda	raypage,y
+	ldy	#2
+	sta	(di),y+
+	mva	#{lda (),y}	(di),y+
+	mva	div3,x	(di),y+
+	dec	tx
+	bne	mcod_nvsc
+	lda	vct
+	beq	mcod_nvsc
+	mva	#{sta ^45}	(di),y+
+	mva	<^45	(di),y+
+	mva	>^45	(di),y+
+	mva	#{ldy #}	(di),y+
+	mva	#3	(di),y+
+	mva	#{sty ^45}	(di),y+
+	mva	<^45	(di),y+
+	mva	>^45	(di),y
+	lda	#8
+	add:sta	di
+	scc:inc	di+1
+	mva	#34	tx
+	dec	vct
+	ldy	#5
+mcod_nvsc
+	mva	#{ldy shape,x}	(di),y
+	ldy	#1
+	lda:tax	(ai),y
+	ldy	#6
+	sta	(di),y
+	ldy	#1
+	lda:tay	(ri),y
+	lda	raypage,y
+	ldy	#7
+	sta	(di),y+
+	mva	#{eor (),y}	(di),y+
+	lda	div3,x
+	add	#lp-hp
+	sta	(di),y+
+	mva	#{sta screen}	(di),y+
+	mva	si	(di),y+
+	mva	si+1	(di),y+
+	inw	si
+	lda	#2
+	add:sta	ai
+	scc:inc	ai+1
+	lda	#2
+	add:sta	ri
+	scc:inc	ri+1
+	lda	#13
+	add	di
+	ldy	di+1
+	scc:iny
+	cpy	li+1
+	jcc	mcod_byte
+	cmp	li
+	jcc	mcod_byte
+	mva	#{rts}	(li),0
+	rts
+
+movev
+	lda	vx
+	add:sta	px
+	lda	vy
+	add:sta	py
+	lda	px
+:4	lsr	@
+	eor	py
+	and	#$f
+	eor	py
+	tay
+	jmp	movetex
+
+director
+; do przodu
+	mva	#0	px
+	sta	py
+	sta	vx
+	mva	#-$10	vy
+ ift 0
+	mva	#16	ct
+dir1	jsr	movev
+	jsr	frame
+	dec	ct
+	bne	dir1
+ eif
+; szybciej
+	mva	#16	ct
+dir2	dec	vy
+	jsr	movev
+	jsr	frame
+	dec	ct
+	bne	dir2
+ ift 0
+; wolniej
+	mva	#16	ct
+dir3	inc	vy
+	jsr	movev
+	jsr	frame
+	dec	ct
+	bne	dir3
+ eif
+; po sinusie na boki
+	mva	#0	id
+	mva	#75	ct
+dir4	lda	#3
+	add:sta	id
+	tax
+	mva	sin,x	vx
+	jsr	movev
+	jsr	frame
+	dec	ct
+	bne	dir4
+; szybki obrot
+	mva	#50	ct
+dir5	lda	#2
+	add:sta	an
+	lda	#3
+	add:sta	id
+	tax
+	mva	sin,x	vx
+	jsr	movev
+	jsr	frame
+	dec	ct
+	bne	dir5
+; po sinusie na boki
+	mva	#100	ct
+dir6	lda	#-1
+	add	an
+	and	#$7f
+	sta	an
+	lda	#3
+	add:sta	id
+	tax
+	mva	sin,x	vx
+	jsr	movev
+	jsr	frame
+	dec	ct
+	bne	dir6
+; lisazul
+	mva	#0	i2
+	mva	#200	ct
+dir7	lda	#3
+	add:sta	id
+	tax
+	mva	sin,x	vx
+	txa
+	add	#$47
+	tax
+	lda	#2
+	add:sta	i2
+	tay
+	lda	sin,y
+	and	#$7f
+	sta	an
+	jsr	movev
+	jsr	frame
+	dec	ct
+	bne	dir7
+	inc	ct
+	lda	an
+	bne	dir7
+; hamuj
+dir8	lda	vx
+	seq:inc	vx
+	lda	vy
+	seq:inc	vy
+	lda	#1
+	add	an
+	and	#$7f
+	sta	an
+	jsr	movev
+	jsr	frame
+	lda	vx
+	ora	vy
+	bne	dir8
+; na torus
+	mva	#0	ct
+	mva	#5	div5
+	mva	#0	coli
+
+totoru
+	ldx	an
+	ldy	an
+	jsr	chraysh
+
+	lda	ct
+	asl	@
+	tax
+	mva	>hi2	hp+1,x
+	mva	>lo2	lp+1,x
+	lda	ct
+	asl	@
+	adc	ct
+	adc	an
+	and	#$7f
+	 tay
+	eor	#$80
+	tax
+	jsr	chraysh
+	inx
+	smi:ldx	#$80
+	iny
+	spl:ldy	#0
+	jsr	chraysh
+	inx
+	smi:ldx	#$80
+	iny
+	spl:ldy	#0
+	jsr	chraysh
+	inx
+	smi:ldx	#$80
+	iny
+	spl:ldy	#0
+	jsr	chraysh
+
+	lda	an
+	add	#1
+	and	#$7f
+	sta	an
+	dec	div5
+	bne	ncl
+	ldx:inc	coli
+	mva	colors2,x	^13,x
+	mva	#5	div5
+ncl
+	jsr	frame
+	inc	ct
+	lda	ct
+	cmp	#43
+	bcc	totoru
+
+	mva	#50	ct
+spit0
+	lda	an
+	add	#1
+	and	#$7f
+	sta	an
+	jsr	frame
+	dec	ct
+	bne	spit0
+
+	mva	#-3	id
+	jmp	spito
+
+colors
+;	dta	$00,$78,$56,$34,$22,$1a,$c6,$a4,$96,$81
+;	dta	$22,$34,$56,$76,$96,$a6,$c8,$1a
+	dta	$00,$a0,$a2,$a4,$a6,$a8,$aa,$ac,$ae,$81
+colors2	dta	$40,$42,$44,$46,$48,$4a,$4c,$4e
+
+	ift	!NUMEN
+Banks_table
+Banks_forEffect	dta	$ea,$ee,$fe
+Banks_MAIN_INDEX	equ	2
+	eif
+
+	org	$4000
+ctab	ins	'tabc.dat'
+
+	org	$8000
+	ift	NUMEN
+atab	org	*+4480
+rtab	org	*+4480
+	els
+atab	ins	'taba.dat'
+rtab	ins	'tabr.dat'
+	eif
+
+	end

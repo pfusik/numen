@@ -1,0 +1,251 @@
+MUSIC	equ	1
+STEREO	equ	1
+FRAME_INDICATOR equ	0
+SYNC_INDICATOR	equ	0
+BUFFER_INDICATOR equ	0
+
+LEFT	equ	0
+CENTER	equ	1
+RIGHT	equ	2
+
+	icl	'numendef.asx'
+	opt	h-
+	dta	b(Banks_PLAYINF_INDEX),a(main-1)
+ ift MUSIC
+;	ins	'bonop.mpt',2
+;	ins	'bono.mpf',2
+	ins	'bonoxxx.mpf',2
+lenpat	equ	$40
+speed	equ	$03
+	ift	STEREO
+CHAN1	equ	CENTER
+CHAN2	equ	CENTER
+CHAN3	equ	CENTER
+CHAN4	equ	CENTER
+	els
+CHAN1	equ	LEFT
+CHAN2	equ	LEFT
+CHAN3	equ	LEFT
+CHAN4	equ	LEFT
+	eif
+
+ eif
+	opt	h+
+
+
+Msx_readPointer		equ	$06
+Msx_writePointer	equ	$08
+
+Msx_buffer	equ	$4002
+Msx_BUFFER_LEN	equ	$1ffe
+msx		equ	$6000
+PlayInf_code	equ	$7680
+Sound_player	equ	$7800
+
+	org	PlayInf_code
+main
+	lda:rpl	^4b
+	lda:rne	^4b
+	sta	^4a
+	mva	#3	^2f
+:STEREO	sta	$d21f
+	ldx	#8
+	lda	#0
+	ift	STEREO
+silen	sta	^20,x
+	sta	$d210,x
+	dex:bpl	silen
+	sta	^29
+	sta	$d219
+	els
+	sta:rpl	^20,x-
+	sta	^29
+	eif
+
+ ift MUSIC
+	mva	<Msx_buffer	Msx_readPointer
+	sta	Msx_writePointer
+	mva	>Msx_buffer	Msx_readPointer+1
+	sta	Msx_writePointer+1
+	jsr:rcc	PlayInf_calc
+ eif
+
+	mwa	#nmi	$fffa
+;	mva	#$c0	^4e
+
+	mwa	#$4006	Inflate_inputPointer
+	mva	#Banks_LOAD_FIRST_INDEX	Inflate_inputBankIndex
+	lda	Banks_table+Banks_MAIN_INDEX
+	jmp	NextBlock+3
+
+PlayInf_replay
+ ift FRAME_INDICATOR
+lfi	mva	#$34	^12
+	sta	^1a
+	eor	#4
+	sta	lfi+1
+ eif
+ ift MUSIC
+	ift	BUFFER_INDICATOR
+	mva	#$80	^0e
+	mva	#$a0	^10
+	lda	Msx_readPointer+1
+	asl	@
+	sta	^01
+	lda	Msx_writePointer+1
+	asl	@
+	sta	^03
+	eif
+	ldy	#8
+	mva	(Msx_readPointer),y	^28
+:STEREO	sta	$d218
+	ldy	#0
+	lda	(Msx_readPointer),y
+:CHAN1<=CENTER	sta	^20
+:CHAN1>=CENTER	sta	$d210
+	ldy	#2
+	lda	(Msx_readPointer),y
+:CHAN2<=CENTER	sta	^22
+:CHAN2>=CENTER	sta	$d212
+	ldy	#4
+	lda	(Msx_readPointer),y
+:CHAN3<=CENTER	sta	^24
+:CHAN3>=CENTER	sta	$d214
+	ldy	#6
+	lda	(Msx_readPointer),y
+	ift	SYNC_INDICATOR
+	add	#48
+	sta	^02
+	mva	#$80	^0f
+	els
+:CHAN4<=CENTER	sta	^26
+:CHAN4>=CENTER	sta	$d216
+	eif
+	ldy	#1
+	lda	(Msx_readPointer),y
+:CHAN1<=CENTER	sta	^21
+:CHAN1>=CENTER	sta	$d211
+	ldy	#3
+	lda	(Msx_readPointer),y
+:CHAN2<=CENTER	sta	^23
+:CHAN2>=CENTER	sta	$d213
+	ldy	#5
+	lda	(Msx_readPointer),y
+:CHAN3<=CENTER	sta	^25
+:CHAN3>=CENTER	sta	$d215
+	ldy	#7
+	lda	(Msx_readPointer),y
+:CHAN4<=CENTER	sta	^27
+:CHAN4>=CENTER	sta	$d217
+	lda	#9
+	add	Msx_readPointer
+	bcc	PlayInf_replay_samePage
+	ldy	Msx_readPointer+1
+	iny
+	cpy	>Msx_buffer+Msx_BUFFER_LEN
+	bcc	PlayInf_replay_notEnd
+	lda	<Msx_buffer
+	ldy	>Msx_buffer
+PlayInf_replay_notEnd
+	sty	Msx_readPointer+1
+PlayInf_replay_samePage
+	sta	Msx_readPointer
+ eif
+	rts
+
+ ift MUSIC
+PlayInf_calc
+	jsr	Sound_player
+	lda	aud
+	ldy	#8
+	sta	(Msx_writePointer),y
+	and	#$10
+v10	equ	*-1
+	cmp	#1
+	lda	freq
+	ldx	freq+1
+	bcc	w1
+	ldy	numdzw+1
+	lda	bsfrql,y
+	ldx	bsfrqh,y
+w1	sta	(Msx_writePointer),0+
+	mva	volume	(Msx_writePointer),y+
+	txa:sta	(Msx_writePointer),y+
+	mva	volume+1	(Msx_writePointer),y+
+	mva	freq+2	(Msx_writePointer),y+
+	mva	volume+2	(Msx_writePointer),y+
+	ift	SYNC_INDICATOR
+	mva	pozptr	(Msx_writePointer),y+
+	els
+	mva	freq+3	(Msx_writePointer),y+
+	eif
+	mva	volume+3	(Msx_writePointer),y
+	lda	#9
+	add	Msx_writePointer
+	bcc	PlayInf_calc_samePage
+	ldy	Msx_writePointer+1
+	iny
+	cpy	>Msx_buffer+Msx_BUFFER_LEN
+	bcc	PlayInf_calc_notEnd
+	lda	<Msx_buffer
+	ldy	>Msx_buffer
+PlayInf_calc_notEnd
+	sty	Msx_writePointer+1
+PlayInf_calc_samePage
+	sta	Msx_writePointer
+	rts
+ eif
+
+PlayInf_idle
+ ift MUSIC
+	lda	Msx_writePointer
+	cmp	Msx_readPointer
+	bne	PlayInf_idle_calc
+	lda	Msx_writePointer+1
+	cmp	Msx_readPointer+1
+	beq	PlayInf_idle_skip
+PlayInf_idle_calc
+	jsr	PlayInf_calc
+PlayInf_idle_skip
+ eif
+	lda	Vbl_clock+1
+	bmi	PlayInf_idle
+	rts
+
+ ift MUSIC
+zp	equ	$0a - 12 bytes on page 0
+
+	org	Sound_player
+	icl	'mptplfox.asx'
+ eif MUSIC
+
+	org	Runtime1_end
+	ert	Idle!=*
+	mva	Banks_table+Banks_PLAYINF_INDEX	^31
+	jmp	PlayInf_idle
+
+nmi	pha
+	bit	^4f
+	bpl	vbl
+	ert	Dli_vector!=*+1
+	jmp	*
+vbl	txa:pha
+	tya:pha
+	lda:pha	^31
+	mva	Banks_table+Banks_PLAYINF_INDEX	^31
+
+	jsr	PlayInf_replay
+
+	lda	Vbl_clock+1
+	spl:inw	Vbl_clock
+
+	ert	Vbl_vector!=*+1
+	jsr	rts
+
+	pla:sta	^31
+	pla:tay
+	pla:tax
+	pla:rti
+Reloc_end
+
+	end

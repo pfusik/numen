@@ -1,0 +1,1495 @@
+PACK	equ	1
+
+	ift	PACK
+	opt	f+	; fill space between ORGs with $FFs
+	eif
+
+	ift	0&&!PACK	; brzydkie paski!!!
+
+	org	$3000
+init
+	ldx	#39
+ii1	txa:sta	index,x
+	dex:bpl	ii1
+
+ii2
+	lda	^2a
+	and	#$3f
+	cmp	#40
+	scc:sbc	#40
+	tax
+	lda	^2a
+	and	#$3f
+	cmp	#40
+	scc:sbc	#24
+	tay
+	lda:pha	index,x
+	mva	index,y	index,x
+	pla:sta	index,y
+	inc	ct
+	bne	ii2
+
+	lda:rne	^4b
+	mva	#1	$26f
+	ldx	#3
+	sta:rpl	$2c0,x-
+	ldx	#17
+	mva:rpl	gtiaini,x	^00,x-
+
+	ldx	#39
+lp
+	lda:rne	^4b
+	lda	index,x
+	and	#7
+	tay
+	lda	#0
+	sec
+rr	ror	@
+	dey
+	bpl	rr
+	pha
+	lda	index,x
+:3	lsr	@
+	tay
+	pla
+	ora:sta	graf,y
+	sta	^0d,y
+	mwa	$58	$80
+	mva	#24	$82
+sp	mva	#0	($80),y
+	lda	#40
+	add:sta	$80
+	scc:inc	$81
+	dec	$82
+	bne	sp
+	dex
+	bpl	lp
+	mva	#0	$22f
+	lda:rne	^4b
+	ldx	#17
+	sta:rpl	^00,x-
+	rts
+
+gtiaini	dta	$50,$70,$90,$b0,$48,$40,$38,$30,$03,$03,$03,$03,$ff
+graf	dta	0,0,0,0,0
+ct	dta	0
+index	org	*+40
+
+	ini	init
+
+	eif	; brzydkie paski!!!
+
+	icl	'../filelen.asx'
+; DEMO_LENGTH_PERCENT equ [162560+99]/100
+HUNDRED_PERCENT	equ	1
+
+FILE_CHANNEL	equ	$10
+Banks_MAIN_INDEX equ	16
+
+PANEL_Y		equ	128
+MENU_Y1		equ	136
+MENU_Y2		equ	152
+MENU_Y3		equ	168
+LOADING_Y	equ	136
+PROGRESS_BAR_Y	equ	152
+PERCENT_COLUMN	equ	28
+HIT_Y		equ	168
+SETUP_Y1	equ	128
+SETUP_Y2	equ	144
+SETUP_Y3	equ	160
+SETUP_Y4	equ	176
+
+ACTION_REPEAT_DELAY equ	16
+ACTION_REPEAT_INTERVAL equ	3
+A_OK	equ	0
+A_SELECT equ	1
+A_OPTION equ	2
+A_UP	equ	3
+A_DOWN	equ	4
+A_LEFT	equ	5
+A_RIGHT	equ	6
+
+Banks_save	equ	$3b00
+
+s1	equ	$80	2
+s2	equ	$82	2
+mask	equ	$86
+index	equ	$87
+ptr	equ	$88	2
+ptr2	equ	$8a	2
+blockAddress	equ	$8c	2
+blockLength	equ	$8e	2
+bytesPerPercent equ	$90	2
+bytesLeftToPercent equ	$92	2
+percentage	equ	$94
+menuStack	equ	$95
+acceptedError	equ	$96
+lastConsol	equ	$a0
+repeatConsol	equ	$a1
+lastStick	equ	$a2
+repeatStick	equ	$a3
+lastFire	equ	$a4
+userAction	equ	$a5
+menuOption	equ	$a6
+setupMode	equ	$a7
+setupRow	equ	$a8
+setupTopBank	equ	$a9
+
+	org	$2800
+font
+	ins	'font.raw'
+LETTER	equ	'A'-10
+PERCENT_CHAR equ 36
+EXCLAM_CHAR equ	37
+NO_CHAR equ 38
+YES_CHAR equ 39
+SPACE_CHAR equ	40
+
+bitMasks
+	dta	$04,$02,$01,$80,$40,$20,$10,$08
+leftMasks
+	dta	$fc,$fe,$00,$80,$c0,$e0,$f0,$f8
+
+textBegin
+demoText
+	dta	'D'-LETTER,'E'-LETTER,'M'-LETTER,'O'-LETTER,-1
+noteText
+	dta	'N'-LETTER,'O'-LETTER,'T'-LETTER,'E'-LETTER,-1
+setupText
+	dta	'S'-LETTER,'E'-LETTER,'T'-LETTER,'U'-LETTER,'P'-LETTER,-1
+loadingText
+	dta	'L'-LETTER,'O'-LETTER,'A'-LETTER,'D'-LETTER,'I'-LETTER,'N'-LETTER,'G'-LETTER,-1
+turnDiskText
+	dta	'T'-LETTER,'U'-LETTER,'R'-LETTER,'N'-LETTER,SPACE_CHAR,'D'-LETTER,'I'-LETTER,'S'-LETTER,'K'-LETTER,-1
+hitAKeyText
+	dta	'H'-LETTER,'I'-LETTER,'T'-LETTER,SPACE_CHAR,'A'-LETTER,SPACE_CHAR,'K'-LETTER,'E'-LETTER,'Y'-LETTER,-1
+bankText
+	dta	-1,-1,-1,-1
+autoText
+	dta	NO_CHAR,'A'-LETTER,'U'-LETTER,'T'-LETTER,'O'-LETTER,-1
+okText
+	dta	'O'-LETTER,'K'-LETTER,-1
+saveText
+	dta	'S'-LETTER,'A'-LETTER,'V'-LETTER,'E'-LETTER,-1
+cancelText
+	dta	'C'-LETTER,'A'-LETTER,'N'-LETTER,'C'-LETTER,'E'-LETTER,'L'-LETTER,-1
+savingText
+	dta	'S'-LETTER,'A'-LETTER,'V'-LETTER,'I'-LETTER,'N'-LETTER,'G'-LETTER,-1
+memoryText
+	dta	'M'-LETTER,'E'-LETTER,'M'-LETTER,'O'-LETTER,'R'-LETTER,'Y'-LETTER,-1
+configText
+	dta	'C'-LETTER,'O'-LETTER,'N'-LETTER,'F'-LETTER,'I'-LETTER,'G'-LETTER,-1
+atLeastText
+	dta	'A'-LETTER,'T'-LETTER,SPACE_CHAR,'L'-LETTER,'E'-LETTER,'A'-LETTER,'S'-LETTER,'T'-LETTER,-1
+ramText
+	dta	3,2,0,'K'-LETTER,'B'-LETTER,SPACE_CHAR,'R'-LETTER,'A'-LETTER,'M'-LETTER,-1
+requiredText
+	dta	'R'-LETTER,'E'-LETTER,'Q'-LETTER,'U'-LETTER,'I'-LETTER,'R'-LETTER,'E'-LETTER,'D'-LETTER,-1
+damnItText
+	dta	'D'-LETTER,'A'-LETTER,'M'-LETTER,'N'-LETTER,SPACE_CHAR,'I'-LETTER,'T'-LETTER,EXCLAM_CHAR,-1
+wrongText
+	dta	'W'-LETTER,'R'-LETTER,'O'-LETTER,'N'-LETTER,'G'-LETTER,-1
+correctText
+	dta	'C'-LETTER,'O'-LETTER,'R'-LETTER,'R'-LETTER,'E'-LETTER,'C'-LETTER,'T'-LETTER,-1
+errorText
+	dta	'E'-LETTER,'R'-LETTER,'R'-LETTER,'O'-LETTER,'R'-LETTER,SPACE_CHAR,-1,-1,-1,-1
+mustUseText
+	dta	'M'-LETTER,'U'-LETTER,'S'-LETTER,'T'-LETTER,SPACE_CHAR,'U'-LETTER,'S'-LETTER,'E'-LETTER,-1
+allYourText
+	dta	'A'-LETTER,'L'-LETTER,'L'-LETTER,SPACE_CHAR,'Y'-LETTER,'O'-LETTER,'U'-LETTER,'R'-LETTER,-1
+pleaseText
+	dta	'P'-LETTER,'L'-LETTER,'E'-LETTER,'A'-LETTER,'S'-LETTER,'E'-LETTER,-1
+selectText
+	dta	'S'-LETTER,'E'-LETTER,'L'-LETTER,'E'-LETTER,'C'-LETTER,'T'-LETTER,-1
+sixteenBanksText
+	dta	1,6,SPACE_CHAR,'B'-LETTER,'A'-LETTER,'N'-LETTER,'K'-LETTER,'S'-LETTER,-1
+
+menuScreenAddress_lo
+	dta	l(scr1+MENU_Y1*40+30-6,scr1+MENU_Y2*40+30-6,scr1+MENU_Y3*40+30-6)
+menuScreenAddress_hi
+	dta	h(scr1+MENU_Y1*40+30-6,scr1+MENU_Y2*40+30-6,scr1+MENU_Y3*40+30-6)
+
+fileNameAddress_lo
+	dta	l(demo1FileName,outroFileName)
+fileNameAddress_hi
+	dta	h(demo1FileName,outroFileName)
+percent_lo
+	dta	l(DEMO_LENGTH_PERCENT,OUTRO_LENGTH_PERCENT)
+percent_hi
+	dta	h(DEMO_LENGTH_PERCENT,OUTRO_LENGTH_PERCENT)
+
+setupScreenAddress_lo
+	dta	l(scr1+SETUP_Y1*40+21,scr1+SETUP_Y2*40+21,scr1+SETUP_Y3*40+21,scr1+SETUP_Y4*40+21)
+setupScreenAddress_hi
+	dta	h(scr1+SETUP_Y1*40+21,scr1+SETUP_Y2*40+21,scr1+SETUP_Y3*40+21,scr1+SETUP_Y4*40+21)
+
+configFileName
+	dta	c'D:MEMORY.CFG',0
+demo1FileName
+	dta	c'D:NUMEN1.TQA',0
+demo2FileName
+	dta	c'D:NUMEN2.TQA',0
+outroFileName
+	dta	c'D:OUTRO.COM',0
+
+; text printing stuff
+drawChar
+	sta	s1+1
+	eor	>scr1^scr2
+	sta	s2+1
+	txa
+:5	asl	@
+	sta	drawChar_fontPtr1
+	eor	#16
+	sta	drawChar_fontPtr2
+	txa
+:3	lsr	@
+	add	>font
+	sta	drawChar_fontPtr1+1
+	sta	drawChar_fontPtr2+1
+	ldx	#0	-
+drawChar_line
+drawChar_fontPtr1 equ	*+1
+	mva	font,x	(s1),y
+	sta	(s2),y+
+	bne	drawChar_samePage1
+	inc	s1+1
+	inc	s2+1
+drawChar_samePage1
+drawChar_fontPtr2 equ	*+1
+	mva	font,x	(s1),y
+	sta	(s2),y
+	tya
+	adc	#39	-
+	tay
+	bcc	drawChar_samePage
+	inc	s1+1
+	inc	s2+1
+drawChar_samePage
+	inx:cpx	#16
+	bcc	drawChar_line
+	rts
+
+drawString
+	sta	ptr+1
+	lda	textBegin,x
+	bmi	drawString_end
+	cmp	#SPACE_CHAR
+	bcs	drawString_space
+	stx	index
+	tax
+	sty	ptr
+	lda	ptr+1
+	jsr	drawChar
+	ldx	index
+	ldy	ptr
+drawString_space
+	lda	ptr+1
+	cpy	#$fe
+	iny:iny
+	adc	#0
+	inx
+	bne	drawString	!
+drawString_end
+	rts
+
+; i/o stuff
+readBlockCountPercents
+	lda	#7
+	jsr	fileCommandWithAddress
+	lda	bytesLeftToPercent
+	sub	$348+FILE_CHANNEL
+	sta	bytesLeftToPercent
+	lda	bytesLeftToPercent+1
+	sbc	$349+FILE_CHANNEL
+	sta	bytesLeftToPercent+1
+	bcs	readBlockCountPercents_exit
+	jsr	drawNextPercent
+	lda	bytesPerPercent
+	add:sta	bytesLeftToPercent
+	lda	bytesPerPercent+1
+	adc:sta	bytesLeftToPercent+1
+	ldy	#1
+readBlockCountPercents_exit
+	tya
+fileOk
+	rts
+
+openFileForReading
+	lda	#4
+openFile
+	sta	$34a+FILE_CHANNEL
+	mva	#0	$34b+FILE_CHANNEL
+	lda	#3
+fileCommandWithAddress
+	stx	$344+FILE_CHANNEL
+	sty	$345+FILE_CHANNEL
+	jmp	fileCommand
+closeFileSilent
+	mva	#0	acceptedError
+closeFile
+	lda	#12
+fileCommand
+	sta	$342+FILE_CHANNEL
+	ldx	#FILE_CHANNEL
+	jsr	$e456
+	bpl	fileOk
+	lda	acceptedError
+	beq	fileOk
+	cpy	acceptedError
+	beq	fileOk
+;error
+	tya
+	ldy	#12
+	cpy	$342+FILE_CHANNEL
+	beq	errorClosing
+	sty	$342+FILE_CHANNEL
+	pha
+	jsr	$e456
+	pla
+errorClosing
+	ldx:txs	menuStack
+	ldx	#1
+	cmp	#200
+	bcc	error_conv100
+	inx
+	sbc	#101	+
+error_conv100
+	sbc	#99
+	ldy	#-1
+error_conv10
+	iny
+	sbc	#10	+
+	bcs	error_conv10
+	adc	#10	-
+	stx	errorText+6
+	sty	errorText+7
+	sta	errorText+8
+	jsr	clearPanel
+	ldx	#errorText-textBegin
+	ldy	<scr1+MENU_Y1*40+30-9
+	lda	>scr1+MENU_Y1*40+30-9
+	jsr	drawString
+	ldx	#damnItText-textBegin
+	ldy	<scr1+MENU_Y3*40+30-8
+	lda	>scr1+MENU_Y3*40+30-8
+	jsr	drawString
+	ldx	#18
+	ldy	<scr1+MENU_Y3*40+30-9
+	lda	>scr1+MENU_Y3*40+30-9
+	jsr	invertBar
+	jsr	waitForAKey
+	jsr	clearPanel
+	jmp	menu_enter
+
+; progress bar
+drawNextPercent
+	inc	percentage
+drawNextPercent_dontFlicker
+	lda	^4b
+	cmp	#[32+PROGRESS_BAR_Y+18]/2
+	bcs	drawNextPercent_wontFlicker
+	cmp	#[32+PROGRESS_BAR_Y-64]/2
+	bcs	drawNextPercent_dontFlicker
+drawNextPercent_wontFlicker
+	lda	percentage
+	ift	HUNDRED_PERCENT
+	cmp	#100
+	bcs	drawNextPercent_hundred
+	eif
+	cmp	#10
+	bcc	drawNextPercent_oneDigit
+	ldx	#-1	+
+drawNextPercent_div10
+	inx
+	sbc	#10	+
+	bcs	drawNextPercent_div10
+	adc	#10	-
+	pha
+	ldy	<scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN
+	lda	>scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN
+	jsr	drawChar
+	pla
+drawNextPercent_oneDigit
+	tax
+	ldy	<scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN+2
+	lda	>scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN+2
+	jsr	drawChar
+
+	lda	percentage
+	sub	#26+[PERCENT_COLUMN-27]*8
+	bcc:beq	drawNextPercent_oneColumn
+:3	lsr	@
+	beq	drawNextPercent_noFullBytes
+	cmp	#5
+	scc:lda	#4
+	tax
+	ldy	<scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN
+	lda	>scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN
+	jsr	invertBar
+drawNextPercent_noFullBytes
+	lda	percentage
+	cmp	#26+[PERCENT_COLUMN-27]*8+33
+	bcs	drawNextPercent_oneColumn
+	and	#7
+	tax
+	lda	leftMasks,x
+	bne	drawNextPercent_drawColumn
+drawNextPercent_return
+	rts
+	ift	HUNDRED_PERCENT
+drawNextPercent_hundred
+	bne	drawNextPercent_return
+	ldx	#1
+	ldy	<scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN-2
+	lda	>scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN-2
+	jsr	drawChar
+	ldx	#0
+	ldy	<scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN
+	lda	>scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN
+	jsr	drawChar
+	ldx	#0
+	ldy	<scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN+2
+	lda	>scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN+2
+	jsr	drawChar
+	ldx	#6
+	ldy	<scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN-2
+	lda	>scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN-2
+	jsr	invertBar
+	eif
+drawNextPercent_oneColumn
+	lda	percentage
+	and:tax	#7
+	lda	bitMasks,x
+drawNextPercent_drawColumn
+	tax
+	lda	percentage
+	add	#5
+:3	lsr	@
+	add	<scr1+PROGRESS_BAR_Y*40+23
+	tay
+	lda	>scr1+PROGRESS_BAR_Y*40+23
+	adc	#0
+
+drawBarColumn
+	stx	mask
+	sta	s1+1
+	eor	>scr1^scr2
+	sta	s2+1
+	clc
+	ldx	#16
+drawBarColumn_line
+	lda	mask
+	eor:sta	(s1),y
+	sta	(s2),y
+	tya
+	adc	#40	-
+	tay
+	bcc	drawBarColumn_samePage
+	inc	s1+1
+	inc	s2+1
+	clc
+drawBarColumn_samePage
+	dex
+	bne	drawBarColumn_line
+ertees
+	rts
+
+; invert bytes on screen
+invertBar
+	dex:stx	index
+	sty	ptr
+	sta	ptr+1
+	eor	>scr1^scr2
+	sty	ptr2
+	sta	ptr2+1
+	ldx	#16
+invertBar_line
+	ldy	index
+invertBar_byte
+	lda	#$ff
+	eor:sta	(ptr),y
+	sta	(ptr2),y
+	dey:bpl	invertBar_byte
+	lda	#40
+	add:sta	ptr
+	sta	ptr2
+	bcc	invertBar_samePage
+	inc	ptr+1
+	inc	ptr2+1
+invertBar_samePage
+	dex
+	bne	invertBar_line
+	rts
+
+; clear bottom-right of screen
+clearPanel
+	ldx	#192-PANEL_Y
+	ldy	<scr1+PANEL_Y*40+20
+	lda	>scr1+PANEL_Y*40+20
+clearRectangle
+	sty	ptr
+	sta	ptr+1
+	eor	>scr1^scr2
+	sty	ptr2
+	sta	ptr2+1
+clearPanel_line
+	lda	#0
+	ldy	#19
+clearPanel_byte
+	sta	(ptr),y
+	sta	(ptr2),y
+	dey:bpl	clearPanel_byte
+	lda	#40
+	add:sta	ptr
+	sta	ptr2
+	bcc	clearPanel_samePage
+	inc	ptr+1
+	inc	ptr2+1
+clearPanel_samePage
+	dex
+	bne	clearPanel_line
+	rts
+
+; wait for something
+waitForAKey
+	mva	#$ff	$2fc
+waitForAKey_loop
+	lda	^1f
+	cmp	lastConsol
+	beq	waitForAKey_noConsol
+	sta	lastConsol
+	mvx	#ACTION_REPEAT_DELAY	repeatConsol
+	cmp	#7
+	bne	waitForAKey_return
+waitForAKey_noConsol
+	lda	$284	; FIRE
+	cmp:sta	lastFire
+	bcc	waitForAKey_return
+	lda	^2f
+	and	#8	; SHIFT
+	beq	waitForAKey_return
+	lda	#$ff
+	cmp	$2fc
+	beq	waitForAKey_loop
+	sta	$2fc
+waitForAKey_return
+	rts
+
+; read keys & joy
+getUserAction
+	lda	20
+	cmp:req	20
+	ldx	#ACTION_REPEAT_DELAY
+	lda	^1f
+	cmp	lastConsol
+	bne	getUserAction_newConsol
+	dec	repeatConsol
+	bne	getUserAction_noConsol
+	ldx	#ACTION_REPEAT_INTERVAL
+getUserAction_newConsol
+	sta	lastConsol
+	stx	repeatConsol
+	ldx	#A_OK
+	cmp	#6
+	beq	getUserAction_return
+	ldx	#A_SELECT
+	cmp	#5
+	beq	getUserAction_return
+	ldx	#A_OPTION
+	cmp	#3
+	beq	getUserAction_return
+getUserAction_noConsol
+	lda	$2fc
+	and	#$3f
+	ldx	#A_OK
+	cmp	#$21	; SPACE
+	beq	getUserAction_returnKey
+	cmp	#$0c	; RETURN
+	beq	getUserAction_returnKey
+	ldx	#A_UP
+	cmp	#$0e	; -
+	beq	getUserAction_returnKey
+	cmp	#$03	; F1
+	beq	getUserAction_returnKey
+	ldx	#A_DOWN
+	cmp	#$0f	; =
+	beq	getUserAction_returnKey
+	cmp	#$04	; F2
+	beq	getUserAction_returnKey
+	ldx	#A_LEFT
+	cmp	#$06	; +
+	beq	getUserAction_returnKey
+	cmp	#$13	; F3
+	beq	getUserAction_returnKey
+	ldx	#A_RIGHT
+	cmp	#$07	; *
+	beq	getUserAction_returnKey
+	cmp	#$14	; F4
+	beq	getUserAction_returnKey
+	ldx	#A_OK
+	lda	$284
+	cmp:sta	lastFire
+	bcc	getUserAction_return
+	ldx	#ACTION_REPEAT_DELAY
+	lda	$278
+	cmp	lastStick
+	bne	getUserAction_newStick
+	dec	repeatStick
+	bne	getUserAction_noStick
+	ldx	#ACTION_REPEAT_INTERVAL
+getUserAction_newStick
+	sta	lastStick
+	stx	repeatStick
+	ldx	#A_UP
+	lsr	@
+	bcc	getUserAction_return
+	ldx	#A_DOWN
+	lsr	@
+	bcc	getUserAction_return
+	ldx	#A_LEFT
+	lsr	@
+	bcc	getUserAction_return
+	ldx	#A_RIGHT
+	lsr	@
+	bcc	getUserAction_return
+getUserAction_noStick	equ	getUserAction
+	jmp	getUserAction
+getUserAction_returnKey
+	mva	#$ff	$2fc
+getUserAction_return
+	stx	userAction
+	rts
+
+; draw mark & bank no (for setup)
+drawBank
+	txa
+	add	setupTopBank
+	tay
+	lda	bankSelection,y
+	and	#1
+	add	#NO_CHAR
+	sta	bankText
+	lda	allBanks,y
+:4	lsr	@
+	sta	bankText+1
+	lda	allBanks,y
+	and	#$f
+	sta	bankText+2
+	ldy	setupScreenAddress_lo,x
+	lda	setupScreenAddress_hi,x
+	ldx	#bankText-textBegin
+	jmp	drawString
+
+; draw mark & auto (for setup)
+drawAuto
+	sta	autoText
+	ldx	#autoText-textBegin
+	ldy	<scr1+SETUP_Y1*40+34-5
+	lda	>scr1+SETUP_Y1*40+34-5
+	jmp	drawString
+
+; setup cursor
+invertSetupBar
+	lda	setupMode
+	seq:lda	#7
+	add	setupScreenAddress_lo,x	-
+	tay
+	lda	setupScreenAddress_hi,x
+	adc	#0
+	ldx	setupMode
+	cpx	#1
+	ldx	#6
+	scc:ldx	#12
+	jmp	invertBar
+
+; here we go!
+start
+	tsx:stx	menuStack
+; input: scr1 contains the left picture, both frames side-by-side
+; input: logo contains right-top picture, 20 bytes/line
+; output: left picture on scr1/scr2
+; output: logo on scr1/scr2
+; output: bottom-right on scr1/scr2 cleared
+	mwa	#scr1+20	s1
+	mwa	#scr2+20	s2
+	mwa	#scr2	ptr
+	mwa	#logo	ptr2
+	ldx	#128
+movepic_withLogo
+	ldy	#19
+movepic_withLogo1
+	mva	(s1),y	(ptr),y
+	mva	(ptr2),y	(s1),y
+	sta	(s2),y
+	dey
+	bpl	movepic_withLogo1
+	lda	#40
+	add:sta	s1
+	scc:inc	s1+1
+	lda	#40
+	add:sta	s2
+	scc:inc	s2+1
+	lda	#40
+	add:sta	ptr
+	scc:inc	ptr+1
+	lda	#20
+	add:sta	ptr2
+	scc:inc	ptr2+1
+	dex
+	bne	movepic_withLogo
+	ldx	#64
+movepic_panel
+	ldy	#19
+movepic_panel1
+	mva	(s1),y	(ptr),y
+	mva	#0	(s1),y
+	sta	(s2),y
+	dey
+	bpl	movepic_panel1
+	lda	#40
+	add:sta	s1
+	scc:inc	s1+1
+	lda	#40
+	add:sta	s2
+	scc:inc	s2+1
+	lda	#40
+	add:sta	ptr
+	scc:inc	ptr+1
+	dex
+	bne	movepic_panel
+	stx	s1
+	stx	s2
+; detect extended memory
+	ldx:rne	^4b
+	sei:stx	^4e
+	stx	^40
+	ldy	#0
+Banks_auto1
+	stx	^31
+	mva	$7fff	Banks_save,x
+	inx:inx
+	bne	Banks_auto1
+Banks_auto2
+	stx	^31
+	stx	$7fff
+	inx:inx
+	bne	Banks_auto2
+Banks_auto3
+	stx	^31
+	cpx	$7fff
+	bne	Banks_auto4
+	txa:sta	allBanks,y+
+Banks_auto4
+	inx:inx
+	bne	Banks_auto3
+Banks_auto6
+	stx	^31
+	mva	Banks_save,x	$7fff
+	inx:inx
+	bne	Banks_auto6
+	dey
+	bmi	*	; ??? something very bad must have happened ???
+	sty	totalBanks
+	mva	#$ff	^31
+; by default use first 16 banks
+	ldy	#15
+initAutoBanks
+	mva	allBanks,y	selectedBanks,y
+	mva	#1	bankSelection,y
+	dey:bpl	initAutoBanks
+	sta	autoBanks
+	ldy	#111
+	lsr	@
+	sta:rpl	bankSelection+16,y-
+	mva	#$fe	selectedBanks+16
+; show screen
+	lda:rne	^4b
+	lda	#4
+	sta	$2c6
+	sta	$2c8
+	mva	#$a	$2c5
+	mva	#$22	$22f
+	mwa	#dl1	$230
+	mwa	#dli	$200
+	mwa	$222	oldvbl
+	mwa	#vbl	$222
+	mva	#$40	^4e
+	cli
+	mva	#ACTION_REPEAT_DELAY	$2d9
+	mva	#ACTION_REPEAT_INTERVAL	$2da
+	mva	#$f	lastStick
+	lsr	@
+	sta	lastConsol
+	mva	#0	lastFire
+	mva	#1	repeatConsol
+	sta	repeatStick
+; read config
+	mvx	#0	menuOption
+	lda	totalBanks
+	cmp	#16
+	bcc	menu_enter
+	stx	acceptedError
+	ldx	<configFileName
+	ldy	>configFileName
+	jsr	openFileForReading
+	cpy	#0
+	bmi	menu_enter
+	mwa	#16	$348+FILE_CHANNEL
+	ldx	<selectedBanks
+	ldy	>selectedBanks
+	lda	#7
+	jsr	fileCommandWithAddress
+	cpy	#0
+	bmi	readConfig_close
+	ldy	totalBanks
+	beq	readConfig_close
+	lda	#0
+readConfig_clearSelection
+	dey:sta	bankSelection,y
+	bne	readConfig_clearSelection
+	sta	autoBanks
+;	ldy	#0
+readConfig_selectBanks
+	lda	selectedBanks,y
+	ldx	totalBanks
+readConfig_findBank
+	dex
+	bmi	readConfig_wrongConfig
+	cmp	allBanks,x
+	bne	readConfig_findBank
+	lda	#1
+	cmp:sta	bankSelection,x
+	bne	readConfig_nextBank
+readConfig_wrongConfig
+	mva	#-1	selectedBanks
+readConfig_nextBank
+	iny:cpy	#16
+	bcc	readConfig_selectBanks
+readConfig_close
+	jsr	closeFile
+
+; main menu
+menu_enter
+	ldx	#demoText-textBegin
+	ldy	<scr1+MENU_Y1*40+30-4
+	lda	>scr1+MENU_Y1*40+30-4
+	jsr	drawString
+	ldx	#noteText-textBegin
+	ldy	<scr1+MENU_Y2*40+30-4
+	lda	>scr1+MENU_Y2*40+30-4
+	jsr	drawString
+	ldx	#setupText-textBegin
+	ldy	<scr1+MENU_Y3*40+30-5
+	lda	>scr1+MENU_Y3*40+30-5
+	jsr	drawString
+	ldx	menuOption
+menu_loop
+	stx	menuOption
+	ldy	menuScreenAddress_lo,x
+	lda	menuScreenAddress_hi,x
+	ldx	#12
+	jsr	invertBar
+	jsr	getUserAction
+	ldx	menuOption
+	ldy	menuScreenAddress_lo,x
+	lda	menuScreenAddress_hi,x
+	ldx	#12
+	jsr	invertBar
+	lda	userAction
+	ldx	menuOption
+	cmp	#A_SELECT
+	beq	menu_select
+	cmp	#A_OPTION
+	beq	menu_option
+	cmp	#A_UP
+	beq	menu_up
+	cmp	#A_DOWN
+	beq	menu_down
+	cmp	#A_OK
+	beq	menu_ok
+	jmp	menu_loop
+menu_select
+	inx
+	cpx	#3
+	bcc	menu_loop
+	ldx	#0
+	bpl	menu_loop	!
+menu_option
+	dex
+	bpl	menu_loop
+	ldx	#2
+	bpl	menu_loop	!
+menu_up
+	dex
+	bpl	menu_loop
+	inx
+	bpl	menu_loop	!
+menu_down
+	cpx	#2
+	bcs	menu_loop
+	inx
+	bpl	menu_loop	!
+menu_ok
+	jsr	clearPanel
+	ldx	menuOption
+	cpx	#2
+	jcc	loadFile
+
+; setup
+	ldx	totalBanks
+	cpx	#16
+	jcc	tooFewMemory
+
+setup_run
+	dex
+setup_saveBanksForUndo
+	lda	bankSelection,x
+	cmp	#1
+	rol	@
+	sta	bankSelection,x
+	dex
+	bpl	setup_saveBanksForUndo
+
+	mvx	#1	setupMode
+	stx	setupRow
+	dex	#0
+	stx	setupTopBank
+	lda	autoBanks
+	add	#NO_CHAR
+setup_enter
+	jsr	drawAuto
+	ldx	#okText-textBegin
+	ldy	<scr1+SETUP_Y2*40+34-2
+	lda	>scr1+SETUP_Y2*40+34-2
+	jsr	drawString
+	ldx	#saveText-textBegin
+	ldy	<scr1+SETUP_Y3*40+34-4
+	lda	>scr1+SETUP_Y3*40+34-4
+	jsr	drawString
+	ldx	#cancelText-textBegin
+	ldy	<scr1+SETUP_Y4*40+34-6
+	lda	>scr1+SETUP_Y4*40+34-6
+	jsr	drawString
+
+setup_refreshBanks
+	ldx	#3
+setup_drawBanks
+	txa:pha
+	jsr	drawBank
+	pla:tax
+	dex
+	bpl	setup_drawBanks
+
+	ldy	setupMode
+	ldx	setupRow
+setup_loop
+	sty	setupMode
+	stx	setupRow
+	jsr	invertSetupBar
+	jsr	getUserAction
+	ldx	setupRow
+	jsr	invertSetupBar
+	lda	userAction
+	ldy	setupMode
+	ldx	setupRow
+	cmp	#A_OK
+	beq	setup_ok
+	cmp	#A_SELECT
+	beq	setup_select
+	cmp	#A_OPTION
+	beq	setup_option
+	cmp	#A_UP
+	beq	setup_up
+	cmp	#A_DOWN
+	beq	setup_down
+	cmp	#A_LEFT
+	beq	setup_left
+	cmp	#A_RIGHT
+	beq	setup_right
+	jmp	setup_loop
+setup_select
+	inx
+	cpx	#4
+	bcc	setup_loop
+	ldx	#0
+	cpy	#0
+	bne	setup_loop
+	lda	#3
+	adc	setupTopBank	+
+	cmp	totalBanks
+	bcc	setup_scrollDown
+	stx	setupRow
+	stx	setupTopBank
+	bcs	setup_refreshBanks	!
+setup_option
+	tya
+	eor	#1
+	tay
+	bpl	setup_loop	!
+setup_up
+	dex
+	bpl	setup_loop
+	inx	#0
+	cpy	#0
+	bne	setup_loop
+	lda	setupTopBank
+	beq	setup_loop
+	dec	setupTopBank
+	bpl	setup_refreshBanks	!
+setup_down
+	inx
+	cpx	#4
+	bcc	setup_loop
+	dex	#3
+	cpy	#0
+	bne	setup_loop
+	txa	#3
+	adc	setupTopBank	+
+	cmp	totalBanks
+	bcs	setup_loop
+setup_scrollDown
+	inc	setupTopBank
+	jmp	setup_refreshBanks
+setup_left
+	ldy	#0
+	bpl	setup_loop	!
+setup_right
+	ldy	#1
+	jmp	setup_loop
+setup_ok
+	cpy	#0
+	bne	setup_action
+	txa
+	add	setupTopBank
+	tax
+	lda	bankSelection,x
+	beq	setup_toggleBank
+	ldy	totalBanks
+	cpy	#16
+	beq	setup_mustAll
+setup_toggleBank
+	eor	#1
+	sta	bankSelection,x
+	lda	#NO_CHAR
+	cmp	autoText
+	seq:jsr	drawAuto
+	ldx	setupRow
+	jsr	drawBank
+	ldy	#0
+	ldx	setupRow
+	jmp	setup_loop
+setup_mustAll
+	jsr	clearPanel
+	ldx	#mustUseText-textBegin
+	ldy	<scr1+SETUP_Y1*40+30-8
+	lda	>scr1+SETUP_Y1*40+30-8
+	jsr	drawString
+	ldx	#allYourText-textBegin
+	ldy	<scr1+SETUP_Y2*40+30-8
+	lda	>scr1+SETUP_Y2*40+30-8
+	jsr	drawString
+	ldx	#sixteenBanksText-textBegin
+	ldy	<scr1+SETUP_Y3*40+30-8
+	lda	>scr1+SETUP_Y3*40+30-8
+	jsr	drawString
+	ldx	#damnItText-textBegin
+	ldy	<scr1+SETUP_Y4*40+30-8
+	lda	>scr1+SETUP_Y4*40+30-8
+	jsr	drawString
+	ldx	#18
+	ldy	<scr1+SETUP_Y4*40+30-9
+	lda	>scr1+SETUP_Y4*40+30-9
+	jsr	invertBar
+	jsr	waitForAKey
+	jsr	clearPanel
+	lda	autoText
+	jmp	setup_enter
+setup_action
+	cpx	#0
+	jeq	setup_toggleAuto
+	cpx	#3
+	jeq	setup_cancel
+
+	ldx	#0
+	ldy	#0
+writeSelectedBanks_loop
+	lda	bankSelection,x
+	and	#1
+	beq	writeSelectedBanks_skip
+	cpy	#16
+	beq	setup_please16
+	mva	allBanks,x	selectedBanks,y+
+writeSelectedBanks_skip
+	inx
+	cpx	totalBanks
+	bcc	writeSelectedBanks_loop
+	cpy	#16
+	beq	setup_banksOk
+setup_please16
+	jsr	clearPanel
+	ldx	#pleaseText-textBegin
+	ldy	<scr1+SETUP_Y1*40+30-6
+	lda	>scr1+SETUP_Y1*40+30-6
+	jsr	drawString
+	ldx	#selectText-textBegin
+	ldy	<scr1+SETUP_Y2*40+30-6
+	lda	>scr1+SETUP_Y2*40+30-6
+	jsr	drawString
+	ldx	#sixteenBanksText-textBegin
+	ldy	<scr1+SETUP_Y3*40+30-8
+	lda	>scr1+SETUP_Y3*40+30-8
+	jsr	drawString
+	ldx	#okText-textBegin
+	ldy	<scr1+SETUP_Y4*40+30-2
+	lda	>scr1+SETUP_Y4*40+30-2
+	jsr	drawString
+	ldx	#6
+	ldy	<scr1+SETUP_Y4*40+30-3
+	lda	>scr1+SETUP_Y4*40+30-3
+	jsr	invertBar
+	jsr	waitForAKey
+	jsr	clearPanel
+	lda	autoText
+	jmp	setup_enter
+
+setup_banksOk
+	ldx:dex	totalBanks
+setup_acceptBanks
+	lda	#1
+	and:sta	bankSelection,x
+	dex:bpl	setup_acceptBanks
+	lda	autoText
+	sub	#NO_CHAR
+	sta	autoBanks
+
+	ldx	setupRow
+	cpx	#1
+	jeq	setup_menu
+; save config file
+	jsr	clearPanel
+	ldx	#savingText-textBegin
+	ldy	<scr1+MENU_Y1*40+30-6
+	lda	>scr1+MENU_Y1*40+30-6
+	jsr	drawString
+	ldx	#memoryText-textBegin
+	ldy	<scr1+MENU_Y2*40+30-6
+	lda	>scr1+MENU_Y2*40+30-6
+	jsr	drawString
+	ldx	#configText-textBegin
+	ldy	<scr1+MENU_Y3*40+30-6
+	lda	>scr1+MENU_Y3*40+30-6
+	jsr	drawString
+	mva	#1	acceptedError
+	ldx	<configFileName
+	ldy	>configFileName
+	lda	#8
+	jsr	openFile
+	lda	autoBanks
+	bne	setup_saveEmpty
+	mwa	#16	$348+FILE_CHANNEL
+	ldx	<selectedBanks
+	ldy	>selectedBanks
+	lda	#11
+	jsr	fileCommandWithAddress
+setup_saveEmpty
+	jsr	closeFile
+	jmp	setup_menu
+setup_toggleAuto
+	lda	#NO_CHAR^YES_CHAR
+	eor	autoText
+	jsr	drawAuto
+	lda	autoText
+	cmp	#YES_CHAR
+	bne	setup_noSetAuto
+	ldx:dex	totalBanks
+setup_clearBanks
+	lsr:asl	bankSelection,x
+	dex:bpl	setup_clearBanks
+	ldx	#15
+	inc:rpl	bankSelection,x-
+	jmp	setup_refreshBanks
+setup_noSetAuto
+	ldy	#1
+	ldx	#0
+	jmp	setup_loop
+setup_cancel
+	ldx:dex	totalBanks
+	lsr:rpl	bankSelection,x-
+setup_menu
+	jsr	clearPanel
+	jmp	menu_enter
+
+tooFewMemory
+	jsr	clearPanel
+	ldx	#atLeastText-textBegin
+	ldy	<scr1+SETUP_Y1*40+30-8
+	lda	>scr1+SETUP_Y1*40+30-8
+	jsr	drawString
+	ldx	#ramText-textBegin
+	ldy	<scr1+SETUP_Y2*40+30-9
+	lda	>scr1+SETUP_Y2*40+30-9
+	jsr	drawString
+	ldx	#requiredText-textBegin
+	ldy	<scr1+SETUP_Y3*40+30-8
+	lda	>scr1+SETUP_Y3*40+30-8
+	jsr	drawString
+	ldx	#damnItText-textBegin
+	ldy	<scr1+SETUP_Y4*40+30-8
+	lda	>scr1+SETUP_Y4*40+30-8
+	jsr	drawString
+	ldx	#18
+	ldy	<scr1+SETUP_Y4*40+30-9
+	lda	>scr1+SETUP_Y4*40+30-9
+	jsr	invertBar
+	jsr	waitForAKey
+	jsr	clearPanel
+	jmp	menu_enter
+
+; load demo or outro
+loadFile
+	cpx	#0
+	bne	loadOutro
+	ldx	totalBanks
+	cpx	#16
+	bcc	tooFewMemory
+	lda	selectedBanks
+	cmp	#-1
+	bne	loadOutro
+	ldx	#wrongText-textBegin
+	ldy	<scr1+SETUP_Y1*40+30-5
+	lda	>scr1+SETUP_Y1*40+30-5
+	jsr	drawString
+	ldx	#memoryText-textBegin
+	ldy	<scr1+SETUP_Y2*40+30-6
+	lda	>scr1+SETUP_Y2*40+30-6
+	jsr	drawString
+	ldx	#configText-textBegin
+	ldy	<scr1+SETUP_Y3*40+30-6
+	lda	>scr1+SETUP_Y3*40+30-6
+	jsr	drawString
+	ldx	#correctText-textBegin
+	ldy	<scr1+SETUP_Y4*40+30-7
+	lda	>scr1+SETUP_Y4*40+30-7
+	jsr	drawString
+	ldx	#16
+	ldy	<scr1+SETUP_Y4*40+30-8
+	lda	>scr1+SETUP_Y4*40+30-8
+	jsr	invertBar
+	jsr	waitForAKey
+	jsr	clearPanel
+	jmp	setup_run
+
+loadOutro
+; init loading progress bar
+	ldx	#loadingText-textBegin
+	ldy	<scr1+LOADING_Y*40+23
+	lda	>scr1+LOADING_Y*40+23
+	jsr	drawString
+	ldx	#$30
+	ldy	<scr1+PROGRESS_BAR_Y*40+23
+	lda	>scr1+PROGRESS_BAR_Y*40+23
+	jsr	drawBarColumn
+	ldx	#$0c
+	ldy	<scr1+PROGRESS_BAR_Y*40+36
+	lda	>scr1+PROGRESS_BAR_Y*40+36
+	jsr	drawBarColumn
+	ldx	#0
+	ldy	<scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN+2
+	lda	>scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN+2
+	jsr	drawChar
+	ldx	#PERCENT_CHAR
+	ldy	<scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN+4
+	lda	>scr1+PROGRESS_BAR_Y*40+PERCENT_COLUMN+4
+	jsr	drawChar
+
+	mva	#0	$2e1
+	ldx	menuOption
+	mva	percent_lo,x	bytesPerPercent
+	mvy	percent_hi,x	bytesPerPercent+1
+	sub	#1
+	scs:dey
+	sta	bytesLeftToPercent
+	sty	bytesLeftToPercent+1
+	mva	#0	percentage
+	lda	fileNameAddress_lo,x
+	ldy	fileNameAddress_hi,x
+	tax
+	lda	#1
+openAndLoadFile
+	sta	acceptedError
+	jsr	openFileForReading
+	cpy	#170
+	jeq	turnDisk
+readHeader
+	mva	#136	acceptedError
+	mwa	#2	$348+FILE_CHANNEL
+	ldx	<blockAddress
+	ldy	>blockAddress
+	jsr	readBlockCountPercents
+	cpy	#136
+	jeq	readFile_end
+	lda	blockAddress
+	and	blockAddress+1
+	cmp	#$ff
+	bcs	readHeader
+	mva	#1	acceptedError
+	mwa	#2	$348+FILE_CHANNEL
+	ldx	<blockLength
+	ldy	>blockLength
+	jsr	readBlockCountPercents
+	lda	blockLength
+	sub	blockAddress
+	sta	blockLength
+	lda	blockLength+1
+	sbc	blockAddress+1
+	sta	blockLength+1
+	inw	blockLength
+	mwa	#ertees	$2e2
+	jmp	readBlock_check
+
+readBlock_full
+	mwa	bytesPerPercent	$348+FILE_CHANNEL
+	ldx	blockAddress
+	ldy	blockAddress+1
+	lda	#7
+	jsr	fileCommandWithAddress
+	jsr	drawNextPercent
+	lda	bytesPerPercent
+	add:sta	blockAddress
+	lda	bytesPerPercent+1
+	adc:sta	blockAddress+1
+	lda	blockLength
+	sub	bytesPerPercent
+	sta	blockLength
+	lda	blockLength+1
+	sbc	bytesPerPercent+1
+	sta	blockLength+1
+readBlock_check
+	ldx	blockLength
+	ldy	blockLength+1
+	cpy	bytesPerPercent+1
+	sne:cpx	bytesPerPercent
+	bcs	readBlock_full
+	txa
+	bne	readBlock_notEnd
+	tya
+	beq	readBlock_end
+readBlock_notEnd
+	stx	$348+FILE_CHANNEL
+	sty	$349+FILE_CHANNEL
+	ldx	blockAddress
+	ldy	blockAddress+1
+	jsr	readBlockCountPercents
+readBlock_end
+	jsr	jumpInit
+	jmp	readHeader
+
+jumpInit
+	jmp	($2e2)
+
+readFile_end
+	jsr	closeFile
+
+	lda	$2e1
+	beq	load2ndPart
+	ift	HUNDRED_PERCENT
+runFile_fillToHundredPercent
+	lda	percentage
+	cmp	#100
+	jcs	($2e0)
+	jsr	drawNextPercent
+	jmp	runFile_fillToHundredPercent
+	els
+	jmp	($2e0)
+	eif
+
+turnDisk
+	jsr	closeFile
+	ldx	#16
+	ldy	<scr1+LOADING_Y*40+20
+	lda	>scr1+LOADING_Y*40+20
+	jsr	clearRectangle
+	ldx	#turnDiskText-textBegin
+	ldy	<scr1+LOADING_Y*40+30-9
+	lda	>scr1+LOADING_Y*40+30-9
+	jsr	drawString
+	ldx	#hitAKeyText-textBegin
+	ldy	<scr1+HIT_Y*40+30-9
+	lda	>scr1+HIT_Y*40+30-9
+	jsr	drawString
+	jsr	waitForAKey
+	ldx	#16
+	ldy	<scr1+LOADING_Y*40+20
+	lda	>scr1+LOADING_Y*40+20
+	jsr	clearRectangle
+	ldx	#loadingText-textBegin
+	ldy	<scr1+LOADING_Y*40+23
+	lda	>scr1+LOADING_Y*40+23
+	jsr	drawString
+	ldx	#16
+	ldy	<scr1+HIT_Y*40+20
+	lda	>scr1+HIT_Y*40+20
+	jsr	clearRectangle
+load2ndPart
+	ldx	<demo2FileName
+	ldy	>demo2FileName
+	lda	#170
+	jmp	openAndLoadFile
+
+dli
+	pha
+	lda:pha	^31
+	mva	#$ff	^31
+	lda	#193
+	sec
+dli_loop
+	sta	^4a
+	sbc	#1
+	bne	dli_loop
+	pla:sta	^31
+	pla
+	rti
+
+vbl
+	lda	>dl1^dl2
+	eor:sta	$231
+	sta	^43
+	mva	<dl1	^42
+	sta	$4d
+	jmp	$4c4c
+oldvbl	equ	*-2
+
+	org	$3a00
+allBanks org	*+128
+bankSelection org *+128
+
+	org	$3c00
+dl1	dta	$70,$70,$70,$4f,a(scr1)
+:95	dta	$f
+	dta	$4f,a(scr1+$f00)
+:95	dta	$f
+	dta	$41,a(dl2)
+
+	org	$3d00
+dl2	dta	$70,$70,$70,$4f,a(scr2)
+:95	dta	$f
+	dta	$4f,a(scr2+$f00)
+:95	dta	$f
+	dta	$41,a(dl1)
+
+	org	$3e00
+	dta	c'tQa'
+selectedBanks	org	*+17
+totalBanks	org	*+1
+autoBanks	org	*+1
+
+	org	$4100
+scr1	ins	'diablik.gr8'
+
+	org	$6100
+scr2	org	*+40*192
+	org	*-20*128
+logo	ins	'numen.gr8'
+
+	run	start

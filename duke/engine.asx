@@ -1,0 +1,4386 @@
+* modules
+; Math
+; - multiplication and division routines
+; - sine and cosine lookup tables
+; View
+; - contains viewpoint
+; - moves and rotates to viewpoint
+; Project
+; - clips walls to screen width
+; - projects rotated 3D points to screen (perspective view)
+; Picture
+; - stores textures
+; Fill
+; - fills ceiling/floor and walls
+; Outline
+; - calculates and stores edge lines between walls and ceiling/floor
+; - scans wall outlines to get ceiling/floor outlines
+; Engine
+; - draws walls and ceilings/floors in 3D view
+; Sprite
+; - draws sprites in 3D view
+
+* const
+Screen_WIDTH                    equ	80
+Screen_HEIGHT                   equ	48
+Screen_CENTER_X                 equ	40
+Screen_CENTER_Y                 equ	24
+
+World_MAX_SECTORS               equ	64
+World_MAX_WALLS                 equ	256
+World_MAX_SPRITES               equ	64
+; World_sectorFlags
+World_SECTOR_DOOR_OPEN          equ	1
+World_SECTOR_LIFT_LOW           equ	1
+World_SECTOR_LOCKED             equ	2
+World_SECTOR_ANIMATE            equ	4
+World_SECTOR_PARALLAXING        equ	8
+; World_sectorEffect
+World_EFFECT_WATER              equ	1
+World_EFFECT_UNDERWATER         equ	2
+World_EFFECT_DOOR_DOOM_UP       equ	3
+World_EFFECT_DOOR_DOOM_DOWN     equ	4
+World_EFFECT_DOOR_DOOM_SPLIT    equ	5
+World_EFFECT_DOOR_SWING_CCW     equ	6
+World_EFFECT_DOOR_SWING_CW      equ	7
+World_EFFECT_LIFT_FLOOR_ONLY    equ	8
+World_EFFECT_LIFT_CEIL_FLOOR    equ	9
+; World_wallFlags
+World_WALL_SWAP_BOTTOM          equ	1
+World_WALL_HORIZON              equ	2
+; World_spriteFlags
+World_SPRITE_CENTER_VERT        equ	2
+
+Project_SCALE                   equ	40
+Project_INVERSE_SHIFT           equ	8
+Project_HORIZON_MIN             equ	0
+Project_HORIZON_MAX             equ	48
+Project_DRAW_MIN_DISTANCE       equ	2
+
+Picture_REVERSE_TRANSPARENCY    equ	1
+Picture_SKY_WIDTH               equ	32
+
+Engine_WALL_HORIZON             equ	1
+Engine_COUNT_COLUMNS            equ	0	; 0=slower? 1=faster?
+Engine_CHECK_FACE_WALL          equ	0	; 0=faster? 1=no bugs?
+Engine_MAX_SECTORS_ON_SCREEN    equ	12
+Engine_MAX_WALLS_ON_SCREEN      equ	96
+Engine_MAX_BUNCHES_ON_SCREEN    equ	16
+
+Sprite_MAX_SPRITES_ON_SCREEN    equ	16
+Sprite_DRAW_MIN_DISTANCE        equ	32
+Sprite_CLIP_INDEX_MAX           equ	63
+Sprite_CLIP_OUTLINE_MAX         equ	768
+Sprite_CLIP_FULL                equ	0
+Sprite_CLIP_TOP                 equ	1
+Sprite_CLIP_BOTTOM              equ	2
+
+* structs
+Math_MS_AL                      equ	0
+Math_MS_SL                      equ	2
+Math_MS_AH                      equ	4
+Math_MS_SH                      equ	6
+Math_MS_SIZE                    equ	8
+
+* arrays
+Math_idTable                    equ	$0700	($100)
+Math_sqrTable_lo                equ	$0800	($400)
+Math_sqrZero_lo                 equ	Math_sqrTable_lo+$200
+Math_sqrTable_hi                equ	$0c00	($400)
+Math_sqrZero_hi                 equ	Math_sqrTable_hi+$200
+
+View_rotateC_lo                 equ	$2000	(World_MAX_WALLS)
+View_rotateC_hi                 equ	$2100	(World_MAX_WALLS)
+View_rotateD_lo                 equ	$2200	(World_MAX_WALLS)
+View_rotateD_hi                 equ	$2300	(World_MAX_WALLS)
+
+Project_calcScreenY_lookup_hi   equ	$2400	($100)
+
+Picture_angleToSkyColumn        equ	$2500	($100)
+Picture_screenColumnToSkyColumn	equ	$2600	(Picture_SKY_WIDTH/2+Screen_WIDTH/2)
+Picture_horizonToSkyLine        equ	$2640	(Project_HORIZON_MAX+1)
+
+Fill_fillWallSolid_left_lo      equ	$2680	(2*Screen_HEIGHT+2)
+Fill_fillWallSolid_right_lo     equ	Fill_fillWallSolid_left_lo+Screen_HEIGHT+1
+Fill_fillWallSolid_left_hi      equ	$2700	(4*Screen_HEIGHT+4)
+Fill_fillWallSolid_right_hi     equ	Fill_fillWallSolid_left_hi+Screen_HEIGHT+1
+Fill_fillWallSolid_unrolled     equ	$2800	($800)	| PROFILE
+
+Outline_borderTop               equ	$3000	(Screen_WIDTH)
+Outline_borderBottom            equ	$3050	(Screen_WIDTH)
+Outline_spanRight               equ	$30a0	(Screen_HEIGHT)
+Outline_table                   equ	$3100
+Outline_wallTop                 equ	$3100	(Screen_WIDTH)
+Outline_wallBottom              equ	$3150	(Screen_WIDTH)
+Outline_step                    equ	$31a0	(Screen_WIDTH)
+
+Engine_wallSector               equ	$3200	(Engine_MAX_WALLS_ON_SCREEN)	| PROFILE
+Engine_wallIndex                equ	$3260	(Engine_MAX_WALLS_ON_SCREEN)
+Engine_wallScreenX1             equ	$32c0	(Engine_MAX_WALLS_ON_SCREEN)
+Engine_wallInverseD1_lo         equ	$3320	(Engine_MAX_WALLS_ON_SCREEN)
+Engine_wallInverseD1_hi         equ	$3380	(Engine_MAX_WALLS_ON_SCREEN)
+Engine_wallScreenX2             equ	$33e0	(Engine_MAX_WALLS_ON_SCREEN)
+Engine_wallInverseD2_lo         equ	$3440	(Engine_MAX_WALLS_ON_SCREEN)
+Engine_wallInverseD2_hi         equ	$34a0	(Engine_MAX_WALLS_ON_SCREEN)
+Engine_wallNext                 equ	$0600	(Engine_MAX_WALLS_ON_SCREEN)
+Engine_bunchFirst               equ	$0660	(Engine_MAX_BUNCHES_ON_SCREEN)
+Engine_bunchLast                equ	$0670	(Engine_MAX_BUNCHES_ON_SCREEN)
+Engine_bunchChecked             equ	$0680	(Engine_MAX_BUNCHES_ON_SCREEN)
+Engine_scanSector_border        equ	$0690	(Engine_MAX_SECTORS_ON_SCREEN)
+Engine_gotSector                equ	$06c0	(World_MAX_SECTORS)
+
+Sprite_calcFlatV1               equ	$3500	(15*Screen_HEIGHT)
+Sprite_calcFlatV2               equ	$3800	(15*Screen_HEIGHT)
+Sprite_fillFlatSprite_unrolled1 equ	$3b00	(16*Screen_HEIGHT+1)
+Sprite_fillFlatSprite_unrolled2 equ	$3f00	(16*Screen_HEIGHT+1)
+Sprite_fillFlatSprite_lo        equ	$3e11	(Screen_HEIGHT+1)
+Sprite_fillFlatSprite_hi        equ	$3e42	(2*Screen_HEIGHT+2)
+Sprite_onScreen                 equ	$3eb0	(Sprite_MAX_SPRITES_ON_SCREEN)
+Sprite_onScreenC_lo             equ	$3ec0	(Sprite_MAX_SPRITES_ON_SCREEN)
+Sprite_onScreenC_hi             equ	$3ed0	(Sprite_MAX_SPRITES_ON_SCREEN)
+Sprite_onScreenD_lo             equ	$3ee0	(Sprite_MAX_SPRITES_ON_SCREEN)
+Sprite_onScreenD_hi             equ	$3ef0	(Sprite_MAX_SPRITES_ON_SCREEN)
+Sprite_clipType                 equ	$4204	(Sprite_CLIP_INDEX_MAX)
+Sprite_clipWall                 equ	$4243	(Sprite_CLIP_INDEX_MAX)
+Sprite_clipOutlineStart_lo      equ	$4282	(Sprite_CLIP_INDEX_MAX)
+Sprite_clipOutlineStart_hi      equ	$42c1	(Sprite_CLIP_INDEX_MAX)
+Sprite_clipOutline              equ	$0300	(Sprite_CLIP_OUTLINE_MAX)
+                                icl	'../world.equ'
+
+* variables
+Screen_drawnPage                equ	$8f
+
+View_x                          equ	$90 (2)
+View_y                          equ	$92 (2)
+View_z                          equ	$94
+View_angle                      equ	$95
+View_sector                     equ	$96
+View_cosUS                      equ	$18	(8)
+View_cosSS                      equ	$20 (8)
+View_sinUS                      equ	$28 (8)
+View_sinSS                      equ	$30 (8)
+
+View_setCosSin_sin              equ	$38
+View_calcRotate_x               equ	$38	(2)
+View_calcRotate_y               equ	$3a	(2)
+View_calcRotate_c               equ	$3c	(2)
+View_calcRotate_d               equ	$3e	(2)
+View_calcRotate_hi              equ	$40
+View_calcRotate_dX              equ	$41
+View_calcRotate_cX              equ	$42
+View_calcRotate_dY              equ	$43
+View_calcRotate_cY              equ	$44
+View_calcRotate_word            equ	$45	(2)
+
+Project_calcScreenX_hi          equ	$47
+Project_calcScreenY_hi          equ	$47
+Project_inverseDUU_lo           equ	$48	(8)
+Project_inverseDSU_lo           equ	$50	(8)
+Project_inverseDUU_hi           equ	$58	(8)
+Project_inverseDSU_hi           equ	$60	(8)
+Project_rotateC1                equ	$68	(2)
+Project_rotateD1                equ	$6a	(2)
+Project_rotateC2                equ	$6c	(2)
+Project_rotateD2                equ	$6e	(2)
+Project_screenX1                equ	$70
+Project_screenX2                equ	$71
+Project_inverseD1               equ	$72	(2)
+Project_inverseD2               equ	$74	(2)
+
+Fill_init_fill                  equ	$97	(2)
+Fill_init_screen                equ	$99	(2)
+Fill_init_screenHi              equ	$9b
+Fill_init_lines                 equ	$9c
+Fill_init_mask                  equ	$9d
+Fill_init_color                 equ	$9e
+Fill_pointer                    equ	$76	(2)
+Fill_fillWall_colorEvenLeft     equ	$78
+Fill_fillWall_colorEvenRight    equ	$79
+Fill_fillWall_colorOddLeft      equ	$7a
+Fill_fillWall_colorOddRight     equ	$7b
+Fill_fillSpanSolid_color        equ	$78
+Fill_fillSpanSolid_colorEven    equ	$79
+Fill_fillSpanSolid_colorOdd     equ	$7a
+Fill_fillSpanParallaxing_x      equ	$7b
+Fill_firstParallaxingLine_lo    equ	$7c	(2)
+Fill_firstParallaxingLine_hi    equ	$7e	(2)
+Fill_firstParallaxingColumn     equ	$8a
+
+Outline_x1                      equ	$80
+Outline_x2                      equ	$81
+Outline_y1                      equ	$82	(2)
+Outline_y2                      equ	$84	(2)
+Outline_dx                      equ	$86
+Outline_dy                      equ	$87
+Outline_calcLine_xLimit         equ	$88
+Outline_calcLine_e              equ	$89
+
+Math_word                       equ	$97	(2)
+Math_word2                      equ	$99	(2)
+Math_word3                      equ	$9b	(2)
+Math_word4                      equ	$9d	(2)
+Math_sign                       equ	$9f
+Math_mulUU_lo                   equ	$a0	(8)
+Math_mulSU_lo                   equ	$a8	(8)
+Math_mulUU_hi                   equ	$b0	(8)
+Math_mulUS_hi                   equ	$b8	(8)
+Math_mulSS_hi                   equ	$c0	(8)
+Math_long                       equ	$c8	(4)
+Math_long2                      equ	$cc	(4)
+
+	ift	Engine_COUNT_COLUMNS
+Engine_columnsToDraw            equ	$8b
+	eif
+Engine_wallCount                equ	$d0
+Engine_bunchCount               equ	$d1
+Engine_scanSector_sector        equ	$d2
+Engine_scanSector_wall          equ	$d3
+Engine_scanSector_wallSave      equ	$d4
+Engine_scanSector_wallFirst     equ	$d5
+Engine_scanSector_bunchSave     equ	$d6
+Engine_scanSector_borderIndex   equ	$dd
+Engine_wallFront_wall1          equ	$d7
+Engine_wallFront_wall2          equ	$d8
+Engine_bunchFront_bunch1        equ	$d9
+Engine_bunchFront_b2f           equ	$d9
+Engine_bunchFront_bunch2        equ	$da
+Engine_bunchFront_x1b1          equ	$da
+Engine_bunchFront_b1f           equ	$db
+Engine_draw_i                   equ	$dc
+Engine_drawBunch_wallIndex      equ	$d7
+Engine_drawBunch_ceilingZ       equ	$d8
+Engine_drawBunch_floorZ         equ	$d9
+Engine_drawBunch_bunchFirst     equ	$da
+Engine_drawBunch_bunchLast      equ	$db
+Engine_drawBunch_sector         equ	$dc
+Engine_drawBunch_nextSector     equ	$dd
+Engine_draw_closest             equ	$de
+
+Sprite_clipIndex                equ	$df
+Sprite_clipOutlinePtr           equ	$e0	(2)
+Sprite_init_calcV               equ	$97	(2)
+Sprite_init_fill                equ	$99	(2)
+Sprite_init_screen              equ	$9b	(2)
+Sprite_init_lines               equ	$9d
+Sprite_drawSprite_u             equ	$d0	(2)
+Sprite_drawSprite_du            equ	$d2	(2)
+Sprite_drawSprite_dv            equ	$d2	(2)
+Sprite_drawSprite_columnPtr     equ	$d4	(2)
+Sprite_drawSprite_retPtr        equ	$d6	(2)
+Sprite_drawSprite_texturePtr    equ	$d8	(2)
+Sprite_drawSprite_xSize         equ	$d6
+Sprite_drawSprite_ySize         equ	$d7
+Sprite_drawSprite_xCenter       equ	$d8
+Sprite_drawSprite_flags         equ	$d9
+Sprite_drawSprite_picWidth      equ	$da
+Sprite_drawSprite_picHeight     equ	$db
+Sprite_drawSprite_index         equ	$dc
+Sprite_drawSprite_inverseD      equ	$dd	(2)
+Sprite_drawSprite_clipIndex     equ	$e0
+Sprite_drawSprite_clipIgnore    equ	$e1
+Sprite_drawSprite_xLimit        equ	$e2
+Sprite_drawSprite_clipPtr       equ	$e3	(2)
+Sprite_drawSprite_mask          equ	$8b
+Sprite_draw_index               equ	$8c
+Sprite_draw_onScreenIndex       equ	$8d
+
+* Math, Project
+	org	$4700
+	icl	'../lookup.asx'
+
+* Picture
+Picture_solidColorEven
+	dta	$00,$11,$22,$33,$44,$55,$66,$77,$88,$99,$aa,$bb,$cc,$dd,$ee,$ff
+	dta	$01,$02,$03,$04,$05,$06,$07,$08
+	dta	$12,$13,$14,$15,$16,$17,$18
+	dta	$23,$24,$25,$26,$27,$28
+	dta	$34,$35,$36,$37,$38
+	dta	$45,$46,$47,$48
+	dta	$56,$57,$58
+	dta	$67,$68
+	dta	$78
+Picture_solidColorOdd
+	dta	$00,$11,$22,$33,$44,$55,$66,$77,$88,$99,$aa,$bb,$cc,$dd,$ee,$ff
+	dta	$10,$20,$30,$40,$50,$60,$70,$80
+	dta	$21,$31,$41,$51,$61,$71,$81
+	dta	$32,$42,$52,$62,$72,$82
+	dta	$43,$53,$63,$73,$83
+	dta	$54,$64,$74,$84
+	dta	$65,$75,$85
+	dta	$76,$86
+	dta	$87
+
+* Math_init
+; Initialize Math module
+Math_init
+	ldx	#0
+Math_init_idTable
+	txa:sta	Math_idTable,x+
+	bne	Math_init_idTable
+
+;	ldx	#0
+	stx	Math_sqrZero_lo
+	stx	Math_sqrZero_hi
+	ldy	#$ff
+Math_init_sqr1
+	txa
+	lsr	@
+	adc	Math_sqrZero_lo,x
+	sta	Math_sqrZero_lo+1,x
+	sta	Math_sqrZero_lo-$100,y
+	lda	#0
+	adc	Math_sqrZero_hi,x
+	sta	Math_sqrZero_hi+1,x
+	sta	Math_sqrZero_hi-$100,y
+	inx
+	dey
+	bne	Math_init_sqr1
+Math_init_sqr2
+	tya
+	sbc	#0	-
+	ror	@
+	adc	Math_sqrZero_lo+$ff,y
+	sta	Math_sqrZero_lo+$100,y
+	sta	Math_sqrZero_lo-$1ff,x
+	lda	#0
+	adc	Math_sqrZero_hi+$ff,y
+	sta	Math_sqrZero_hi+$100,y
+	sta	Math_sqrZero_hi-$1ff,x
+	dex
+	iny
+	bne	Math_init_sqr2
+	mva	>Math_sqrZero_lo	Math_mulUU_lo+Math_MS_AL+1
+	sta	Math_mulUU_hi+Math_MS_AL+1
+	mva	>Math_sqrZero_hi	Math_mulUU_lo+Math_MS_AH+1
+	sta	Math_mulUU_hi+Math_MS_AH+1
+	mva	>Math_sqrZero_lo-$100	Math_mulSS_hi+Math_MS_AL+1
+	mva	>Math_sqrZero_hi-$100	Math_mulSS_hi+Math_MS_AH+1
+	rts
+
+* Math_setUU
+; Initialize UU structure X for multiplying unsigned bytes
+; by the unsigned byte A
+; input: X - pointer to UU structure, A - multiplier
+Math_setUU	| PROFILE
+	sta	Math_MS_AL,x
+	sta	Math_MS_AH,x
+	eor	#$ff
+	add	#1
+	sta	Math_MS_SL,x
+	sta	Math_MS_SH,x
+	lda	#0
+	adc	>Math_sqrZero_lo-$100
+	sta	Math_MS_SL+1,x
+	adc	>Math_sqrZero_hi-Math_sqrZero_lo	-
+	sta	Math_MS_SH+1,x
+	rts
+
+	ift	0	; not used after Math_setUUSU was introduced
+* Math_setSU
+; Initialize SU structure X for multiplying signed bytes
+; by the unsigned byte A
+; input: X - pointer to UU structure, A - multiplier
+Math_setSU
+	tay
+	eor	#$80
+	sta	Math_MS_AL,x
+	sta	Math_MS_AH,x
+	eor	#$ff
+	add	#1
+	sta	Math_MS_SL,x
+	sta	Math_MS_SH,x
+	cpy	#$80
+	lda	#0
+	adc	>Math_sqrZero_lo-$100
+	sta	Math_MS_AL+1,x
+	adc	>Math_sqrZero_hi-Math_sqrZero_lo	-
+	sta	Math_MS_AH+1,x
+	lda	#$80
+	cmp	Math_MS_SL,x
+	adc	#>[$8000+Math_sqrZero_lo-$200]
+	sta	Math_MS_SL+1,x
+	eor	>Math_sqrZero_hi^Math_sqrZero_lo
+	sta	Math_MS_SH+1,x
+	rts
+	eif
+
+* Math_setUS
+; Initialize US structure X for multiplying unsigned bytes
+; by the signed byte A
+; input: X - pointer to US structure, A - multiplier
+Math_setUS
+	sta	Math_MS_AL,x
+	sta	Math_MS_AH,x
+	eor	#$ff
+	add	#1
+	sta	Math_MS_SL,x
+	sta	Math_MS_SH,x
+	lda	#$7f
+	cmp	Math_MS_AL,x
+	adc	#>[$8100+Math_sqrZero_lo-$100]
+	sta	Math_MS_AL+1,x
+	eor	>Math_sqrZero_hi^Math_sqrZero_lo
+	sta	Math_MS_AH+1,x
+	lda	#$80
+	cmp	Math_MS_SL,x
+	adc	#>[$8000+Math_sqrZero_lo-$100]
+	sta	Math_MS_SL+1,x
+	eor	>Math_sqrZero_hi^Math_sqrZero_lo
+	sta	Math_MS_SH+1,x
+	rts
+
+	ift	0	; not used after Math_setUSSS was introduced
+* Math_setSS
+; Initialize SS structure X for multiplying signed bytes
+; by the signed byte A
+; input: X - pointer to SS structure, A - multiplier
+Math_setSS
+	eor	#$80
+	sta	Math_MS_AL,x
+	sta	Math_MS_AH,x
+	eor	#$ff
+	add	#1
+	sta	Math_MS_SL,x
+	sta	Math_MS_SH,x
+	lda	#0
+	adc	>Math_sqrZero_lo-$100
+	sta	Math_MS_SL+1,x
+	adc	>Math_sqrZero_hi-Math_sqrZero_lo	-
+	sta	Math_MS_SH+1,x
+	rts
+	eif
+
+* Math_setUUSU
+; Combined Math_setUU and Math_setSU for better performance
+Math_setUUSU1
+	ert	Math_mulUU_lo+Math_MS_SIZE!=Math_mulSU_lo
+	ldx	#Math_mulUU_lo
+Math_setUUSU
+	tay
+	sta	Math_MS_AL,x
+	sta	Math_MS_AH,x
+	eor	#$80
+	sta	Math_MS_SIZE+Math_MS_AL,x
+	sta	Math_MS_SIZE+Math_MS_AH,x
+	eor	#$7f
+	add	#1
+	sta	Math_MS_SL,x
+	sta	Math_MS_SH,x
+	eor	#$80
+	sta	Math_MS_SIZE+Math_MS_SL,x
+	sta	Math_MS_SIZE+Math_MS_SH,x
+	lda	#0
+	adc	>Math_sqrZero_lo-$100
+	sta	Math_MS_SL+1,x
+	adc	>Math_sqrZero_hi-Math_sqrZero_lo	-
+	sta	Math_MS_SH+1,x
+	cpy	#$80
+	lda	#0
+	adc	>Math_sqrZero_lo-$100
+	sta	Math_MS_SIZE+Math_MS_AL+1,x
+	adc	>Math_sqrZero_hi-Math_sqrZero_lo	-
+	sta	Math_MS_SIZE+Math_MS_AH+1,x
+	lda	#$80
+	cmp	Math_MS_SIZE+Math_MS_SL,x
+	adc	#>[$8000+Math_sqrZero_lo-$200]
+	sta	Math_MS_SIZE+Math_MS_SL+1,x
+	eor	>Math_sqrZero_hi^Math_sqrZero_lo
+	sta	Math_MS_SIZE+Math_MS_SH+1,x
+	rts
+
+* Math_setUSSS
+; Combined Math_setUS and Math_setSS for better performance
+Math_setUSSS
+	sta	Math_MS_AL,x
+	sta	Math_MS_AH,x
+	eor	#$80
+	sta	Math_MS_SIZE+Math_MS_AL,x
+	sta	Math_MS_SIZE+Math_MS_AH,x
+	eor	#$ff
+	add	#1
+	sta	Math_MS_SIZE+Math_MS_SL,x
+	sta	Math_MS_SIZE+Math_MS_SH,x
+	eor	#$80
+	sta	Math_MS_SL,x
+	sta	Math_MS_SH,x
+	lda	#0
+	adc	>Math_sqrZero_lo-$100
+	sta	Math_MS_SIZE+Math_MS_SL+1,x
+	adc	>Math_sqrZero_hi-Math_sqrZero_lo	-
+	sta	Math_MS_SIZE+Math_MS_SH+1,x
+	lda	#$7f
+	cmp	Math_MS_AL,x
+	adc	#>[$8100+Math_sqrZero_lo-$100]
+	sta	Math_MS_AL+1,x
+	eor	>Math_sqrZero_hi^Math_sqrZero_lo
+	sta	Math_MS_AH+1,x
+	lda	#$80
+	cmp	Math_MS_SL,x
+	adc	#>[$8000+Math_sqrZero_lo-$100]
+	sta	Math_MS_SL+1,x
+	eor	>Math_sqrZero_hi^Math_sqrZero_lo
+	sta	Math_MS_SH+1,x
+	rts
+
+* Math_sqr16s
+; Calculate square of 16-bit signed integer Math_word
+; giving 32-bit result in Math_long
+Math_sqr16s	| PROFILE
+	lda	Math_word+1
+	ldx	#Math_mulUS_hi
+	jsr	Math_setUS
+	ldy	Math_word
+	lda	(Math_mulUS_hi+Math_MS_AL),y
+	sub	(Math_mulUS_hi+Math_MS_SL),y
+	sta	Math_long+1
+	lda	(Math_mulUS_hi+Math_MS_AH),y
+	sbc	(Math_mulUS_hi+Math_MS_SH),y
+	php
+	asl	Math_long+1
+	rol	@
+	sta	Math_long+2
+	tya
+	asl	@
+	tay
+	mva	Math_sqrZero_lo,y	Math_long
+	lda	Math_sqrZero_hi,y
+	bcc	Math_sqr16s_1
+	sbc	#$40	+
+	adc	Math_word	-
+	clc
+Math_sqr16s_1
+	adc:sta	Math_long+1	-
+	php
+	lda	Math_word+1
+	asl	@
+	bcc	Math_sqr16s_2
+	eor	#$ff
+	adc	#0	+
+Math_sqr16s_2
+	tay
+	lda	Math_sqrZero_lo,y
+	plp
+	adc:sta	Math_long+2
+	lda	Math_sqrZero_hi,y
+	adc	#0
+	plp
+	adc	#$ff
+	sta	Math_long+3
+	rts
+
+* Math_mul16sBy16s
+; Multiply 16-bit signed integer Math_word
+; by 16-bit signed integer Math_word2
+; giving 32-bit result in Math_long
+Math_mul16sBy16s	| PROFILE
+	lda	Math_word2
+	jsr	Math_setUUSU1
+	lda	Math_word2+1
+	ert	Math_mulUS_hi+Math_MS_SIZE!=Math_mulSS_hi
+	ldx	#Math_mulUS_hi
+	jsr	Math_setUSSS
+	ldy	Math_word
+	lda	(Math_mulUU_lo+Math_MS_AL),y
+	sub	(Math_mulUU_lo+Math_MS_SL),y
+	sta	Math_long
+	lda	(Math_mulUU_lo+Math_MS_AH),y
+	sbc	(Math_mulUU_lo+Math_MS_SH),y
+	add	(Math_mulUS_hi+Math_MS_AL),y
+	php
+	sub	(Math_mulUS_hi+Math_MS_SL),y
+	sta	Math_long+1
+	lda:tax	#0
+	adc	(Math_mulUS_hi+Math_MS_AH),y
+	scc:inx
+	plp
+	sbc	(Math_mulUS_hi+Math_MS_SH),y
+	scs:dex
+	sta	Math_long+2
+	lda	Math_word+1
+	eor	#$80
+	tay
+	lda	Math_long+1
+	add	(Math_mulSU_lo+Math_MS_AL),y
+	php
+	sub	(Math_mulSU_lo+Math_MS_SL),y
+	sta	Math_long+1
+	lda	Math_long+2
+	adc	(Math_mulSU_lo+Math_MS_AH),y
+	scc:inx
+	plp
+	sbc	(Math_mulSU_lo+Math_MS_SH),y
+	scs:dex
+	add	(Math_mulSS_hi+Math_MS_AL),y
+	php
+	sub	(Math_mulSS_hi+Math_MS_SL),y
+	sta	Math_long+2
+	txa
+	adc	(Math_mulSS_hi+Math_MS_AH),y
+	plp
+	sbc	(Math_mulSS_hi+Math_MS_SH),y
+	sta	Math_long+3
+	rts
+
+* Math_mul16sBy16s2
+; Call Math_mul16sBy16s and then
+; multiply 16-bit signed integer Math_word3
+; by 16-bit signed integer Math_word4
+; giving 32-bit result in Math_long2
+Math_mul16sBy16s2
+	jsr	Math_mul16sBy16s
+	lda	Math_word4
+	jsr	Math_setUUSU1
+	lda	Math_word4+1
+	ert	Math_mulUS_hi+Math_MS_SIZE!=Math_mulSS_hi
+	ldx	#Math_mulUS_hi
+	jsr	Math_setUSSS
+	ldy	Math_word3
+	lda	(Math_mulUU_lo+Math_MS_AL),y
+	sub	(Math_mulUU_lo+Math_MS_SL),y
+	sta	Math_long2
+	lda	(Math_mulUU_lo+Math_MS_AH),y
+	sbc	(Math_mulUU_lo+Math_MS_SH),y
+	add	(Math_mulUS_hi+Math_MS_AL),y
+	php
+	sub	(Math_mulUS_hi+Math_MS_SL),y
+	sta	Math_long2+1
+	lda:tax	#0
+	adc	(Math_mulUS_hi+Math_MS_AH),y
+	scc:inx
+	plp
+	sbc	(Math_mulUS_hi+Math_MS_SH),y
+	scs:dex
+	sta	Math_long2+2
+	lda	Math_word3+1
+	eor	#$80
+	tay
+	lda	Math_long2+1
+	add	(Math_mulSU_lo+Math_MS_AL),y
+	php
+	sub	(Math_mulSU_lo+Math_MS_SL),y
+	sta	Math_long2+1
+	lda	Math_long2+2
+	adc	(Math_mulSU_lo+Math_MS_AH),y
+	scc:inx
+	plp
+	sbc	(Math_mulSU_lo+Math_MS_SH),y
+	scs:dex
+	add	(Math_mulSS_hi+Math_MS_AL),y
+	php
+	sub	(Math_mulSS_hi+Math_MS_SL),y
+	sta	Math_long2+2
+	txa
+	adc	(Math_mulSS_hi+Math_MS_AH),y
+	plp
+	sbc	(Math_mulSS_hi+Math_MS_SH),y
+	sta	Math_long2+3
+	rts
+
+* Math_mulCmp
+; Returns sign of (Math_word * Math_word2 - Math_word3 * Math_word4)
+; return: A - b7 contains sign
+Math_mulCmp
+	jsr	Math_mul16sBy16s2
+	lda	Math_long
+	cmp	Math_long2
+	lda	Math_long+1
+	sbc	Math_long2+1
+	lda	Math_long+2
+	sbc	Math_long2+2
+	lda	Math_long+3
+	sbc	Math_long2+3
+	rts
+
+* Math_shl3Div8uBy8u
+; Y:A = (A << 11) / Math_word
+; All numbers unsigned
+; input: A - dividend
+; return: Y - result hi, A - result lo
+Math_shl3Div8uBy8u	| PROFILE
+:4	rol	@
+	sta	Math_word2+1
+	rol	@
+	and	#$f
+	cmp	Math_word
+	scc:sbc	Math_word
+	rol	Math_word2+1
+	rol	@
+	cmp	Math_word
+	scc:sbc	Math_word
+	rol	Math_word2+1
+	rol	@
+	cmp	Math_word
+	scc:sbc	Math_word
+	rol	Math_word2+1
+	rol	@
+	cmp	Math_word
+	scc:sbc	Math_word
+	rol	Math_word2+1
+	rol	@
+	cmp	Math_word
+	scc:sbc	Math_word
+	rol	Math_word2+1
+	asl	@
+	cmp	Math_word
+	scc:sbc	Math_word
+	rol	Math_word2+1
+	asl	@
+	cmp	Math_word
+	scc:sbc	Math_word
+	rol	Math_word2+1
+	asl	@
+	cmp	Math_word
+	scc:sbc	Math_word
+	rol	Math_word2+1
+	asl	@
+	cmp	Math_word
+	scc:sbc	Math_word
+	rol	Math_word2
+	asl	@
+	cmp	Math_word
+	scc:sbc	Math_word
+	rol	Math_word2
+	asl	@
+	cmp	Math_word
+	scc:sbc	Math_word
+	rol	Math_word2
+	asl	@
+	cmp	Math_word
+	scc:sbc	Math_word
+	rol	Math_word2
+	asl	@
+	cmp	Math_word
+	scc:sbc	Math_word
+	rol	Math_word2
+	asl	@
+	cmp	Math_word
+	scc:sbc	Math_word
+	rol	Math_word2
+	asl	@
+	cmp	Math_word
+	scc:sbc	Math_word
+	rol	Math_word2
+	asl	@
+	cmp	Math_word
+	lda	Math_word2
+	rol	@
+	ldy	Math_word2+1
+	rts
+
+* Math_mul15uBy15u
+; Multiply 15-bit unsigned integer Math_word
+; by 15-bit unsigned integer Math_word2
+; giving 32-bit result in Math_long
+Math_mul15uBy15u
+	lda	Math_word2
+	ldx	#Math_mulUU_lo
+	jsr	Math_setUU
+	lda	Math_word2+1
+	ldx	#Math_mulUU_hi
+	jsr	Math_setUU
+	ldy	Math_word
+	lda	(Math_mulUU_lo+Math_MS_AL),y
+	sub	(Math_mulUU_lo+Math_MS_SL),y
+	sta	Math_long
+	lda	(Math_mulUU_lo+Math_MS_AH),y
+	sbc	(Math_mulUU_lo+Math_MS_SH),y
+	sta	Math_long+1
+	lda	(Math_mulUU_hi+Math_MS_AL),y
+	sub	(Math_mulUU_hi+Math_MS_SL),y
+	tax
+	lda	(Math_mulUU_hi+Math_MS_AH),y
+	sbc	(Math_mulUU_hi+Math_MS_SH),y
+	sta	Math_long+2
+	txa
+	add:sta	Math_long+1
+	scc:inc	Math_long+2
+	ldy	Math_word+1
+	lda	(Math_mulUU_lo+Math_MS_AL),y
+	sub	(Math_mulUU_lo+Math_MS_SL),y
+	tax
+	lda	(Math_mulUU_lo+Math_MS_AH),y
+	sbc	(Math_mulUU_lo+Math_MS_SH),y
+	add:sta	Math_long+2
+	txa
+	add:sta	Math_long+1
+	scc:inc	Math_long+2
+	lda	(Math_mulUU_hi+Math_MS_AL),y
+	sub	(Math_mulUU_hi+Math_MS_SL),y
+	tax
+	lda	(Math_mulUU_hi+Math_MS_AH),y
+	sbc	(Math_mulUU_hi+Math_MS_SH),y
+	sta	Math_long+3
+	txa
+	add:sta	Math_long+2
+	scc:inc	Math_long+3
+	rts
+
+* Math_div30uBy16u
+; Divide 30-bit unsigned integer Math_long
+; by 16-bit unsigned integer Math_word
+; result in Math_word
+Math_div30uBy16u
+	lda	Math_long+3
+;0
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+;1
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+	cmp	Math_word+1
+Math_div30uBy16u_dist1	equ	Math_div30uBy16u_2-*
+	bcc	*+Math_div30uBy16u_dist1
+	tay
+	lda	Math_long+2
+	sbc	Math_word	+
+Math_div30uBy16u_dist2	equ	Math_div30uBy16u_1-*
+	bcs	*+Math_div30uBy16u_dist2
+	cpy	Math_word+1
+	clc
+Math_div30uBy16u_dist3	equ	Math_div30uBy16u_2-1-*
+	beq	*+Math_div30uBy16u_dist3
+Math_div30uBy16u_1
+	sta	Math_long+2
+	tya
+	sbc	Math_word+1
+	ert	Math_word+1!={tya}
+Math_div30uBy16u_2
+;2
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+	cmp	Math_word+1
+	bcc	*+Math_div30uBy16u_dist1
+	tay
+	lda	Math_long+2
+	sbc	Math_word	+
+	bcs	*+Math_div30uBy16u_dist2
+	cpy	Math_word+1
+	clc
+	beq	*+Math_div30uBy16u_dist3
+	sta	Math_long+2
+	tya
+	sbc	Math_word+1
+;3
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+	cmp	Math_word+1
+	bcc	*+Math_div30uBy16u_dist1
+	tay
+	lda	Math_long+2
+	sbc	Math_word	+
+	bcs	*+Math_div30uBy16u_dist2
+	cpy	Math_word+1
+	clc
+	beq	*+Math_div30uBy16u_dist3
+	sta	Math_long+2
+	tya
+	sbc	Math_word+1
+;4
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+	cmp	Math_word+1
+	bcc	*+Math_div30uBy16u_dist1
+	tay
+	lda	Math_long+2
+	sbc	Math_word	+
+	bcs	*+Math_div30uBy16u_dist2
+	cpy	Math_word+1
+	clc
+	beq	*+Math_div30uBy16u_dist3
+	sta	Math_long+2
+	tya
+	sbc	Math_word+1
+;5
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+	cmp	Math_word+1
+	bcc	*+Math_div30uBy16u_dist1
+	tay
+	lda	Math_long+2
+	sbc	Math_word	+
+	bcs	*+Math_div30uBy16u_dist2
+	cpy	Math_word+1
+	clc
+	beq	*+Math_div30uBy16u_dist3
+	sta	Math_long+2
+	tya
+	sbc	Math_word+1
+;6
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+	cmp	Math_word+1
+	bcc	*+Math_div30uBy16u_dist1
+	tay
+	lda	Math_long+2
+	sbc	Math_word	+
+	bcs	*+Math_div30uBy16u_dist2
+	cpy	Math_word+1
+	clc
+	beq	*+Math_div30uBy16u_dist3
+	sta	Math_long+2
+	tya
+	sbc	Math_word+1
+;7
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+	cmp	Math_word+1
+	bcc	*+Math_div30uBy16u_dist1
+	tay
+	lda	Math_long+2
+	sbc	Math_word	+
+	bcs	*+Math_div30uBy16u_dist2
+	cpy	Math_word+1
+	clc
+	beq	*+Math_div30uBy16u_dist3
+	sta	Math_long+2
+	tya
+	sbc	Math_word+1
+;8
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+	cmp	Math_word+1
+	bcc	*+Math_div30uBy16u_dist1
+	tay
+	lda	Math_long+2
+	sbc	Math_word	+
+	bcs	*+Math_div30uBy16u_dist2
+	cpy	Math_word+1
+	clc
+	beq	*+Math_div30uBy16u_dist3
+	sta	Math_long+2
+	tya
+	sbc	Math_word+1
+;9
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+	cmp	Math_word+1
+	bcc	*+Math_div30uBy16u_dist1
+	tay
+	lda	Math_long+2
+	sbc	Math_word	+
+	bcs	*+Math_div30uBy16u_dist2
+	cpy	Math_word+1
+	clc
+	beq	*+Math_div30uBy16u_dist3
+	sta	Math_long+2
+	tya
+	sbc	Math_word+1
+;10
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+	cmp	Math_word+1
+	bcc	*+Math_div30uBy16u_dist1
+	tay
+	lda	Math_long+2
+	sbc	Math_word	+
+	bcs	*+Math_div30uBy16u_dist2
+	cpy	Math_word+1
+	clc
+	beq	*+Math_div30uBy16u_dist3
+	sta	Math_long+2
+	tya
+	sbc	Math_word+1
+;11
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+	cmp	Math_word+1
+	bcc	*+Math_div30uBy16u_dist1
+	tay
+	lda	Math_long+2
+	sbc	Math_word	+
+	bcs	*+Math_div30uBy16u_dist2
+	cpy	Math_word+1
+	clc
+	beq	*+Math_div30uBy16u_dist3
+	sta	Math_long+2
+	tya
+	sbc	Math_word+1
+;12
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+	cmp	Math_word+1
+	bcc	*+Math_div30uBy16u_dist1
+	tay
+	lda	Math_long+2
+	sbc	Math_word	+
+	bcs	*+Math_div30uBy16u_dist2
+	cpy	Math_word+1
+	clc
+	beq	*+Math_div30uBy16u_dist3
+	sta	Math_long+2
+	tya
+	sbc	Math_word+1
+;13
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+	cmp	Math_word+1
+	bcc	*+Math_div30uBy16u_dist1
+	tay
+	lda	Math_long+2
+	sbc	Math_word	+
+	bcs	*+Math_div30uBy16u_dist2
+	cpy	Math_word+1
+	clc
+	beq	*+Math_div30uBy16u_dist3
+	sta	Math_long+2
+	tya
+	sbc	Math_word+1
+;14
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+	cmp	Math_word+1
+	bcc	*+Math_div30uBy16u_dist1
+	tay
+	lda	Math_long+2
+	sbc	Math_word	+
+	bcs	*+Math_div30uBy16u_dist2
+	cpy	Math_word+1
+	clc
+	beq	*+Math_div30uBy16u_dist3
+	sta	Math_long+2
+	tya
+	sbc	Math_word+1
+;15
+	rol	Math_long
+	rol	Math_long+1
+	rol	Math_long+2
+	rol	@
+	cmp	Math_word+1
+	bne	Math_div30uBy16u_3
+	lda	Math_long+2
+	cmp	Math_word
+Math_div30uBy16u_3
+	lda	Math_long
+	rol	@
+	sta	Math_word
+	lda	Math_long+1
+	rol	@
+	sta	Math_word+1
+	rts
+
+* Math_getAngleDiv
+; A = atan(Math_word2 / Math_word)
+; Math_word2 < Math_word
+; 0 <= A <= $1f
+Math_getAngleDiv
+	lda	Math_word2+1
+Math_getAngleDiv_1
+	asl	Math_word2
+	rol	@
+	asl	Math_word
+	rol	Math_word+1
+	bpl	Math_getAngleDiv_1
+	asl	Math_word2
+	rol	@
+; 0
+	cmp	Math_word+1
+	scc:sbc	Math_word+1
+	rol	Math_word2
+	rol	@
+; 1
+	cmp	Math_word+1
+	scc:sbc	Math_word+1
+	rol	Math_word2
+	rol	@
+; 2
+	cmp	Math_word+1
+	scc:sbc	Math_word+1
+	rol	Math_word2
+	rol	@
+; 3
+	cmp	Math_word+1
+	scc:sbc	Math_word+1
+	rol	Math_word2
+	rol	@
+; 4
+	cmp	Math_word+1
+	scc:sbc	Math_word+1
+	rol	Math_word2
+	rol	@
+; 5
+	cmp	Math_word+1
+	lda	Math_word2
+	rol	@
+	tay
+	lda	Math_getAngle_lookup,y
+	rts
+
+* Math_getAngleDiv2
+; A = $40 - atan(Math_word / Math_word2)
+; Math_word < Math_word2
+; $21 <= A <= $40
+Math_getAngleDiv2
+	lda	Math_word+1
+Math_getAngleDiv2_1
+	asl	Math_word
+	rol	@
+	asl	Math_word2
+	rol	Math_word2+1
+	bpl	Math_getAngleDiv2_1
+	asl	Math_word
+	rol	@
+; 0
+	cmp	Math_word2+1
+	scc:sbc	Math_word2+1
+	rol	Math_word
+	rol	@
+; 1
+	cmp	Math_word2+1
+	scc:sbc	Math_word2+1
+	rol	Math_word
+	rol	@
+; 2
+	cmp	Math_word2+1
+	scc:sbc	Math_word2+1
+	rol	Math_word
+	rol	@
+; 3
+	cmp	Math_word2+1
+	scc:sbc	Math_word2+1
+	rol	Math_word
+	rol	@
+; 4
+	cmp	Math_word2+1
+	scc:sbc	Math_word2+1
+	rol	Math_word
+	rol	@
+; 5
+	cmp	Math_word2+1
+	lda	Math_word
+	rol	@
+	tay
+	lda	#$40
+	sub	Math_getAngle_lookup,y
+	rts
+
+* Math_getAngle
+; Returns angle of (Math_word,Math_word2)
+;    C0
+;     |
+; 80 -*- 00 -->Math_word
+;     |
+;    40
+;     |
+;     v Math_word2
+Math_getAngle
+	lda	Math_word2+1
+	bmi	Math_getAngle_80toFF
+	ora	Math_word2
+	beq	Math_getAngle_00or80
+	lda	Math_word+1
+	bmi	Math_getAngle_40to7F
+	ora	Math_word
+	beq	Math_getAngle_return40
+	ldy	Math_word2
+	cpy	Math_word
+	lda	Math_word2+1
+	sbc	Math_word+1
+	jcc	Math_getAngleDiv
+	bne	Math_getAngleDiv2
+	cpy	Math_word
+	bne	Math_getAngleDiv2
+	lda	#$20
+	rts
+Math_getAngle_00or80
+	lda	Math_word+1
+	and	#$80
+	rts
+Math_getAngle_40to7F
+	lda	#0
+	sub:sta	Math_word
+	lda	#0
+	sbc:sta	Math_word+1
+	ldy	Math_word2
+	cpy	Math_word
+	lda	Math_word2+1
+	sbc	Math_word+1
+	bcc	Math_getAngle_60to7F
+	bne	Math_getAngle_not60
+	cpy	Math_word
+	beq	Math_getAngle_return60
+Math_getAngle_not60
+	jsr	Math_getAngleDiv2
+Math_getAngle_return40
+	add	#$40
+	rts
+Math_getAngle_return60
+	lda	#$60
+	rts
+Math_getAngle_60to7F
+	jsr	Math_getAngleDiv
+	add	#$40
+	rts
+Math_getAngle_80toFF
+	lda	#0
+	sub:sta	Math_word2
+	lda	#0
+	sbc:sta	Math_word2+1
+	lda	Math_word+1
+	bpl	Math_getAngle_C0toFF
+	lda	#0
+	sub:sta	Math_word
+	lda	#0
+	sbc:sta	Math_word+1
+	ldy	Math_word2
+	cpy	Math_word
+	lda	Math_word2+1
+	sbc	Math_word+1
+	bcs	Math_getAngle_A0toBF
+	jsr	Math_getAngleDiv
+	eor	#$80
+	rts
+Math_getAngle_A0toBF
+	bne	Math_getAngle_notA0
+	cpy	Math_word
+	beq	Math_getAngle_returnA0
+Math_getAngle_notA0
+	jsr	Math_getAngleDiv2
+	eor	#$80
+	rts
+Math_getAngle_returnA0
+	lda	#$a0
+	rts
+Math_getAngle_C0toFF
+	ora	Math_word
+	beq	Math_getAngle_returnC0
+	ldy	Math_word2
+	cpy	Math_word
+	lda	Math_word2+1
+	sbc	Math_word+1
+	bcc	Math_getAngle_E0toFF
+	bne	Math_getAngle_notE0
+	cpy	Math_word
+	beq	Math_getAngle_returnE0
+Math_getAngle_notE0
+	jsr	Math_getAngleDiv2
+Math_getAngle_returnC0
+	add	#$c0
+	rts
+Math_getAngle_returnE0
+	lda	#$e0
+	rts
+Math_getAngle_E0toFF
+	jsr	Math_getAngleDiv
+	add	#$c0
+	rts
+
+* View_init
+; Initialize View module
+View_init	| PROFILE
+	mva	>Math_sqrZero_lo-$100	View_cosSS+Math_MS_AL+1
+	sta	View_sinSS+Math_MS_AL+1
+	mva	>Math_sqrZero_hi-$100	View_cosSS+Math_MS_AH+1
+	sta	View_sinSS+Math_MS_AH+1
+	rts
+
+* View_setCosSin
+; Initialize View_cos_* and View_sin_* structures for View_calcRotate
+; input: A - cos, Y - sin
+View_setCosSin
+	sty	View_setCosSin_sin
+	ert	View_cosUS+Math_MS_SIZE!=View_cosSS
+	ldx	#View_cosUS
+	jsr	Math_setUSSS
+	lda	View_setCosSin_sin
+	ert	View_sinUS+Math_MS_SIZE!=View_sinSS
+	ldx	#View_sinUS
+	jmp	Math_setUSSS
+
+* View_calcRotate
+; Rotate View_calcRotate_x/y point to View_calcRotate_c/d
+; Doesn't modify X!
+View_calcRotate
+; View_calcRotate_hi:Y = View_calcRotate_x - View_x
+	lda	View_calcRotate_x
+	sub	View_x
+	sta	View_calcRotate_hi
+	lda	View_calcRotate_x+1
+	sbc	View_x+1
+	asl:ldy	View_calcRotate_hi
+	rol	@
+	eor	#$80
+	sta	View_calcRotate_hi
+; View_calcRotate_dX:0 = Y * cos(a)
+	lda	(View_cosUS+Math_MS_AL),y
+	cmp	(View_cosUS+Math_MS_SL),y
+	lda	(View_cosUS+Math_MS_AH),y
+	sbc	(View_cosUS+Math_MS_SH),y
+	sta	View_calcRotate_dX
+; View_calcRotate_cX:0 = -Y * sin(a)
+	lda	(View_sinUS+Math_MS_SL),y
+	cmp	(View_sinUS+Math_MS_AL),y
+	lda	(View_sinUS+Math_MS_SH),y
+	sbc	(View_sinUS+Math_MS_AH),y
+	sta	View_calcRotate_cX
+; View_calcRotate_d = View_calcRotate_hi * cos(a)
+	ldy	View_calcRotate_hi
+	lda	(View_cosSS+Math_MS_AL),y
+	sub	(View_cosSS+Math_MS_SL),y
+	sta	View_calcRotate_d
+	lda	(View_cosSS+Math_MS_AH),y
+	sbc	(View_cosSS+Math_MS_SH),y
+	sta	View_calcRotate_d+1
+; View_calcRotate_c = -View_calcRotate_hi * sin(a)
+	lda	(View_sinSS+Math_MS_SL),y
+	sub	(View_sinSS+Math_MS_AL),y
+	sta	View_calcRotate_c
+	lda	(View_sinSS+Math_MS_SH),y
+	sbc	(View_sinSS+Math_MS_AH),y
+	sta	View_calcRotate_c+1
+; View_calcRotate_hi:Y = View_calcRotate_y - View_y
+	lda	View_calcRotate_y
+	sub	View_y
+	sta	View_calcRotate_hi
+	lda	View_calcRotate_y+1
+	sbc	View_y+1
+	asl:ldy	View_calcRotate_hi
+	rol	@
+	eor	#$80
+	sta	View_calcRotate_hi
+; View_calcRotate_dY:0 = Y * sin(a)
+	lda	(View_sinUS+Math_MS_AL),y
+	cmp	(View_sinUS+Math_MS_SL),y
+	lda	(View_sinUS+Math_MS_AH),y
+	sbc	(View_sinUS+Math_MS_SH),y
+	sta	View_calcRotate_dY
+; View_calcRotate_cY:0 = Y * cos(a)
+	lda	(View_cosUS+Math_MS_AL),y
+	cmp	(View_cosUS+Math_MS_SL),y
+	lda	(View_cosUS+Math_MS_AH),y
+	sbc	(View_cosUS+Math_MS_SH),y
+	sta	View_calcRotate_cY
+; View_calcRotate_word = View_calcRotate_hi * sin(a)
+	ldy	View_calcRotate_hi
+	lda	(View_sinSS+Math_MS_AL),y
+	sub	(View_sinSS+Math_MS_SL),y
+	sta	View_calcRotate_word
+	lda	(View_sinSS+Math_MS_AH),y
+	sbc	(View_sinSS+Math_MS_SH),y
+	sta	View_calcRotate_word+1
+; View_calcRotate_d += View_calcRotate_word
+	lda	View_calcRotate_word
+	add:sta	View_calcRotate_d
+	lda	View_calcRotate_word+1
+	adc:sta	View_calcRotate_d+1
+; View_calcRotate_word = View_calcRotate_hi * cos(a)
+	lda	(View_cosSS+Math_MS_AL),y
+	sub	(View_cosSS+Math_MS_SL),y
+	sta	View_calcRotate_word
+	lda	(View_cosSS+Math_MS_AH),y
+	sbc	(View_cosSS+Math_MS_SH),y
+	sta	View_calcRotate_word+1
+; View_calcRotate_c += View_calcRotate_word
+	lda	View_calcRotate_word
+	add:sta	View_calcRotate_c
+	lda	View_calcRotate_word+1
+	adc:sta	View_calcRotate_c+1
+; View_calcRotate_d += View_calcRotate_dX
+	ldy	#$7f
+	lda	View_calcRotate_dX
+	add:sta	View_calcRotate_d
+	lda	#0
+	adc	View_calcRotate_d+1
+	cpy	View_calcRotate_dX
+	adc	#$ff
+	sta	View_calcRotate_d+1
+; View_calcRotate_d += View_calcRotate_dY
+	lda	View_calcRotate_dY
+	add:sta	View_calcRotate_d
+	lda	#0
+	adc	View_calcRotate_d+1
+	cpy	View_calcRotate_dY
+	adc	#$ff
+	sta	View_calcRotate_d+1
+; View_calcRotate_c += View_calcRotate_cX
+	lda	View_calcRotate_cX
+	add:sta	View_calcRotate_c
+	lda	#0
+	adc	View_calcRotate_c+1
+	cpy	View_calcRotate_cX
+	adc	#$ff
+	sta	View_calcRotate_c+1
+; View_calcRotate_c += View_calcRotate_cY
+	lda	View_calcRotate_cY
+	add:sta	View_calcRotate_c
+	lda	#0
+	adc	View_calcRotate_c+1
+	cpy	View_calcRotate_cY
+	adc	#$ff
+	sta	View_calcRotate_c+1
+	rts
+
+* Project_init
+; Initialize Project module
+Project_init	| PROFILE
+	mva	>Math_sqrZero_lo	Project_inverseDUU_lo+Math_MS_AL+1
+	sta	Project_inverseDUU_hi+Math_MS_AL+1
+	mva	>Math_sqrZero_hi	Project_inverseDUU_lo+Math_MS_AH+1
+	sta	Project_inverseDUU_hi+Math_MS_AH+1
+
+	ldx	#0
+Project_init_calcScreenY
+	txa
+:5	lsr	@
+	add	#$7c
+	sta	Project_calcScreenY_lookup_hi,x
+	inx
+	bne	Project_init_calcScreenY
+	rts
+
+* Project_calcInverseD
+; Calculate (Project_SCALE << Project_INVERSE_SHIFT) / d = $2800 / d
+; input: X = d lo, A = d hi
+; return: Y = result lo, A = result hi
+Project_calcInverseD
+	tay
+; $0000-$ffff
+	bne	project_calcInverseD_0100_ffff
+; $0000-$00ff
+	ldy	Project_inverseDLookup_lo,x
+	lda	Project_inverseDLookup_hi,x
+	rts
+project_calcInverseD_0100_ffff
+; $0100-$ffff
+	lda	#0
+	cpy	#2
+	bcs	project_calcInverseD_0200_ffff
+; $0100-$01ff
+	ldy	Project_inverseDLookup_lo+$100,x
+	rts
+project_calcInverseD_0200_ffff
+; $0200-$ffff
+	bne	project_calcInverseD_0300_ffff
+; $0200-$02ff
+	cpx	#$81
+	bcs	project_calcInverseD_0281_02ff
+; $0200-$0280
+	cpx	#$39
+	bcs	project_calcInverseD_0239_0280
+; $0200-$0238
+	cpx	#$1b
+	bcs	project_calcInverseD_r12
+; $0200-$021a
+	cpx	#1
+	bcs	project_calcInverseD_r13
+; $0200 -> $14
+	ldy	#$14
+	rts
+project_calcInverseD_r13
+; $0201-$021a -> $13
+	ldy	#$13
+	rts
+project_calcInverseD_r12
+; $021b-$0238 -> $12
+	ldy	#$12
+	rts
+project_calcInverseD_0239_0280
+; $0239-$0280
+	cpx	#$5b
+	bcs	project_calcInverseD_r10
+; $0239-$025a -> $11
+	ldy	#$11
+	rts
+project_calcInverseD_r10
+; $025b-$0280 -> $10
+	ldy	#$10
+	rts
+project_calcInverseD_0281_02ff
+; $0281-$02ff
+	cpx	#$dc
+	bcs	project_calcInverseD_r0d
+; $0281-$02db
+	cpx	#$ab
+	bcs	project_calcInverseD_r0e
+; $0281-$02aa -> $0f
+	ldy	#$0f
+	rts
+project_calcInverseD_r0e
+; $02ab-$02db -> $0e
+	ldy	#$0e
+	rts
+project_calcInverseD_r0d
+; $02dc-$02ff -> $0d
+; $0300-$0313 -> $0d
+	ldy	#$0d
+	rts
+project_calcInverseD_0300_ffff
+; $0300-$ffff
+	cpy	#4
+	bcs	project_calcInverseD_0400_ffff
+; $0300-$03ff
+	cpx	#$56
+	bcs	project_calcInverseD_0356_03ff
+; $0300-$0355
+	cpx	#$14
+	bcc	project_calcInverseD_r0d
+; $0314-$0355 -> $0c
+	ldy #$0c
+	rts
+project_calcInverseD_0356_03ff
+; $0356-$03ff
+	cpx	#$a3
+	bcs	project_calcInverseD_r0a
+; $0356-$03a2 -> $0b
+	ldy	#$0b
+	rts
+project_calcInverseD_r0a
+; $03a3-$03ff -> $0a
+; $0400       -> $0a
+	ldy	#$0a
+	rts
+project_calcInverseD_0400_ffff
+; $0400-$ffff
+	bne	project_calcInverseD_0500_ffff
+; $0400-$04ff
+	cpx	#$72
+	bcs	project_calcInverseD_r08
+	cpx	#1
+	bcc	project_calcInverseD_r0a
+; $0401-$0471 -> $09
+	ldy	#$09
+	rts
+project_calcInverseD_r08
+; $0472-$04ff -> $08
+; $0500       -> $08
+	ldy	#$08
+	rts
+project_calcInverseD_0500_ffff
+; $0500-$ffff
+	cpy	#$08
+	bcs	project_calcInverseD_0800_ffff
+	cpy	#$06
+	bcs	project_calcInverseD_0600_07ff
+; $0500-$05ff
+	cpx	#$b7
+	bcs	project_calcInverseD_r06
+; $0500-$05b6
+	cpx	#1
+	bcc	project_calcInverseD_r08
+; $0501-$05b6 -> $07
+	ldy	#$07
+	rts
+project_calcInverseD_r06
+; $05b7-$05ff -> $06
+; $0600-$06aa -> $06
+	ldy	#$06
+	rts
+project_calcInverseD_0600_07ff
+; $0600-$07ff
+	bne	project_calcInverseD_r05
+; $0600-$06ff
+	cpx	#$ab
+	bcc	project_calcInverseD_r06
+project_calcInverseD_r05
+; $06ab-$06ff -> $05
+; $0700-$07ff -> $05
+; $0800-$08ff -> $05
+	ldy	#$05
+	rts
+project_calcInverseD_0800_ffff
+; $0800-$ffff
+	bne	project_calcInverseD_0900_ffff
+; $0800-$08ff
+	cpx	#1
+	bcc	project_calcInverseD_r05
+project_calcInverseD_r04
+; $0801-$08ff -> $04
+; $0900-$09ff -> $04
+; $0a00       -> $04
+	ldy	#$04
+	rts
+project_calcInverseD_0900_ffff
+; $0900-$ffff
+	cpy	#$14
+	bcs	project_calcInverseD_1400_ffff
+; $0900-$13ff
+	cpy	#$0d
+	bcs	project_calcInverseD_0d00_13ff
+; $0900-$0cff
+	cpy	#$0a
+	bcc	project_calcInverseD_r04
+; $0a00-$cff
+	bne	project_calcInverseD_r03
+; $0a00-$0aff
+	cpx	#1
+	bcc	project_calcInverseD_r04
+project_calcInverseD_r03
+; $0a01-$0aff -> $03
+; $0b00-$0cff -> $03
+; $0d00-$0d55 -> $03
+	ldy	#$03
+	rts
+project_calcInverseD_0d00_13ff
+; $0d00-$13ff
+	bne	project_calcInverseD_r02
+; $0d00-$0d55
+	cpx	#$56
+	bcc	project_calcInverseD_r03
+project_calcInverseD_r02
+; $0d56-$0dff -> $02
+; $0e00-$13ff -> $02
+; $1400       -> $02
+	ldy	#$02
+	rts
+project_calcInverseD_1400_ffff
+; $1400-$ffff
+	bne	project_calcInverseD_1500_ffff
+; $1400-$14ff
+	cpx	#1
+	bcc	project_calcInverseD_r02
+project_calcInverseD_r01
+; $1401-$14ff -> $01
+; $1500-$27ff -> $01
+; $2800       -> $01
+	ldy	#$01
+	rts
+project_calcInverseD_1500_ffff
+; $1500-$ffff
+	cpy	#$28
+	bcc	project_calcInverseD_r01
+	bne	project_calcInverseD_r00
+	cpx	#1
+	bcc	project_calcInverseD_r01
+project_calcInverseD_r00
+; $2801-$28ff -> $00
+; $2900-$ffff -> $00
+	ldy	#$00
+	rts
+
+* Project_setInverseD
+; Initialize Project_inverseD_* structures for Project_calcScreenX/Y
+; input: Y - inverseD lo, A - inverseD hi
+Project_setInverseD	| PROFILE
+	sty	Project_inverseDUU_lo
+	ert	Project_inverseDUU_hi+Math_MS_SIZE!=Project_inverseDSU_hi
+	ldx	#Project_inverseDUU_hi
+	jsr	Math_setUUSU
+	lda	Project_inverseDUU_lo
+	ert	Project_inverseDUU_lo+Math_MS_SIZE!=Project_inverseDSU_lo
+	ldx	#Project_inverseDUU_lo
+	jmp	Math_setUUSU
+
+* Project_calcScreenX
+; Calculate X coordinate on screen for rotated point (C, D):
+; screenX = Screen_CENTER_X + ((rotateC * inverseD) >> Project_INVERSE_SHIFT)
+; input: Y - rotateC lo, A - rotateC hi
+; return: A - screenX
+Project_calcScreenX
+	eor	#$80
+	sta	Project_calcScreenX_hi
+; a = (cl * il) >> 8
+	lda	(Project_inverseDUU_lo+Math_MS_AL),y
+	cmp	(Project_inverseDUU_lo+Math_MS_SL),y
+	lda	(Project_inverseDUU_lo+Math_MS_AH),y
+	sbc	(Project_inverseDUU_lo+Math_MS_SH),y
+; a += (cl * ih)
+	add	(Project_inverseDUU_hi+Math_MS_AL),y
+	sub	(Project_inverseDUU_hi+Math_MS_SL),y
+; a += (ch * il)
+	ldy	Project_calcScreenX_hi
+	add	(Project_inverseDSU_lo+Math_MS_AL),y
+	sub	(Project_inverseDSU_lo+Math_MS_SL),y
+	add	#Screen_CENTER_X
+	rts
+
+* Project_calcScreenY
+; Calculate Y coordinate on screen for vertical world coordinate Z:
+; screenY = Project_horizon + (((worldZ - View_z) * inverseD) >> Project_INVERSE_SHIFT)
+; input: A - worldZ
+; return: A - screenY
+Project_calcScreenY
+	sub	View_z
+	ror	@
+	tax
+	rol	@
+:2	asl	@
+	tay
+	mva	Project_calcScreenY_lookup_hi,x	Project_calcScreenY_hi
+; a = (zl * il) >> 8
+	lda	(Project_inverseDUU_lo+Math_MS_AL),y
+	cmp	(Project_inverseDUU_lo+Math_MS_SL),y
+	lda	(Project_inverseDUU_lo+Math_MS_AH),y
+	sbc	(Project_inverseDUU_lo+Math_MS_SH),y
+	pha
+; x = >(zl * ih)
+	lda	(Project_inverseDUU_hi+Math_MS_AH),y
+	sub	(Project_inverseDUU_hi+Math_MS_SH),y
+	tax
+	pla
+; a += (zl * ih)
+	add	(Project_inverseDUU_hi+Math_MS_AL),y
+	scc:inx
+	sub	(Project_inverseDUU_hi+Math_MS_SL),y
+	scs:dex
+	ldy	Project_calcScreenY_hi
+; a += (zh * il)
+	add	(Project_inverseDSU_lo+Math_MS_AL),y
+	scc:inx
+	sub	(Project_inverseDSU_lo+Math_MS_SL),y
+	scs:dex
+	add	#0
+Project_horizon	equ	*-1
+	pha
+; x += >(zh * il)
+	txa
+	adc	(Project_inverseDSU_lo+Math_MS_AH),y
+	sub	(Project_inverseDSU_lo+Math_MS_SH),y
+	add	(Project_inverseDSU_hi+Math_MS_AL),y
+	sub	(Project_inverseDSU_hi+Math_MS_SL),y
+	tax
+	pla
+	rts
+
+* Project_clipInverseD
+; Calculate Project_rotateD1 + Math_word * (Project_rotateD2 - Project_rotateD1)
+;                           / (Math_word3 + Project_rotateD1 - Project_rotateD2)
+; return: Y - result lo, A - result hi
+Project_clipInverseD	| PROFILE
+; Math_word = abs(Math_word)
+	lda	Math_word+1
+	sta	Math_sign
+	bpl	Project_clipInverseD_1
+	lda	#0
+	sub:sta	Math_word
+	lda	#0
+	sbc:sta	Math_word+1
+Project_clipInverseD_1
+; Math_word2 = d2 - d1
+	lda	Project_rotateD2
+	sub	Project_rotateD1
+	sta	Math_word2
+	lda	Project_rotateD2+1
+	sbc	Project_rotateD1+1
+	sta	Math_word2+1
+; Math_word3 += d1 - d2
+	lda	Math_word3
+	sub	Math_word2
+	sta	Math_word3
+	lda	Math_word3+1
+	sbc	Math_word2+1
+	sta	Math_word3+1
+; Math_word2 = abs(Math_word2)
+	lda	Math_word2+1
+	bpl	Project_clipInverseD_2
+	lda	#$80
+	eor:sta	Math_sign
+	lda	#0
+	sub:sta	Math_word2
+	lda	#0
+	sbc:sta	Math_word2+1
+Project_clipInverseD_2
+; Math_word3 = abs(Math_word3)
+	lda	Math_word3+1
+	bpl	Project_clipInverseD_3
+	lda	#$80
+	eor:sta	Math_sign
+	lda	#0
+	sub:sta	Math_word3
+	lda	#0
+	sbc:sta	Math_word3+1
+Project_clipInverseD_3
+	jsr	Math_mul15uBy15u
+	mwa	Math_word3	Math_word
+	jsr	Math_div30uBy16u
+	bit	Math_sign
+	bmi	Project_clipInverseD_4
+	lda	Project_rotateD1
+	add	Math_word
+	tax
+	lda	Project_rotateD1+1
+	adc	Math_word+1
+	jmp	Project_clipInverseD_5
+Project_clipInverseD_4
+	lda	Project_rotateD1
+	sub	Math_word
+	tax
+	lda	Project_rotateD1+1
+	sbc	Math_word+1
+Project_clipInverseD_5
+	bmi	Project_clipInverseD_dNeg
+	bne	Project_clipInverseD_6
+	cpx	#Project_DRAW_MIN_DISTANCE
+	bcc	Project_clipInverseD_dNeg
+Project_clipInverseD_6
+	jsr	Project_calcInverseD
+Project_clipWall_reject1
+	clc:rts
+Project_clipInverseD_dNeg
+	sec:rts
+
+* Project_clipWall
+; Calculates Project_screenX's and Project_inverseD's
+; for wall between Project_rotateC/D's
+Project_clipWall	| PROFILE
+	lda	Project_rotateC1
+	add	Project_rotateD1
+	lda	Project_rotateC1+1
+	adc	Project_rotateD1+1
+	bmi	Project_clipWall_clip1
+	lda	Project_rotateD1
+	cmp	Project_rotateC1
+	lda	Project_rotateD1+1
+	sbc	Project_rotateC1+1
+	bmi	Project_clipWall_reject1
+	lda	Project_rotateD1
+	ora	Project_rotateD1+1
+	beq	Project_clipWall_reject1
+	ldx	Project_rotateD1
+	lda	Project_rotateD1+1
+	jsr	Project_calcInverseD
+	sty	Project_inverseD1
+	sta	Project_inverseD1+1
+	jsr	Project_setInverseD
+	ldy	Project_rotateC1
+	lda	Project_rotateC1+1
+	jsr	Project_calcScreenX
+	cmp	#Screen_WIDTH
+	bpl	Project_clipWall_reject1
+	tax
+	spl:lda	#0
+	sta	Project_screenX1
+	jmp	Project_clipWall_point2
+Project_clipWall_clip1
+	lda	Project_rotateC2
+	add	Project_rotateD2
+	lda	Project_rotateC2+1
+	adc	Project_rotateD2+1
+	bmi	Project_clipWall_reject1
+	mva	#0	Project_screenX1
+; Math_word = Project_rotateC1 + Project_rotateD1
+	lda	Project_rotateC1
+	add	Project_rotateD1
+	sta	Math_word
+	lda	Project_rotateC1+1
+	adc	Project_rotateD1+1
+	sta	Math_word+1
+; Math_word3 = Project_rotateC1 - Project_rotateC2
+	lda	Project_rotateC1
+	sub	Project_rotateC2
+	sta	Math_word3
+	lda	Project_rotateC1+1
+	sbc	Project_rotateC2+1
+	sta	Math_word3+1
+; Project_inverseD1 = (Project_SCALE << Project_INVERSE_SHIFT) /
+; (Project_rotateD1 + (Project_rotateC1 + Project_rotateD1) * (Project_rotateD2 - Project_rotateD1)
+; / (Project_rotateC1 - Project_rotateC2 + Project_rotateD1 - Project_rotateD2))
+	jsr	Project_clipInverseD
+	bcs	Project_clipWall_reject1
+	sty	Project_inverseD1
+	sta	Project_inverseD1+1
+Project_clipWall_point2
+	lda	Project_rotateD2
+	cmp	Project_rotateC2
+	lda	Project_rotateD2+1
+	sbc	Project_rotateC2+1
+	bmi	Project_clipWall_clip2
+	lda	Project_rotateC2
+	add	Project_rotateD2
+	lda	Project_rotateC2+1
+	adc	Project_rotateD2+1
+	bmi	Project_clipWall_reject2
+	lda	Project_rotateD2
+	ora	Project_rotateD2+1
+	beq	Project_clipWall_reject2
+	ldx	Project_rotateD2
+	lda	Project_rotateD2+1
+	jsr	Project_calcInverseD
+	sty	Project_inverseD2
+	sta	Project_inverseD2+1
+	jsr	Project_setInverseD
+	ldy	Project_rotateC2
+	lda	Project_rotateC2+1
+	jsr	Project_calcScreenX
+	cmp	#0
+	bmi	Project_clipWall_reject2
+	cmp	#Screen_WIDTH+1
+	scc:lda	#Screen_WIDTH
+	sta	Project_screenX2
+	jmp	Project_clipWall_finish
+Project_clipWall_clip2
+	mva	#Screen_WIDTH	Project_screenX2
+; Math_word = Project_rotateD1 - Project_rotateC1
+	lda	Project_rotateD1
+	sub	Project_rotateC1
+	sta	Math_word
+	lda	Project_rotateD1+1
+	sbc	Project_rotateC1+1
+	sta	Math_word+1
+; Math_word3 = Project_rotateC2 - Project_rotateC1
+	lda	Project_rotateC2
+	sub	Project_rotateC1
+	sta	Math_word3
+	lda	Project_rotateC2+1
+	sbc	Project_rotateC1+1
+	sta	Math_word3+1
+; Project_inverseD2 = (Project_SCALE << Project_INVERSE_SHIFT) /
+; (Project_rotateD1 + (Project_rotateD1 - Project_rotateC1) * (Project_rotateD2 - Project_rotateD1)
+; / (Project_rotateC2 - Project_rotateC1 + Project_rotateD1 - Project_rotateD2))
+	jsr	Project_clipInverseD
+	bcs	Project_clipWall_reject2
+	sty	Project_inverseD2
+	sta	Project_inverseD2+1
+Project_clipWall_finish
+	lda	Project_screenX1
+	cmp	Project_screenX2
+	bcs	Project_clipWall_reject2
+	sec
+	rts
+Project_clipWall_reject2
+	clc
+	rts
+
+* Picture_init
+; Initialize Picture module
+Picture_init	| PROFILE
+	ldx	#0
+Picture_init_angleToSkyColumn
+	txa
+:2	lsr	@
+	add	Math_idTable,x
+; a = x * 320/256 = x * 5/4
+	lsr	@
+	ert	Picture_SKY_WIDTH!=16&&Picture_SKY_WIDTH!=32
+	and	#Picture_SKY_WIDTH/2-1
+	sta	Picture_angleToSkyColumn,x
+	inx
+	bne	Picture_init_angleToSkyColumn
+
+	ldx	#Picture_SKY_WIDTH/2+Screen_WIDTH/2-1
+Picture_init_screenColumnToSkyColumn1
+	lda	#Picture_SKY_WIDTH/2
+Picture_init_screenColumnToSkyColumn2
+	sub	#1
+	bcc	Picture_init_screenColumnToSkyColumn1
+	sta	Picture_screenColumnToSkyColumn,x-
+	bpl	Picture_init_screenColumnToSkyColumn2
+
+	ldx	#Project_HORIZON_MAX-1
+	mva	#0	Picture_horizonToSkyLine+Project_HORIZON_MAX
+	clc
+Picture_init_horizonToSkyLine
+	adc	#1	-
+	sta	Picture_horizonToSkyLine,x-
+	adc	#1	-
+	sta	Picture_horizonToSkyLine,x-
+	sta	Picture_horizonToSkyLine,x-
+	bpl	Picture_init_horizonToSkyLine
+	rts
+
+* Fill_init
+; Initialize Fill module
+Fill_init
+
+* Fill_initFillWallSolid
+; Make unrolled code for fillWallSolid
+Fill_initFillWallSolid	| PROFILE
+	mva	>Fill_fillWallSolid_unrolled	Fill_init_fill+1
+	ldx	#0
+	lda	>Screen_screen1
+	jsr	Fill_initFillWallSolid_screen
+	lda	>Screen_screen2
+Fill_initFillWallSolid_screen
+	sta	Fill_init_screenHi
+	lda	#$0f
+	ldy	#Fill_fillWall_colorEvenLeft
+	jsr	Fill_initFillWallSolid_column
+	lda	#$f0
+	ldy	#Fill_fillWall_colorEvenRight
+Fill_initFillWallSolid_column
+	sta	Fill_init_mask
+	sty	Fill_init_color
+	mva	#0	Fill_init_fill
+	mva	<Screen_screen1	Fill_init_screen
+	mva	Fill_init_screenHi	Fill_init_screen+1
+	mva	#Screen_HEIGHT	Fill_init_lines
+Fill_initFillWallSolid_pixel
+	ldy	#0
+	mva	#{lda a:,y}	(Fill_init_fill),y+
+	mva	Fill_init_screen	(Fill_init_fill),y+
+	mva	Fill_init_screen+1	(Fill_init_fill),y+
+	mva	#{and #}	(Fill_init_fill),y+
+	mva	Fill_init_mask	(Fill_init_fill),y+
+	mva	#{eor z:}	(Fill_init_fill),y+
+	mva	Fill_init_color	(Fill_init_fill),y+
+	ert	Fill_fillWall_colorEvenLeft^Fill_fillWall_colorOddLeft!=Fill_fillWall_colorEvenRight^Fill_fillWall_colorOddRight
+	eor	#Fill_fillWall_colorEvenLeft^Fill_fillWall_colorOddLeft
+	sta	Fill_init_color
+	mva	#{sta a:,y}	(Fill_init_fill),y+
+	mva	Fill_init_screen	(Fill_init_fill),y+
+	add	#Screen_WIDTH/2
+	sta	Fill_init_screen
+	mva	Fill_init_screen+1	(Fill_init_fill),y
+	adc	#0
+	sta	Fill_init_screen+1
+	lda	Fill_init_fill
+	cpx	#2*Screen_HEIGHT+2
+	scs:sta	Fill_fillWallSolid_left_lo,x
+	add	#10
+	sta	Fill_init_fill
+	mva	Fill_init_fill+1	Fill_fillWallSolid_left_hi,x
+	adc	#0
+	sta	Fill_init_fill+1
+	inx
+	dec	Fill_init_lines
+	bne	Fill_initFillWallSolid_pixel
+	cpx	#2*Screen_HEIGHT+2
+	scs:mva	Fill_init_fill	Fill_fillWallSolid_left_lo,x
+	mva	Fill_init_fill+1	Fill_fillWallSolid_left_hi,x
+	inx
+	inc	Fill_init_fill+1
+	rts
+
+* Fill_setPage
+; Set screen page for Fill module
+Fill_setPage
+	lda	Screen_drawnPage
+	cmp	>Screen_screen2
+	lda	<Fill_fillWallSolid_left_hi
+	scc:lda	<Fill_fillWallSolid_left_hi+2*Screen_HEIGHT+2
+	sta	Fill_fillWallSolid_loadLeftHi1+1
+	sta	Fill_fillWallSolid_loadLeftHi2+1
+	add	<Fill_fillWallSolid_right_hi-Fill_fillWallSolid_left_hi
+	sta	Fill_fillWallSolid_loadRightHi1+1
+	sta	Fill_fillWallSolid_loadRightHi2+1
+
+	ldx	View_angle
+	mva	Picture_angleToSkyColumn,x	Fill_firstParallaxingColumn
+
+	ldx	Project_horizon
+	lda	<Picture_skyColumn_lo
+	ldy	>Picture_skyColumn_lo
+	add	Picture_horizonToSkyLine,x
+	scc:iny
+	sta	Fill_firstParallaxingLine_lo
+	sty	Fill_firstParallaxingLine_lo+1
+	add	#Picture_skyColumn_hi-Picture_skyColumn_lo
+	scc:iny
+	sta	Fill_firstParallaxingLine_hi
+	sty	Fill_firstParallaxingLine_hi+1
+	rts
+
+* Fill_fillSpanSolid
+; Fill horizontal line (X,Y) to (Outline_spanRight,Y) with a solid color
+; input: X - leftX, Y - Y
+Fill_fillSpanSolid	| PROFILE
+	txa
+	cmp	Outline_spanRight,y
+	bcs	Fill_fillSpanSolid_return
+	lsr	@
+	bcs	Fill_fillSpanSolid_x1Odd
+	adc	Screen_lineOffset_lo,y	-
+	sta	Fill_pointer
+	lda	Screen_drawnPage
+	adc	Screen_lineOffset_hi,y
+	sta	Fill_pointer+1
+	tya
+	lsr	@
+	lda	Fill_fillSpanSolid_colorEven
+	scc:lda	Fill_fillSpanSolid_colorOdd
+	sta	Fill_fillSpanSolid_color
+	txa
+	eor	#$ff
+	sec:adc	Outline_spanRight,y	+
+	lsr	@
+	tay
+	bcc	Fill_fillSpanSolid_x1EvenX2Even
+	lda	(Fill_pointer),y
+	eor	Fill_fillSpanSolid_color
+	and	#$0f
+	eor	Fill_fillSpanSolid_color
+	sta	(Fill_pointer),y
+	tya:beq	Fill_fillSpanSolid_return
+Fill_fillSpanSolid_x1EvenX2Even
+	lda	Fill_fillSpanSolid_color
+Fill_fillSpanSolid_x1EvenFill
+	dey
+	sta	(Fill_pointer),y
+	bne	Fill_fillSpanSolid_x1EvenFill
+Fill_fillSpanSolid_return
+	rts
+
+Fill_fillSpanSolid_x1Odd
+	add	Screen_lineOffset_lo,y
+	sta	Fill_pointer
+	lda	Screen_drawnPage
+	adc	Screen_lineOffset_hi,y
+	sta	Fill_pointer+1
+	tya
+	lsr	@
+	lda	Fill_fillSpanSolid_colorEven
+	bcc	Fill_fillSpanSolid_x1OddX0
+	lda	Fill_fillSpanSolid_colorOdd
+	clc
+Fill_fillSpanSolid_x1OddX0
+	sta	Fill_fillSpanSolid_color
+	txa
+	eor	#$ff
+	adc	Outline_spanRight,y	-
+	lsr	@
+	tay
+	bcc	Fill_fillSpanSolid_x1OddX2Even
+	iny
+	lda	(Fill_pointer),y
+	eor	Fill_fillSpanSolid_color
+	and	#$0f
+	eor	Fill_fillSpanSolid_color
+	sta	(Fill_pointer),y
+	dey
+Fill_fillSpanSolid_x1OddX2Even
+	beq	Fill_fillSpanSolid_x1OddBegin
+	lda	Fill_fillSpanSolid_color
+	sta:rne	(Fill_pointer),y-
+Fill_fillSpanSolid_x1OddBegin
+	lda	(Fill_pointer),y
+	eor	Fill_fillSpanSolid_color
+	and	#$f0
+	eor	Fill_fillSpanSolid_color
+	sta	(Fill_pointer),y
+	rts
+
+* Fill_fillSpanParallaxing
+; Fill horizontal line (X,Y) to (Outline_spanRight,Y) with flat picture
+; input: X - leftX, Y - Y
+Fill_fillSpanParallaxing	| PROFILE
+	txa
+	cmp	Outline_spanRight,y
+	bcs	Fill_fillSpanParallaxing_return
+	stx	Fill_fillSpanParallaxing_x
+	lsr	@
+	bcs	Fill_fillSpanParallaxing_x1Odd
+	pha
+	adc	Screen_lineOffset_lo,y	-
+	sta	Fill_pointer
+	lda	Screen_drawnPage
+	adc	Screen_lineOffset_hi,y
+	sta	Fill_pointer+1
+	pla
+	ert	<Picture_screenColumnToSkyColumn!=0
+	adc	Fill_firstParallaxingColumn	-
+	sta	Fill_fillSpanParallaxing_convertColumn2+1
+	adc	#1	-
+	sta	Fill_fillSpanParallaxing_convertColumn1+1
+	mva	(Fill_firstParallaxingLine_lo),y	Fill_fillSpanParallaxing_loadTexture1+1
+	sta	Fill_fillSpanParallaxing_loadTexture2+1
+	mva	(Fill_firstParallaxingLine_hi),y	Fill_fillSpanParallaxing_loadTexture1+2
+	sta	Fill_fillSpanParallaxing_loadTexture2+2
+	txa
+	eor	#$ff
+	sec:adc	Outline_spanRight,y	+
+	lsr	@
+	tay
+	bcc	Fill_fillSpanParallaxing_x1EvenX2Even
+Fill_fillSpanParallaxing_convertColumn1
+	ldx	Picture_screenColumnToSkyColumn,y
+Fill_fillSpanParallaxing_loadTexture1
+	lda	$adad,x	.
+	eor	(Fill_pointer),y
+	and	#$f0
+	eor:sta	(Fill_pointer),y
+	tya:beq	Fill_fillSpanParallaxing_returnX
+Fill_fillSpanParallaxing_x1EvenX2Even
+Fill_fillSpanParallaxing_x1EvenFill
+Fill_fillSpanParallaxing_convertColumn2
+	ldx	Picture_screenColumnToSkyColumn,y
+Fill_fillSpanParallaxing_loadTexture2
+	lda	$adad,x	.
+	dey
+	sta	(Fill_pointer),y
+	bne	Fill_fillSpanParallaxing_x1EvenFill
+Fill_fillSpanParallaxing_returnX
+	ldx	Fill_fillSpanParallaxing_x
+Fill_fillSpanParallaxing_return
+	rts
+
+Fill_fillSpanParallaxing_x1Odd
+	pha
+	add	Screen_lineOffset_lo,y
+	sta	Fill_pointer
+	lda	Screen_drawnPage
+	adc	Screen_lineOffset_hi,y
+	sta	Fill_pointer+1
+	pla
+	ert	<Picture_screenColumnToSkyColumn!=0
+	sec:adc	Fill_firstParallaxingColumn
+	sta	Fill_fillSpanParallaxing_convertColumn3+1
+	sta	Fill_fillSpanParallaxing_convertColumn4+1
+	sta	Fill_fillSpanParallaxing_convertColumn5+1
+	mva	(Fill_firstParallaxingLine_lo),y	Fill_fillSpanParallaxing_loadTexture3+1
+	sta	Fill_fillSpanParallaxing_loadTexture4+1
+	sta	Fill_fillSpanParallaxing_loadTexture5+1
+	mva	(Fill_firstParallaxingLine_hi),y	Fill_fillSpanParallaxing_loadTexture3+2
+	sta	Fill_fillSpanParallaxing_loadTexture4+2
+	sta	Fill_fillSpanParallaxing_loadTexture5+2
+	txa
+	eor	#$ff
+	adc	Outline_spanRight,y	-
+	lsr	@
+	tay
+	bcc	Fill_fillSpanParallaxing_x1OddX2Even
+	iny
+Fill_fillSpanParallaxing_convertColumn3
+	ldx	Picture_screenColumnToSkyColumn,y
+Fill_fillSpanParallaxing_loadTexture3
+	lda	$adad,x	.
+	eor	(Fill_pointer),y
+	and	#$f0
+	eor:sta	(Fill_pointer),y
+	dey
+Fill_fillSpanParallaxing_x1OddX2Even
+	beq	Fill_fillSpanParallaxing_x1OddBegin
+
+Fill_fillSpanParallaxing_x1OddFill
+Fill_fillSpanParallaxing_convertColumn4
+	ldx	Picture_screenColumnToSkyColumn,y
+Fill_fillSpanParallaxing_loadTexture4
+	lda	$adad,x	.
+	sta	(Fill_pointer),y-
+	bne	Fill_fillSpanParallaxing_x1OddFill
+Fill_fillSpanParallaxing_x1OddBegin
+Fill_fillSpanParallaxing_convertColumn5
+	ldx	Picture_screenColumnToSkyColumn,y
+Fill_fillSpanParallaxing_loadTexture5
+	lda	$adad,x	.
+	eor	(Fill_pointer),y
+	and	#$0f
+	eor:sta	(Fill_pointer),y
+	ldx	Fill_fillSpanParallaxing_x
+	rts
+
+* Outline_calcLine
+; Calculate Y coordinates of line (Outline_x1,Outline_y1) to (Outline_x2,Outline_y1)
+; (x1<x2, one coordinate per column) and store them in ptr table.
+; input: A - screenX2, X - ptr - Outline_table
+; a/
+; /b
+; --
+; \c
+; d\
+Outline_calcLine_a	| PROFILE
+	lda	Outline_y1+1
+	bne	Outline_calcLine_a1
+	cpy	#Screen_HEIGHT
+	bcs	Outline_calcLine_a1
+	lda	Outline_dy
+	lsr	@
+	bpl	Outline_calcLine_a4	!
+Outline_calcLine_a1
+	lda	Outline_dy
+	lsr	@
+Outline_calcLine_a2
+	sub	Outline_dx
+	bcs	Outline_calcLine_a3
+	adc	Outline_dy	-
+	sta	Outline_calcLine_e
+	mva	#Screen_HEIGHT	Outline_table,x+
+	cpx	Outline_calcLine_xLimit
+	bcs	Outline_return1
+	lda	Outline_calcLine_e
+Outline_calcLine_a3
+	dey
+	cpy	#Screen_HEIGHT-1
+	bne	Outline_calcLine_a2
+
+Outline_calcLine_a4
+	sub	Outline_dx
+	bcs	Outline_calcLine_a5
+	adc	Outline_dy	-
+	sta	Outline_calcLine_e
+	tya:sta	Outline_table,x+
+	cpx	Outline_calcLine_xLimit
+	bcs	Outline_return1
+	lda	Outline_calcLine_e
+Outline_calcLine_a5
+	dey
+	bne	Outline_calcLine_a4
+	beq	Outline_fillTop	!
+
+Outline_calcLine_ab
+	lda	Outline_y1+1
+	bmi	Outline_fillTop
+	lda	Outline_y2+1
+	bmi	Outline_calcLine_abNoBottom
+	bne	Outline_fillBottom
+	lda	Outline_y2
+	cmp	#Screen_HEIGHT
+	bcs	Outline_fillBottom
+Outline_calcLine_abNoBottom
+	lda	Outline_y1
+	bne	Outline_calcLine_abNoTop
+	ldy	Outline_y1+1
+	beq	Outline_fillTop
+Outline_calcLine_abNoTop
+	tay
+	sub	Outline_y2
+	sta	Outline_dy
+ ift 0
+	lda	Outline_y1+1
+	sbc	Outline_y2+1
+	beq	Outline_calcLine_abShrEnd
+Outline_calcLine_abShrLoop
+	lsr	@
+	ror	Outline_dy
+	lsr	Outline_dx
+	cmp	#0
+	bne	Outline_calcLine_abShrLoop
+Outline_calcLine_abShrEnd
+ eif
+	lda	Outline_dx
+	cmp	Outline_dy
+	bcc	Outline_calcLine_a
+Outline_calcLine_b
+	lda	Outline_y1+1
+	bne	Outline_calcLine_b0
+	cpy	#Screen_HEIGHT
+	bcs	Outline_calcLine_b0
+	lda	Outline_dx
+	lsr	@
+	bpl	Outline_calcLine_b3	!
+Outline_calcLine_b0
+	lda	Outline_dx
+	lsr	@
+Outline_calcLine_b1
+	sub	Outline_dy
+	bcs	Outline_calcLine_b2
+	adc	Outline_dx	-
+	dey
+	cpy	#Screen_HEIGHT-1
+	beq	Outline_calcLine_b4
+Outline_calcLine_b2
+	sta	Outline_calcLine_e
+	mva	#Screen_HEIGHT	Outline_table,x+
+	lda	Outline_calcLine_e
+	cpx	Outline_calcLine_xLimit
+	bcc	Outline_calcLine_b1
+Outline_return1
+	rts
+Outline_calcLine_b3
+	sub	Outline_dy
+	bcs	Outline_calcLine_b4
+	add	Outline_dx	-
+	dey
+	beq	Outline_fillTop
+Outline_calcLine_b4
+	sta	Outline_calcLine_e
+	tya:sta	Outline_table,x+
+	lda	Outline_calcLine_e
+	cpx	Outline_calcLine_xLimit
+	bcc	Outline_calcLine_b3
+	rts
+
+Outline_fillTop
+	lda	#0
+	dta	{bit a:0}
+Outline_fillBottom
+	lda	#Screen_HEIGHT
+Outline_fillConst
+	sta	Outline_table,x+
+	cpx	Outline_calcLine_xLimit
+	bcc	Outline_fillConst
+	rts
+
+Outline_calcLine
+	sub	Outline_x1
+	sta	Outline_dx
+	txa
+	add	Outline_x1
+	tax
+	adc	Outline_dx	-
+	sta	Outline_calcLine_xLimit
+
+	lda	Outline_y2
+	sub	Outline_y1
+	sta	Outline_dy
+	lda	Outline_y2+1
+	sbc	Outline_y1+1
+ ift 0
+	bpl	Outline_calcLine_cdShrNext
+	jmp	Outline_calcLine_ab
+Outline_calcLine_cdShrLoop
+	lsr	@
+	ror	Outline_dy
+	lsr	Outline_dx
+	tay
+Outline_calcLine_cdShrNext
+	bne	Outline_calcLine_cdShrLoop
+ els
+	jmi	Outline_calcLine_ab
+ eif
+Outline_calcLine_cd
+	lda	Outline_y2+1
+	bmi	Outline_fillTop
+	ldy	Outline_y1
+	lda	Outline_y1+1
+	bmi	Outline_calcLine_cdNoBottom
+	bne	Outline_fillBottom
+	cpy	#Screen_HEIGHT
+	bcs	Outline_fillBottom
+Outline_calcLine_cdNoBottom
+	lda	Outline_dx
+	cmp	Outline_dy
+	bcc	Outline_calcLine_d
+	lsr	@
+	cpy	#0
+	bpl	Outline_calcLine_c4
+Outline_calcLine_c1
+	sub	Outline_dy
+	bcs	Outline_calcLine_c2
+	adc	Outline_dx	-
+	iny
+	bpl	Outline_calcLine_c4
+Outline_calcLine_c2
+	sta	Outline_calcLine_e
+	mva	#0	Outline_table,x+
+	lda	Outline_calcLine_e
+	cpx	Outline_calcLine_xLimit
+	bcc	Outline_calcLine_c1
+	rts
+Outline_calcLine_c3
+	lda	Outline_calcLine_e
+Outline_calcLine_c4
+	sub	Outline_dy
+	bcs	Outline_calcLine_c5
+	adc	Outline_dx	-
+	iny
+	cpy	#Screen_HEIGHT
+	bpl	Outline_fillBottom
+Outline_calcLine_c5
+	sta	Outline_calcLine_e
+	tya:sta	Outline_table,x+
+	cpx	Outline_calcLine_xLimit
+	bcc	Outline_calcLine_c3
+Outline_return2
+	rts
+
+Outline_calcLine_d
+	lda	Outline_dy
+	lsr	@
+	bit	Outline_y1+1
+	bpl	Outline_calcLine_d3
+Outline_calcLine_d1
+	sub	Outline_dx
+	bcs	Outline_calcLine_d2
+	adc	Outline_dy	-
+	sta	Outline_calcLine_e
+	mva	#0	Outline_table,x+
+	cpx	Outline_calcLine_xLimit
+	bcs	Outline_return2
+	lda	Outline_calcLine_e
+Outline_calcLine_d2
+	iny
+	bne	Outline_calcLine_d1
+Outline_calcLine_d3
+	sub	Outline_dx
+	bcs	Outline_calcLine_d4
+	adc	Outline_dy	-
+	sta	Outline_calcLine_e
+	tya:sta	Outline_table,x+
+	cpx	Outline_calcLine_xLimit
+	bcs	Outline_return2
+	lda	Outline_calcLine_e
+Outline_calcLine_d4
+	iny
+	cpy	#Screen_HEIGHT
+	bmi	Outline_calcLine_d3
+	jmp	Outline_fillBottom
+
+* Outline_fillCeiling
+; Fill ceiling (area between Outline_borderTop and Outline_wallTop)
+; input: A - x1, X - x2
+Outline_fillCeiling	| PROFILE
+	sta	Outline_x1
+
+	lda	World_sectorFlags,y
+	and	#World_SECTOR_PARALLAXING
+	jne	Outline_fillCeilingParallaxing
+
+* Outline_fillCeilingSolid
+	lda:tay	World_ceilingPicture,y
+	mva	Picture_solidColorEven,y	Fill_fillSpanSolid_colorEven
+	mva	Picture_solidColorOdd,y	Fill_fillSpanSolid_colorOdd
+
+	mva	Outline_borderTop-1,x	Outline_y1
+	sta	Outline_y2
+Outline_fillCeilingSolid_loop
+	lda	Outline_wallTop-1,x
+	cmp	Outline_borderBottom-1,x
+	scc:lda	Outline_borderBottom-1,x
+	cmp	Outline_borderTop-1,x
+	bcc:beq	Outline_fillCeilingSolid_e2
+; t < b
+	sta	Outline_dx
+	lda	Outline_borderTop-1,x
+	cmp	Outline_y2
+	bcc	Outline_fillCeilingSolid_e1
+; t >= y2
+	bcs	Outline_fillCeilingSolid_w1b	!
+Outline_fillCeilingSolid_w1l
+	jsr	Fill_fillSpanSolid
+	inc	Outline_y1
+Outline_fillCeilingSolid_w1b
+	ldy	Outline_y1
+	cpy	Outline_y2
+	bcc	Outline_fillCeilingSolid_w1l
+	mva	Outline_borderTop-1,x	Outline_y1
+	bcs	Outline_fillCeilingSolid_w4s	!
+; t < y2
+Outline_fillCeilingSolid_e1
+	sta	Outline_dy
+	ldy	Outline_y1
+	cpy	Outline_dy
+	bcs	Outline_fillCeilingSolid_w3s
+; y1 < t
+Outline_fillCeilingSolid_w2l
+	jsr	Fill_fillSpanSolid
+	inc:ldy	Outline_y1
+	cpy	Outline_dy
+	bcc	Outline_fillCeilingSolid_w2l
+	bcs	Outline_fillCeilingSolid_w4s	!
+; y1 > t
+Outline_fillCeilingSolid_w3s
+	beq	Outline_fillCeilingSolid_w4s
+	txa
+Outline_fillCeilingSolid_w3l
+	dey
+	sta	Outline_spanRight,y
+	cpy	Outline_dy
+	bne	Outline_fillCeilingSolid_w3l
+	sty	Outline_y1
+;
+Outline_fillCeilingSolid_w4s
+	ldy	Outline_y2
+	cpy	Outline_dx
+	bcc	Outline_fillCeilingSolid_w5s
+	beq	Outline_fillCeilingSolid_next
+; y2 > b
+Outline_fillCeilingSolid_w4l
+	dey:sty	Outline_y2
+	jsr	Fill_fillSpanSolid
+	ldy	Outline_y2
+	cpy	Outline_dx
+	bne	Outline_fillCeilingSolid_w4l
+	beq	Outline_fillCeilingSolid_next	!
+; y2 < b
+Outline_fillCeilingSolid_w5s
+	txa
+Outline_fillCeilingSolid_w5l
+	sta	Outline_spanRight,y
+	iny
+	cpy	Outline_dx
+	bcc	Outline_fillCeilingSolid_w5l
+	sty	Outline_y2
+	bcs	Outline_fillCeilingSolid_next	!
+Outline_fillCeilingSolid_w6l
+	jsr	Fill_fillSpanSolid
+	inc	Outline_y1
+; t >= b
+Outline_fillCeilingSolid_e2
+	ldy	Outline_y1
+	cpy	Outline_y2
+	bcc	Outline_fillCeilingSolid_w6l
+	mva	Outline_borderTop-2,x	Outline_y1
+	sta	Outline_y2
+Outline_fillCeilingSolid_next
+	dex
+	cpx	Outline_x1
+	beq	Outline_fillCeilingSolid_w7b
+	jmp	Outline_fillCeilingSolid_loop
+Outline_fillCeilingSolid_w7l
+	jsr	Fill_fillSpanSolid
+	inc	Outline_y1
+Outline_fillCeilingSolid_w7b
+	ldy	Outline_y1
+	cpy	Outline_y2
+	bcc	Outline_fillCeilingSolid_w7l
+	rts
+
+* Outline_fillCeilingParallaxing
+Outline_fillCeilingParallaxing
+
+	mva	Outline_borderTop-1,x	Outline_y1
+	sta	Outline_y2
+Outline_fillCeilingParallaxing_loop
+	lda	Outline_wallTop-1,x
+	cmp	Outline_borderBottom-1,x
+	scc:lda	Outline_borderBottom-1,x
+	cmp	Outline_borderTop-1,x
+	bcc:beq	Outline_fillCeilingParallaxing_e2
+; t < b
+	sta	Outline_dx
+	lda	Outline_borderTop-1,x
+	cmp	Outline_y2
+	bcc	Outline_fillCeilingParallaxing_e1
+; t >= y2
+	bcs	Outline_fillCeilingParallaxing_w1b	!
+Outline_fillCeilingParallaxing_w1l
+	jsr	Fill_fillSpanParallaxing
+	inc	Outline_y1
+Outline_fillCeilingParallaxing_w1b
+	ldy	Outline_y1
+	cpy	Outline_y2
+	bcc	Outline_fillCeilingParallaxing_w1l
+	mva	Outline_borderTop-1,x	Outline_y1
+	bcs	Outline_fillCeilingParallaxing_w4s	!
+; t < y2
+Outline_fillCeilingParallaxing_e1
+	sta	Outline_dy
+	ldy	Outline_y1
+	cpy	Outline_dy
+	bcs	Outline_fillCeilingParallaxing_w3s
+; y1 < t
+Outline_fillCeilingParallaxing_w2l
+	jsr	Fill_fillSpanParallaxing
+	inc:ldy	Outline_y1
+	cpy	Outline_dy
+	bcc	Outline_fillCeilingParallaxing_w2l
+	bcs	Outline_fillCeilingParallaxing_w4s	!
+; y1 > t
+Outline_fillCeilingParallaxing_w3s
+	beq	Outline_fillCeilingParallaxing_w4s
+	txa
+Outline_fillCeilingParallaxing_w3l
+	dey
+	sta	Outline_spanRight,y
+	cpy	Outline_dy
+	bne	Outline_fillCeilingParallaxing_w3l
+	sty	Outline_y1
+;
+Outline_fillCeilingParallaxing_w4s
+	ldy	Outline_y2
+	cpy	Outline_dx
+	bcc	Outline_fillCeilingParallaxing_w5s
+	beq	Outline_fillCeilingParallaxing_next
+; y2 > b
+Outline_fillCeilingParallaxing_w4l
+	dey:sty	Outline_y2
+	jsr	Fill_fillSpanParallaxing
+	ldy	Outline_y2
+	cpy	Outline_dx
+	bne	Outline_fillCeilingParallaxing_w4l
+	beq	Outline_fillCeilingParallaxing_next	!
+; y2 < b
+Outline_fillCeilingParallaxing_w5s
+	txa
+Outline_fillCeilingParallaxing_w5l
+	sta	Outline_spanRight,y
+	iny
+	cpy	Outline_dx
+	bcc	Outline_fillCeilingParallaxing_w5l
+	sty	Outline_y2
+	bcs	Outline_fillCeilingParallaxing_next	!
+Outline_fillCeilingParallaxing_w6l
+	jsr	Fill_fillSpanParallaxing
+	inc	Outline_y1
+; t >= b
+Outline_fillCeilingParallaxing_e2
+	ldy	Outline_y1
+	cpy	Outline_y2
+	bcc	Outline_fillCeilingParallaxing_w6l
+	mva	Outline_borderTop-2,x	Outline_y1
+	sta	Outline_y2
+Outline_fillCeilingParallaxing_next
+	dex
+	cpx	Outline_x1
+	beq	Outline_fillCeilingParallaxing_w7b
+	jmp	Outline_fillCeilingParallaxing_loop
+Outline_fillCeilingParallaxing_w7l
+	jsr	Fill_fillSpanParallaxing
+	inc	Outline_y1
+Outline_fillCeilingParallaxing_w7b
+	ldy	Outline_y1
+	cpy	Outline_y2
+	bcc	Outline_fillCeilingParallaxing_w7l
+	rts
+
+* Outline_fillFloor
+; Fill floor (area between Outline_wallBottom and Outline_borderBottom)
+; input: A - x1, X - x2, Y - sector
+Outline_fillFloor	| PROFILE
+	sta	Outline_x1
+
+	lda:tay	World_floorPicture,y
+	mva	Picture_solidColorEven,y	Fill_fillSpanSolid_colorEven
+	mva	Picture_solidColorOdd,y	Fill_fillSpanSolid_colorOdd
+
+	lda	Outline_wallBottom-1,x
+	cmp	Outline_borderTop-1,x
+	scs:lda	Outline_borderTop-1,x
+	sta	Outline_y1
+	sta	Outline_y2
+Outline_fillFloor_loop
+	lda	Outline_wallBottom-1,x
+	cmp	Outline_borderTop-1,x
+	scs:lda	Outline_borderTop-1,x
+	cmp	Outline_borderBottom-1,x
+	bcs	Outline_fillFloor_e2
+; t < b
+	sta	Outline_dy
+	cmp	Outline_y2
+	bcc	Outline_fillFloor_e1
+; t >= y2
+	bcs	Outline_fillFloor_w1b	!
+Outline_fillFloor_w1l
+	jsr	Fill_fillSpanSolid
+	inc	Outline_y1
+Outline_fillFloor_w1b
+	ldy	Outline_y1
+	cpy	Outline_y2
+	bcc	Outline_fillFloor_w1l
+	mva	Outline_dy	Outline_y1
+	bcs	Outline_fillFloor_w4s	!
+; t < y2
+Outline_fillFloor_e1
+	ldy	Outline_y1
+	cpy	Outline_dy
+	bcs	Outline_fillFloor_w3s
+; y1 < t
+Outline_fillFloor_w2l
+	jsr	Fill_fillSpanSolid
+	inc:ldy	Outline_y1
+	cpy	Outline_dy
+	bcc	Outline_fillFloor_w2l
+	bcs	Outline_fillFloor_w4s	!
+; y1 > t
+Outline_fillFloor_w3s
+	beq	Outline_fillFloor_w4s
+	txa
+Outline_fillFloor_w3l
+	dey
+	sta	Outline_spanRight,y
+	cpy	Outline_dy
+	bne	Outline_fillFloor_w3l
+	sty	Outline_y1
+;
+Outline_fillFloor_w4s
+	mva	Outline_borderBottom-1,x	Outline_dx
+	ldy	Outline_y2
+	cpy	Outline_dx
+	bcc	Outline_fillFloor_w5s
+	beq	Outline_fillFloor_next
+; y2 > b
+Outline_fillFloor_w4l
+	dey:sty	Outline_y2
+	jsr	Fill_fillSpanSolid
+	ldy	Outline_y2
+	cpy	Outline_dx
+	bne	Outline_fillFloor_w4l
+	beq	Outline_fillFloor_next	!
+; y2 < b
+Outline_fillFloor_w5s
+	txa
+Outline_fillFloor_w5l
+	sta	Outline_spanRight,y
+	iny
+	cpy	Outline_dx
+	bcc	Outline_fillFloor_w5l
+	sty	Outline_y2
+	bcs	Outline_fillFloor_next	!
+Outline_fillFloor_w6l
+	jsr	Fill_fillSpanSolid
+	inc	Outline_y1
+; t >= b
+Outline_fillFloor_e2
+	ldy	Outline_y1
+	cpy	Outline_y2
+	bcc	Outline_fillFloor_w6l
+	lda	Outline_wallBottom-2,x
+	cmp	Outline_borderTop-2,x
+	scs:lda	Outline_borderTop-2,x
+	sta	Outline_y1
+	sta	Outline_y2
+Outline_fillFloor_next
+	dex
+	cpx	Outline_x1
+	beq	Outline_fillFloor_w7b
+	jmp	Outline_fillFloor_loop
+Outline_fillFloor_w7l
+	jsr	Fill_fillSpanSolid
+	inc	Outline_y1
+Outline_fillFloor_w7b
+	ldy	Outline_y1
+	cpy	Outline_y2
+	bcc	Outline_fillFloor_w7l
+Outline_fillFloor_return
+	rts
+
+* Outline_fillWall
+; Fills wall from A to Outline_x2
+; input: A - top outline, Y - bottom outline
+Outline_fillWall	| PROFILE
+	ldx	Outline_x1
+	ert	<Outline_table!=0
+	sta	Outline_fillWallSolid_loadTableTop1+1
+	sty	Outline_fillWallSolid_loadTableBottom1+1
+	sta	Outline_fillWallSolid_loadTableTop2+1
+	sty	Outline_fillWallSolid_loadTableBottom2+1
+	txa
+	lsr	@
+	bcs	Outline_fillWallSolid_right
+Outline_fillWallSolid_left
+Outline_fillWallSolid_loadTableTop1
+	lda	Outline_table,x
+	cmp	Outline_borderTop,x
+	scs:lda	Outline_borderTop,x
+	tay
+	mva	Fill_fillWallSolid_left_lo,y	Fill_fillWallSolid_leftJump+1
+Fill_fillWallSolid_loadLeftHi1
+	mva	Fill_fillWallSolid_left_hi,y	Fill_fillWallSolid_leftJump+2
+Outline_fillWallSolid_loadTableBottom1
+	lda	Outline_table,x
+	cmp	Outline_borderBottom,x
+	scc:lda	Outline_borderBottom,x
+	cmp	Math_idTable+1,y
+	bcc	Fill_fillWallSolid_leftSkip
+	tay
+	mva	Fill_fillWallSolid_left_lo,y	Fill_pointer
+Fill_fillWallSolid_loadLeftHi2
+	mva	Fill_fillWallSolid_left_hi,y	Fill_pointer+1
+	mva	#{rts}	(Fill_pointer),0
+	txa
+	lsr	@
+	tay
+Fill_fillWallSolid_leftJump
+	jsr	$2020
+	mva	#{lda a:0,y}	(Fill_pointer),0
+Fill_fillWallSolid_leftSkip
+	inx
+	cpx	Outline_x2
+	bcs	Outline_fillWallSolid_return
+Outline_fillWallSolid_right
+Outline_fillWallSolid_loadTableTop2
+	lda	Outline_table,x
+	cmp	Outline_borderTop,x
+	scs:lda	Outline_borderTop,x
+	tay
+	mva	Fill_fillWallSolid_right_lo,y	Fill_fillWallSolid_rightJump+1
+Fill_fillWallSolid_loadRightHi1
+	mva	Fill_fillWallSolid_right_hi,y	Fill_fillWallSolid_rightJump+2
+Outline_fillWallSolid_loadTableBottom2
+	lda	Outline_table,x
+	cmp	Outline_borderBottom,x
+	scc:lda	Outline_borderBottom,x
+	cmp	Math_idTable+1,y
+	bcc	Fill_fillWallSolid_rightSkip
+	tay
+	mva	Fill_fillWallSolid_right_lo,y	Fill_pointer
+Fill_fillWallSolid_loadRightHi2
+	mva	Fill_fillWallSolid_right_hi,y	Fill_pointer+1
+	mva	#{rts}	(Fill_pointer),0
+	txa
+	lsr	@
+	tay
+Fill_fillWallSolid_rightJump
+	jsr	$2020
+	mva	#{lda a:0,y}	(Fill_pointer),0
+Fill_fillWallSolid_rightSkip
+	inx
+	cpx	Outline_x2
+	jcc	Outline_fillWallSolid_left
+Outline_fillWallSolid_return
+	rts
+
+* Engine_clearGotSector
+; Clear Engine_gotSector array
+Engine_clearGotSector	| PROFILE
+	ldx	World_sectors
+	lda	#0
+Engine_clearGotSector_loop
+	dex:sta	Engine_gotSector,x
+	bne	Engine_clearGotSector_loop
+	rts
+
+* Engine_calcRotate
+; Rotate left point of wall X and store result in View_calcRotate_c/D
+; input: X - wall
+Engine_calcRotate
+	mva	World_wallX_lo,x	View_calcRotate_x
+	mva	World_wallX_hi,x	View_calcRotate_x+1
+	mva	World_wallY_lo,x	View_calcRotate_y
+	mva	World_wallY_hi,x	View_calcRotate_y+1
+	jsr	View_calcRotate
+	mva	View_calcRotate_c	View_rotateC_lo,x
+	mva	View_calcRotate_c+1	View_rotateC_hi,x
+	mva	View_calcRotate_d	View_rotateD_lo,x
+	mva	View_calcRotate_d+1	View_rotateD_hi,x
+	rts
+
+* Engine_addWall
+; Clip the wall. If visible, add to 'walls on screen'
+Engine_addWall
+	stx	Engine_scanSector_wall
+	mva	View_rotateC_lo,x	Project_rotateC1
+	mva	View_rotateC_hi,x	Project_rotateC1+1
+	mva	View_rotateD_lo,x	Project_rotateD1
+	mva	View_rotateD_hi,x	Project_rotateD1+1
+	ldy	World_wallSector,x
+	bmi	Engine_addWall_jNoPortal
+	lda	Engine_gotSector,y
+	bne	Engine_addWall_jNoPortal
+	ldy	World_wallNext,x
+	lda	World_wallX_lo,x
+	sub	View_x
+	sta	Math_word
+	lda	World_wallX_hi,x
+	sbc	View_x+1
+	sta	Math_word+1
+	lda	World_wallY_lo,y
+	sub	View_y
+	sta	Math_word2
+	lda	World_wallY_hi,y
+	sbc	View_y+1
+	sta	Math_word2+1
+	lda	World_wallX_lo,y
+	sub	View_x
+	sta	Math_word3
+	lda	World_wallX_hi,y
+	sbc	View_x+1
+	sta	Math_word3+1
+	lda	World_wallY_lo,x
+	sub	View_y
+	sta	Math_word4
+	lda	World_wallY_hi,x
+	sbc	View_y+1
+	sta	Math_word4+1
+	jsr	Math_mul16sBy16s2
+	ldx	Engine_scanSector_wall
+	lda	Math_long
+	sub	Math_long2
+	sta	Math_word2
+	lda	Math_long+1
+	sbc	Math_long2+1
+	sta	Math_word2+1
+	lda	Math_long+2
+	sbc:sta	Math_long2+2
+	lda	Math_long+3
+	sbc	Math_long2+3
+	cmp	#$80
+	ror	@
+	ror	Math_long2+2
+	ror	Math_word2+1
+	ror	Math_word2
+	cmp	#$80
+	ror	@
+	ror	Math_long2+2
+	ror	Math_word2+1
+	ror	Math_word2
+	cmp	Math_long2+2
+	bne	Engine_addWall_jNoPortal
+	cmp	#0
+	beq	Engine_addWall_portal1
+	cmp	#$ff
+	beq	Engine_addWall_portal1
+Engine_addWall_jNoPortal
+	jmp	Engine_addWall_noPortal
+Engine_addWall_portal1
+	eor	Math_word2+1
+	bmi	Engine_addWall_jNoPortal
+	ldy	World_wallNext,x
+	lda	World_wallX_lo,y
+	sub	World_wallX_lo,x
+	sta	Math_word
+	lda	World_wallX_hi,y
+	sbc	World_wallX_hi,x
+	sta	Math_word+1
+	jsr	Math_sqr16s
+	mwa	Math_long	Math_long2
+	mwa	Math_long+2	Math_long2+2
+	ldx	Engine_scanSector_wall
+	ldy	World_wallNext,x
+	lda	World_wallY_lo,y
+	sub	World_wallY_lo,x
+	sta	Math_word
+	lda	World_wallY_hi,y
+	sbc	World_wallY_hi,x
+	sta	Math_word+1
+	jsr	Math_sqr16s
+	lda	Math_long
+	add:sta	Math_long2
+	lda	Math_long+1
+	adc:sta	Math_long2+1
+	lda	Math_long+2
+	adc:sta	Math_long2+2
+	lda	Math_long+3
+	adc:sta	Math_long2+3
+	mwa	Math_word2	Math_word
+	jsr	Math_sqr16s
+	lsr	Math_long+3
+	ror	Math_long+2
+	ror	Math_long+1
+	ror	Math_long
+	lda	Math_long2
+	cmp	Math_long
+	lda	Math_long2+1
+	sbc	Math_long+1
+	lda	Math_long2+2
+	sbc	Math_long+2
+	lda	Math_long2+3
+	sbc	Math_long+3
+	ldx	Engine_scanSector_wall
+	bcc	Engine_addWall_noPortal
+	ldy:inc	Engine_scanSector_borderIndex
+	mva	World_wallSector,x	Engine_scanSector_border,y
+Engine_addWall_noPortal
+	ldy	World_wallNext,x
+	mva	View_rotateC_lo,y	Project_rotateC2
+	mva	View_rotateC_hi,y	Project_rotateC2+1
+	mva	View_rotateD_lo,y	Project_rotateD2
+	mva	View_rotateD_hi,y	Project_rotateD2+1
+	and	Project_rotateD1+1
+	bmi	Engine_addWall_return
+	ift	Engine_CHECK_FACE_WALL
+	mwa	Project_rotateC1	Math_word
+	mwa	Project_rotateD1	Math_word4
+	mwa	Project_rotateC2	Math_word3
+	mwa	Project_rotateD2	Math_word2
+	jsr	Math_mulCmp
+	bpl	Engine_addWall_return
+	eif
+	jsr	Project_clipWall
+	bcc	Engine_addWall_return
+	ldy	Engine_wallCount
+	mva	Engine_scanSector_sector	Engine_wallSector,y
+	mva	Engine_scanSector_wall	Engine_wallIndex,y
+	mva	Project_screenX1	Engine_wallScreenX1,y
+	mva	Project_inverseD1	Engine_wallInverseD1_lo,y
+	mva	Project_inverseD1+1	Engine_wallInverseD1_hi,y
+	mva	Project_screenX2	Engine_wallScreenX2,y
+	mva	Project_inverseD2	Engine_wallInverseD2_lo,y
+	mva	Project_inverseD2+1	Engine_wallInverseD2_hi,y
+	iny
+	tya:sta	Engine_wallNext-1,y
+	sta	Engine_wallCount
+Engine_addWall_return
+	ldx	Engine_scanSector_wall
+	inx
+	rts
+
+* Engine_scanSector
+; Add all visible walls to 'walls on screen'
+Engine_scanSector
+	sty	Engine_scanSector_border
+	ldx	#1
+Engine_scanSector_sectorLoop
+	dex
+	stx	Engine_scanSector_borderIndex
+	mvy	Engine_scanSector_border,x	Engine_scanSector_sector
+	mva	#1	Engine_gotSector,y
+	mva	Engine_wallCount	Engine_scanSector_wallSave
+	ldx	World_sectorWall,y
+Engine_scanSector_1
+	mva	Engine_wallCount	Engine_scanSector_wallFirst
+	jsr	Engine_calcRotate
+Engine_scanSector_2
+	inx
+	jsr	Engine_calcRotate
+	dex
+	jsr	Engine_addWall
+	txa
+	cmp	World_wallNext,x
+	bcc	Engine_scanSector_2
+	jsr	Engine_addWall
+	lda	Engine_scanSector_wallFirst
+	cmp	Engine_wallCount
+	bcs	Engine_scanSector_3
+	ldy	Engine_wallCount
+	sta	Engine_wallNext-1,y
+Engine_scanSector_3
+	txa
+	ldy	Engine_scanSector_sector
+	cmp	World_sectorWall+1,y
+	bcc	Engine_scanSector_1
+
+	ldy	Engine_scanSector_wallSave
+	cpy	Engine_wallCount
+	bcs	Engine_scanSector_sectorNext
+	mva	Engine_bunchCount	Engine_scanSector_bunchSave
+Engine_scanSector_addBunch1
+	ldx	Engine_wallIndex,y
+	lda	World_wallNext,x
+	ldx	Engine_wallNext,y
+	cmp	Engine_wallIndex,x
+	bne	Engine_scanSector_addBunch2
+	lda	Engine_wallScreenX1,x
+	cmp	Engine_wallScreenX2,y
+	bcs	Engine_scanSector_addBunch3
+Engine_scanSector_addBunch2
+	txa
+	ldx:inc	Engine_bunchCount
+	sta	Engine_bunchFirst,x
+	mva	#-1	Engine_wallNext,y
+Engine_scanSector_addBunch3
+	iny:cpy	Engine_wallCount
+	bcc	Engine_scanSector_addBunch1
+
+	ldx	Engine_scanSector_bunchSave
+	bcs	Engine_scanSector_calcLast3	!
+Engine_scanSector_calcLast1
+	lda	Engine_bunchFirst,x
+Engine_scanSector_calcLast2
+	tay:lda	Engine_wallNext,y
+	bpl	Engine_scanSector_calcLast2
+	tya:sta	Engine_bunchLast,x+
+Engine_scanSector_calcLast3
+	cpx	Engine_bunchCount
+	bcc	Engine_scanSector_calcLast1
+Engine_scanSector_sectorNext
+	ldx	Engine_scanSector_borderIndex
+	jne	Engine_scanSector_sectorLoop
+
+	rts
+
+* Engine_wallFrontMulCmp
+; Math_word = World_wallX[y] - World_wallX[x]
+; Math_word4 = World_wallY[y] - World_wallY[x]
+; then Math_mulCmp (result = Math_word * Math_word2 - Math_word3 * Math_word4)
+; input: X, Y - walls
+; return: A = result sign, C=1 if result zero
+Engine_wallFrontMulCmp	| PROFILE
+	lda	World_wallX_lo,y
+	sub	World_wallX_lo,x
+	sta	Math_word
+	lda	World_wallX_hi,y
+	sbc	World_wallX_hi,x
+	sta	Math_word+1
+	lda	World_wallY_lo,y
+	sub	World_wallY_lo,x
+	sta	Math_word4
+	lda	World_wallY_hi,y
+	sbc	World_wallY_hi,x
+	sta	Math_word4+1
+	jsr	Math_mulCmp
+	bcc	Engine_wallFrontMulCmp_return
+	tax
+	lda	Math_long2
+	cmp	Math_long
+	lda	Math_long2+1
+	sbc	Math_long+1
+	lda	Math_long2+2
+	sbc	Math_long+2
+	lda	Math_long2+3
+	sbc	Math_long+3
+	txa
+Engine_wallFrontMulCmp_return
+	rts
+
+* Engine_wallFront
+; Checks which wall is closer to viewpoint.
+; input: X, Y - walls
+; return: A=0 - wall X, A=1 - wall Y, A=-1 - walls are on same line,
+; A=-2 - walls cross each other
+Engine_wallFront
+	mva	Engine_wallIndex,x	Engine_wallFront_wall1
+	tax
+	mva	Engine_wallIndex,y	Engine_wallFront_wall2
+; First, we will try BSP check on second wall
+; against the line that first wall lies on.
+; .....11--l1--21.......
+;   12
+;     \
+;      l2         .P
+;       \
+;        22
+; Math_word3,Math_word2 = x21-x11,y21-y11 = d
+	ldy	World_wallNext,x
+	lda	World_wallX_lo,y
+	sub	World_wallX_lo,x
+	sta	Math_word3
+	lda	World_wallX_hi,y
+	sbc	World_wallX_hi,x
+	sta	Math_word3+1
+	lda	World_wallY_lo,y
+	sub	World_wallY_lo,x
+	sta	Math_word2
+	lda	World_wallY_hi,y
+	sbc	World_wallY_hi,x
+	sta	Math_word2+1
+; Math_word,Math_word4 = x12-x11,y12-y11 = v1
+; v1.x * d.y - d.x * v1.y = |v1| * |d| * sin(a)
+	ldy	Engine_wallFront_wall2
+	jsr	Engine_wallFrontMulCmp
+	ldx	Engine_wallFront_wall2
+	ldy	World_wallNext,x
+	ldx	Engine_wallFront_wall1
+	bcc	Engine_wallFront_aNotZero1
+; a == 0
+; Math_word,Math_word4 = x22-x11,y22-y11
+; v2.x * d.y - d.x * v2.y = |v1| * |d| * sin(b)
+	jsr	Engine_wallFrontMulCmp
+	sta	Math_sign
+	bcc	Engine_wallFront_result1
+; a == 0 && b == 0
+	lda	#-1
+	rts
+; a != 0
+; Math_word,Math_word4 = x22-x11,y22-y11
+; v2.x * d.y - d.x * v2.y = |v1| * |d| * sin(b)
+Engine_wallFront_aNotZero1
+	sta	Math_sign
+	jsr	Engine_wallFrontMulCmp
+	bcs	Engine_wallFront_result1
+; a != 0, b != 0
+	eor	Math_sign
+	bmi	Engine_wallFront_secondCheck
+Engine_wallFront_result1
+; globalposx-x11
+	ldx	Engine_wallFront_wall1
+	lda	View_x
+	sub	World_wallX_lo,x
+	sta	Math_word
+	lda	View_x+1
+	sbc	World_wallX_hi,x
+	sta	Math_word+1
+; globalposy-y11
+	lda	View_y
+	sub	World_wallY_lo,x
+	sta	Math_word4
+	lda	View_y+1
+	sbc	World_wallY_hi,x
+	sta	Math_word4+1
+	jsr	Math_mulCmp
+	eor	Math_sign
+	bmi	Engine_wallFront_return0
+	lda	#1
+	rts
+Engine_wallFront_return0
+	lda	#0
+	rts
+; First check failed because second wall crosses the line.
+; Now there will be check on first wall
+; against the line that second wall lies on.
+Engine_wallFront_secondCheck
+; Math_word3,Math_word2 = x22-x12,y22-y12
+	ldx	Engine_wallFront_wall2
+	ldy	World_wallNext,x
+	lda	World_wallX_lo,y
+	sub	World_wallX_lo,x
+	sta	Math_word3
+	lda	World_wallX_hi,y
+	sbc	World_wallX_hi,x
+	sta	Math_word3+1
+	lda	World_wallY_lo,y
+	sub	World_wallY_lo,x
+	sta	Math_word2
+	lda	World_wallY_hi,y
+	sbc	World_wallY_hi,x
+	sta	Math_word2+1
+; Math_word,Math_word4 = x11-x12,y11-y12
+; v1.x * d.y - d.x * v1.x = |v1| * |d| * sin(a)
+	ldy	Engine_wallFront_wall1
+	jsr	Engine_wallFrontMulCmp
+	ldx	Engine_wallFront_wall1
+	ldy	World_wallNext,x
+	ldx	Engine_wallFront_wall2
+	bcc	Engine_wallFront_aNotZero2
+; a == 0
+; Math_word,Math_word4 = x21-x12,y21-y12
+; v2.x * d.y - d.x * v2.x = |v2| * |d| * sin(b)
+	jsr	Engine_wallFrontMulCmp
+	sta	Math_sign
+	bcc	Engine_wallFront_result2
+; a == 0 && b == 0
+	lda	#-1
+	rts
+; a != 0
+; Math_word,Math_word4 = x21-x12,y21-y12
+; v2.x * d.y - d.x * v2.x = |v2| * |d| * sin(b)
+Engine_wallFront_aNotZero2
+	sta	Math_sign
+	jsr	Engine_wallFrontMulCmp
+	bcs	Engine_wallFront_result2
+	eor	Math_sign
+	bmi	Engine_wallFront_cross
+Engine_wallFront_result2
+; globalposx-x12
+	ldx	Engine_wallFront_wall2
+	lda	View_x
+	sub	World_wallX_lo,x
+	sta	Math_word
+	lda	View_x+1
+	sbc	World_wallX_hi,x
+	sta	Math_word+1
+; globalposy-y12
+	lda	View_y
+	sub	World_wallY_lo,x
+	sta	Math_word4
+	lda	View_y+1
+	sbc	World_wallY_hi,x
+	sta	Math_word4+1
+	jsr	Math_mulCmp
+	eor	Math_sign
+	bpl	Engine_wallFront_return0
+	lda	#1
+	rts
+Engine_wallFront_cross
+	lda	#-2
+	rts
+
+* Engine_bunchFront
+; Checks which bunch is closer to viewpoint
+; input: X, Y - bunches
+; return: 0 = bunch X, 1 = bunch Y, <0 = unknown?
+Engine_bunchFront
+	stx	Engine_bunchFront_bunch1
+	sty	Engine_bunchFront_bunch2
+	lda:tax	Engine_bunchFirst,x
+	stx	Engine_bunchFront_b1f
+	lda	Engine_wallScreenX1,x
+	ldx	Engine_bunchLast,y
+	cmp	Engine_wallScreenX2,x
+	bcc	Engine_bunchFront_1
+Engine_bunchFront_m1
+	lda	#-1
+	rts
+Engine_bunchFront_1
+	sta	Engine_bunchFront_x1b1
+	ldx	Engine_bunchFirst,y
+	ldy	Engine_bunchFront_bunch1
+	stx	Engine_bunchFront_b2f
+	lda	Engine_wallScreenX1,x
+	ldx	Engine_bunchLast,y
+	cmp	Engine_wallScreenX2,x
+	bcs	Engine_bunchFront_m1
+	ldx	Engine_bunchFront_b1f
+	ldy	Engine_bunchFront_b2f
+	cmp	Engine_bunchFront_x1b1
+	beq	Engine_bunchFront_f1b
+	bcc	Engine_bunchFront_f1b
+Engine_bunchFront_2
+	sta	Engine_bunchFront_x1b1
+	jmp	Engine_bunchFront_f2b
+Engine_bunchFront_f2l
+	lda:tax	Engine_wallNext,x
+Engine_bunchFront_f2b
+	lda	Engine_wallScreenX2,x
+	cmp	Engine_bunchFront_x1b1
+	bcc:beq	Engine_bunchFront_f2l
+	jmp	Engine_wallFront
+Engine_bunchFront_f1l
+	lda:tay	Engine_wallNext,y
+Engine_bunchFront_f1b
+	lda	Engine_wallScreenX2,y
+	cmp	Engine_bunchFront_x1b1
+	bcc:beq	Engine_bunchFront_f1l
+	jmp	Engine_wallFront
+
+* Engine_drawBunch
+; Draws bunch Y
+Engine_drawBunch	| PROFILE
+	mvx	Engine_bunchLast,y	Engine_drawBunch_bunchLast
+	mvx	Engine_bunchFirst,y	Engine_drawBunch_bunchFirst
+	mvy	Engine_wallSector,x	Engine_drawBunch_sector
+	mva	World_ceilingZ,y	Engine_drawBunch_ceilingZ
+	mva	World_floorZ,y	Engine_drawBunch_floorZ
+Engine_drawBunch_outlineEdges
+	stx	Engine_drawBunch_wallIndex
+	ift	Engine_WALL_HORIZON
+	ldy	Engine_wallIndex,x
+	lda	World_wallFlags,y
+	and	#World_WALL_HORIZON
+	beq	Engine_drawBunch_outlineNotHorizon
+	ldy	Engine_wallScreenX1,x
+	mva	Engine_wallScreenX2,x	Outline_x2
+	lda	Project_horizon
+Engine_drawBunch_outlineHorizon
+	sta	Outline_wallTop,y
+	sta	Outline_wallBottom,y+
+	cpy	Outline_x2
+	bcc	Engine_drawBunch_outlineHorizon
+	bcs	Engine_drawBunch_outlineNext	!
+Engine_drawBunch_outlineNotHorizon
+	eif
+	ldy	Engine_wallInverseD1_lo,x
+	lda	Engine_wallInverseD1_hi,x
+	jsr	Project_setInverseD
+	lda	Engine_drawBunch_ceilingZ
+	jsr	Project_calcScreenY
+	sta	Outline_y1
+	stx	Outline_y1+1
+	lda	Engine_drawBunch_floorZ
+	jsr	Project_calcScreenY
+	pha
+	txa:pha
+	ldx	Engine_drawBunch_wallIndex
+	ldy	Engine_wallInverseD2_lo,x
+	lda	Engine_wallInverseD2_hi,x
+	jsr	Project_setInverseD
+	lda	Engine_drawBunch_ceilingZ
+	jsr	Project_calcScreenY
+	sta	Outline_y2
+	stx	Outline_y2+1
+	lda	Engine_drawBunch_floorZ
+	jsr	Project_calcScreenY
+	pha
+	txa:pha
+	ldx	Engine_drawBunch_wallIndex
+	mva	Engine_wallScreenX1,x	Outline_x1
+	mva	Engine_wallScreenX2,x	Outline_x2
+	ldx	#Outline_wallTop-Outline_table
+	jsr	Outline_calcLine
+	pla:sta	Outline_y2+1
+	pla:sta	Outline_y2
+	pla:sta	Outline_y1+1
+	pla:sta	Outline_y1
+	lda	Outline_x2
+	ldx	#Outline_wallBottom-Outline_table
+	jsr	Outline_calcLine
+Engine_drawBunch_outlineNext
+	ldy	Engine_drawBunch_wallIndex
+	ldx	Engine_wallNext,y
+:!Engine_WALL_HORIZON	bpl	Engine_drawBunch_outlineEdges
+:Engine_WALL_HORIZON	jpl	Engine_drawBunch_outlineEdges
+
+	ldy	Engine_drawBunch_bunchFirst
+	lda	Engine_wallScreenX1,y
+	ldy	Engine_drawBunch_bunchLast
+	ldx	Engine_wallScreenX2,y
+	ldy	Engine_drawBunch_sector
+	jsr	Outline_fillCeiling
+
+	ldy	Engine_drawBunch_bunchFirst
+	lda	Engine_wallScreenX1,y
+	ldy	Engine_drawBunch_bunchLast
+	ldx	Engine_wallScreenX2,y
+	ldy	Engine_drawBunch_sector
+	jsr	Outline_fillFloor
+
+	ldy	Engine_drawBunch_bunchFirst
+Engine_drawBunch_wallLoop
+	sty	Engine_drawBunch_wallIndex
+	mva	Engine_wallScreenX1,y	Outline_x1
+	mvx	Engine_wallScreenX2,y	Outline_x2
+	lda	Outline_borderTop-1,x
+	cmp	Outline_borderBottom-1,x
+	bcc	Engine_drawBunch_wallVisible
+	ldx	Outline_x1
+Engine_drawBunch_wallCheck
+	lda	Outline_borderTop,x
+	cmp	Outline_borderBottom,x
+	bcc	Engine_drawBunch_wallVisible
+	inx:cpx	Outline_x2
+	bcc	Engine_drawBunch_wallCheck
+	jmp	Engine_drawBunch_wallNext
+Engine_drawBunch_wallVisible
+
+	ldx	Engine_wallIndex,y
+	ldy	World_wallPicture,x
+	lda	Picture_solidColorEven,y
+	and	#$f0
+	sta	Fill_fillWall_colorEvenLeft
+	eor	Picture_solidColorEven,y
+	sta	Fill_fillWall_colorEvenRight
+	lda	Picture_solidColorOdd,y
+	and	#$f0
+	sta	Fill_fillWall_colorOddLeft
+	eor	Picture_solidColorOdd,y
+	sta	Fill_fillWall_colorOddRight
+	ldy	World_wallSector,x
+	jmi	Engine_drawBunch_fullWall
+; portal
+	sty	Engine_drawBunch_nextSector
+	ldx	Engine_drawBunch_sector
+	lda	World_sectorFlags,x
+	and	World_sectorFlags,y
+	and	#World_SECTOR_PARALLAXING
+	jne	Engine_drawBunch_portalFloor
+	lda	World_ceilingZ,x
+	cmp	World_ceilingZ,y
+	bcc	Engine_drawBunch_ceilingStep
+	ldx	Outline_x1
+Engine_drawBunch_ceilingNoStep1
+	lda	Outline_borderTop,x
+	cmp	Outline_wallTop,x
+	bcs	Engine_drawBunch_ceilingNoStep2
+	cmp	Outline_borderBottom,x
+	bcs	Engine_drawBunch_ceilingNoStep2
+	mva	Outline_wallTop,x	Outline_borderTop,x
+:Engine_COUNT_COLUMNS	cmp	Outline_borderBottom,x
+:Engine_COUNT_COLUMNS	bcc:beq	Engine_drawBunch_ceilingNoStep2
+:Engine_COUNT_COLUMNS	dec	Engine_columnsToDraw
+Engine_drawBunch_ceilingNoStep2
+	inx
+	cpx	Outline_x2
+	bcc	Engine_drawBunch_ceilingNoStep1
+	bcs	Engine_drawBunch_ceilingClipSprites	!
+Engine_drawBunch_ceilingStep
+	ldx	Engine_drawBunch_wallIndex
+	ldy	Engine_wallInverseD1_lo,x
+	lda	Engine_wallInverseD1_hi,x
+	jsr	Project_setInverseD
+	ldx	Engine_drawBunch_nextSector
+	lda	World_ceilingZ,x
+	jsr	Project_calcScreenY
+	sta	Outline_y1
+	stx	Outline_y1+1
+	ldx	Engine_drawBunch_wallIndex
+	ldy	Engine_wallInverseD2_lo,x
+	lda	Engine_wallInverseD2_hi,x
+	jsr	Project_setInverseD
+	ldx	Engine_drawBunch_nextSector
+	lda	World_ceilingZ,x
+	jsr	Project_calcScreenY
+	sta	Outline_y2
+	stx	Outline_y2+1
+	lda	Outline_x2
+	ldx	#Outline_step-Outline_table
+	jsr	Outline_calcLine
+	ldx	Outline_x1
+Engine_drawBunch_ceilingStepClip
+	lda	Outline_wallBottom,x
+	cmp	Outline_step,x
+	scs:sta	Outline_step,x
+	inx
+	cpx	Outline_x2
+	bcc	Engine_drawBunch_ceilingStepClip
+	lda	<Outline_wallTop
+	ldy	<Outline_step
+	jsr	Outline_fillWall
+	ldx	Outline_x1
+Engine_drawBunch_ceilingStepBorder1
+	lda	Outline_borderTop,x
+	cmp	Outline_step,x
+	bcs	Engine_drawBunch_ceilingStepBorder2
+	cmp	Outline_borderBottom,x
+	bcs	Engine_drawBunch_ceilingStepBorder2
+	mva	Outline_step,x	Outline_borderTop,x
+:Engine_COUNT_COLUMNS	cmp	Outline_borderBottom,x
+:Engine_COUNT_COLUMNS	bcc:beq	Engine_drawBunch_ceilingStepBorder2
+:Engine_COUNT_COLUMNS	dec	Engine_columnsToDraw
+Engine_drawBunch_ceilingStepBorder2
+	inx
+	cpx	Outline_x2
+	bcc	Engine_drawBunch_ceilingStepBorder1
+	ldy	Engine_drawBunch_nextSector
+Engine_drawBunch_ceilingClipSprites
+	ldx	Engine_drawBunch_sector
+	lda	World_ceilingZ,y
+	cmp	World_ceilingZ,x
+	bcc	Engine_drawBunch_ceilingClipSprites1
+	lda	View_z
+	cmp	World_ceilingZ,y
+	bcs	Engine_drawBunch_portalFloor
+Engine_drawBunch_ceilingClipSprites1
+	ldy:inc	Sprite_clipIndex
+	mva	#Sprite_CLIP_TOP	Sprite_clipType,y
+	mva	Engine_drawBunch_wallIndex	Sprite_clipWall,y
+	mva	Sprite_clipOutlinePtr	Sprite_clipOutlineStart_lo,y
+	mva	Sprite_clipOutlinePtr+1	Sprite_clipOutlineStart_hi,y
+	ldx	Outline_x1
+	ldy	#0
+Engine_drawBunch_ceilingClipSprites2
+	mva	Outline_borderTop,x+	(Sprite_clipOutlinePtr),y+
+	cpx	Outline_x2
+	bcc	Engine_drawBunch_ceilingClipSprites2
+	tya
+	add:sta	Sprite_clipOutlinePtr
+	scc:inc	Sprite_clipOutlinePtr+1
+	ldy	Engine_drawBunch_nextSector
+	ldx	Engine_drawBunch_sector
+; portal floor
+Engine_drawBunch_portalFloor
+	lda	World_floorZ,y
+	cmp	World_floorZ,x
+	bcc	Engine_drawBunch_floorStep
+	ldx	Outline_x1
+Engine_drawBunch_floorNoStep1
+	lda	Outline_borderTop,x
+	cmp	Outline_borderBottom,x
+	bcs	Engine_drawBunch_floorNoStep2
+	lda	Outline_wallBottom,x
+	cmp	Outline_borderBottom,x
+	bcs	Engine_drawBunch_floorNoStep2
+	sta	Outline_borderBottom,x
+:Engine_COUNT_COLUMNS	cmp	Outline_borderTop,x
+:Engine_COUNT_COLUMNS	scs:dec	Engine_columnsToDraw
+Engine_drawBunch_floorNoStep2
+	inx
+	cpx	Outline_x2
+	bcc	Engine_drawBunch_floorNoStep1
+	jmp	Engine_drawBunch_floorClipSprites
+Engine_drawBunch_floorStep
+	ldx	Engine_drawBunch_wallIndex
+	ldy	Engine_wallIndex,x
+	lda	World_wallFlags,y
+	and	#World_WALL_SWAP_BOTTOM
+	beq	Engine_drawBunch_noSwapBottom
+	ldx	World_wallReverse,y
+	ldy	World_wallPicture,x
+	lda	Picture_solidColorEven,y
+	and	#$f0
+	sta	Fill_fillWall_colorEvenLeft
+	eor	Picture_solidColorEven,y
+	sta	Fill_fillWall_colorEvenRight
+	lda	Picture_solidColorOdd,y
+	and	#$f0
+	sta	Fill_fillWall_colorOddLeft
+	eor	Picture_solidColorOdd,y
+	sta	Fill_fillWall_colorOddRight
+	ldx	Engine_drawBunch_wallIndex
+Engine_drawBunch_noSwapBottom
+	ldy	Engine_wallInverseD1_lo,x
+	lda	Engine_wallInverseD1_hi,x
+	jsr	Project_setInverseD
+	ldx	Engine_drawBunch_nextSector
+	lda	World_floorZ,x
+	jsr	Project_calcScreenY
+	sta	Outline_y1
+	stx	Outline_y1+1
+	ldx	Engine_drawBunch_wallIndex
+	ldy	Engine_wallInverseD2_lo,x
+	lda	Engine_wallInverseD2_hi,x
+	jsr	Project_setInverseD
+	ldx	Engine_drawBunch_nextSector
+	lda	World_floorZ,x
+	jsr	Project_calcScreenY
+	sta	Outline_y2
+	stx	Outline_y2+1
+	lda	Outline_x2
+	ldx	#Outline_step-Outline_table
+	jsr	Outline_calcLine
+	ldx	Outline_x1
+Engine_drawBunch_floorStepClip
+	lda	Outline_wallTop,x
+	cmp	Outline_step,x
+	scc:sta	Outline_step,x
+	inx
+	cpx	Outline_x2
+	bcc	Engine_drawBunch_floorStepClip
+	lda	<Outline_step
+	ldy	<Outline_wallBottom
+	jsr	Outline_fillWall
+	ldx	Outline_x1
+Engine_drawBunch_floorStepBorder1
+	lda	Outline_borderTop,x
+	cmp	Outline_borderBottom,x
+	bcs	Engine_drawBunch_floorStepBorder2
+	lda	Outline_step,x
+	cmp	Outline_borderBottom,x
+	bcs	Engine_drawBunch_floorStepBorder2
+	sta	Outline_borderBottom,x
+:Engine_COUNT_COLUMNS	cmp	Outline_borderTop,x
+:Engine_COUNT_COLUMNS	scs:dec	Engine_columnsToDraw
+Engine_drawBunch_floorStepBorder2
+	inx
+	cpx	Outline_x2
+	bcc	Engine_drawBunch_floorStepBorder1
+	ldy	Engine_drawBunch_nextSector
+Engine_drawBunch_floorClipSprites
+	ldx	Engine_drawBunch_sector
+	lda	World_floorZ,x
+	cmp	World_floorZ,y
+	bcc	Engine_drawBunch_floorClipSprites1
+	lda	World_floorZ,y
+	cmp	View_z
+	bcs	Engine_drawBunch_portalCheckSector
+Engine_drawBunch_floorClipSprites1
+	ldy:inc	Sprite_clipIndex
+	mva	#Sprite_CLIP_BOTTOM	Sprite_clipType,y
+	mva	Engine_drawBunch_wallIndex	Sprite_clipWall,y
+	mva	Sprite_clipOutlinePtr	Sprite_clipOutlineStart_lo,y
+	mva	Sprite_clipOutlinePtr+1	Sprite_clipOutlineStart_hi,y
+	ldx	Outline_x1
+	ldy	#0
+Engine_drawBunch_floorClipSprites2
+	mva	Outline_borderBottom,x+	(Sprite_clipOutlinePtr),y+
+	cpx	Outline_x2
+	bcc	Engine_drawBunch_floorClipSprites2
+	tya
+	add:sta	Sprite_clipOutlinePtr
+	scc:inc	Sprite_clipOutlinePtr+1
+	ldy	Engine_drawBunch_nextSector
+Engine_drawBunch_portalCheckSector
+	lda	Engine_gotSector,y
+	bne	Engine_drawBunch_wallNext
+:Engine_COUNT_COLUMNS	lda	Engine_columnsToDraw
+:Engine_COUNT_COLUMNS	bmi	Engine_drawBunch_return
+
+	ldx	Outline_x1
+Engine_drawBunch_checkBorders
+	lda	Outline_borderTop,x
+	cmp	Outline_borderBottom,x
+	bcc	Engine_drawBunch_scanSector
+	inx
+	cpx	Outline_x2
+	bcc	Engine_drawBunch_checkBorders
+	bcs	Engine_drawBunch_clipFull	!
+
+Engine_drawBunch_scanSector
+	jsr	Engine_scanSector
+	jmp	Engine_drawBunch_wallNext
+
+; full wall
+Engine_drawBunch_fullWall
+	lda	<Outline_wallTop
+	ldy	<Outline_wallBottom
+	jsr	Outline_fillWall
+
+	ldx	Outline_x1
+
+	ift	Engine_COUNT_COLUMNS
+Engine_drawBunch_clearBorders
+	lda	Outline_borderBottom,x
+	cmp	Outline_borderTop,x
+	bcc	Engine_drawBunch_clearBordersNext
+	mva	#1	Outline_borderTop,x
+	lsr	@
+	sta	Outline_borderBottom,x
+	dec	Engine_columnsToDraw
+Engine_drawBunch_clearBordersNext
+	els
+	lda	#0
+Engine_drawBunch_clearBorders
+	sta	Outline_borderTop,x
+	sta	Outline_borderBottom,x
+	eif
+	inx
+	cpx	Outline_x2
+	bcc	Engine_drawBunch_clearBorders
+
+Engine_drawBunch_clipFull
+	ldy:inc	Sprite_clipIndex
+	mva	#Sprite_CLIP_FULL	Sprite_clipType,y
+	mva	Engine_drawBunch_wallIndex	Sprite_clipWall,y
+
+Engine_drawBunch_wallNext
+	ldx	Engine_drawBunch_wallIndex
+	ldy	Engine_wallNext,x
+	jpl	Engine_drawBunch_wallLoop
+Engine_drawBunch_return
+	rts
+
+* Engine_draw
+; Draw the 3D view
+Engine_draw
+	ldx	View_angle
+	lda	Math_cos,x
+	ldy	Math_sin,x
+	jsr	View_setCosSin
+
+:Engine_COUNT_COLUMNS	mva	#Screen_WIDTH-1	Engine_columnsToDraw
+	ldx	#Screen_WIDTH/2-1
+Engine_draw_initOutlineBorder
+	mva	#0	Outline_borderTop,x
+	sta	Outline_borderTop+Screen_WIDTH/2,x
+	mva	#Screen_HEIGHT	Outline_borderBottom,x
+	sta	Outline_borderBottom+Screen_WIDTH/2,x
+	dex:bpl	Engine_draw_initOutlineBorder
+
+	jsr	Fill_setPage
+
+	mwa	#Sprite_clipOutline	Sprite_clipOutlinePtr
+	lda	#0
+	sta	Engine_wallCount
+	sta	Engine_bunchCount
+	sta	Sprite_clipIndex
+	jsr	Engine_clearGotSector
+	ldy	View_sector
+	jsr	Engine_scanSector
+
+	ldy	Engine_bunchCount
+	sne:rts
+
+Engine_draw_drawBunch1
+	mva	#0	Engine_draw_closest
+	dey
+	beq	Engine_draw_lastBunch
+	sta:rne	Engine_bunchChecked,y-
+	mvx	#1	Engine_bunchChecked
+Engine_draw_for1
+	stx	Engine_draw_i
+	ldy	Engine_draw_closest
+	jsr	Engine_bunchFront
+	ldx	Engine_draw_i
+	tay
+	bmi	Engine_draw_next1
+	sne:stx	Engine_draw_closest
+	inc	Engine_bunchChecked,x
+Engine_draw_next1
+	inx:cpx	Engine_bunchCount
+	bcc	Engine_draw_for1
+	ldx	#0
+Engine_draw_for2
+	lda	Engine_bunchChecked,x
+	bne	Engine_draw_next2
+	stx	Engine_draw_i
+	ldy	Engine_draw_closest
+	jsr	Engine_bunchFront
+	ldx	Engine_draw_i
+	tay
+	bmi	Engine_draw_next2
+	inc	Engine_bunchChecked,x
+	tay
+	bne	Engine_draw_next2
+	stx	Engine_draw_closest
+	ldx	#0
+Engine_draw_next2
+	inx:cpx	Engine_bunchCount
+	bcc	Engine_draw_for2
+	ldy	Engine_draw_closest
+Engine_draw_lastBunch
+	jsr	Engine_drawBunch
+	dec	Engine_bunchCount
+	beq	Engine_draw_return
+	ldy	Engine_bunchCount
+	ldx	Engine_draw_closest
+	mva	Engine_bunchFirst,y	Engine_bunchFirst,x
+	mva	Engine_bunchLast,y	Engine_bunchLast,x
+:Engine_COUNT_COLUMNS	lda	Engine_columnsToDraw
+:Engine_COUNT_COLUMNS	bpl	Engine_draw_drawBunch1
+:!Engine_COUNT_COLUMNS	jmp	Engine_draw_drawBunch1
+Engine_draw_return
+	rts
+
+* Sprite_init
+; Initialize Sprite module
+Sprite_init
+
+* Sprite_initFlatSprite
+Sprite_initFlatSprite	| PROFILE
+	ldx	#0
+	stx	Sprite_init_screen
+	mva	>Screen_screen1	Sprite_init_screen+1
+	lda	>Sprite_calcFlatV1
+	ldy	>Sprite_fillFlatSprite_unrolled1
+	jsr	Sprite_initFlatSprite_screen
+	mwa	#Screen_screen2	Sprite_init_screen
+	lda	>Sprite_calcFlatV2
+	ldy	>Sprite_fillFlatSprite_unrolled2
+Sprite_initFlatSprite_screen
+	sta	Sprite_init_calcV+1
+	mva	<Sprite_calcFlatV1	Sprite_init_calcV
+	sty	Sprite_init_fill+1
+	mvy	<Sprite_fillFlatSprite_unrolled1	Sprite_init_fill
+	mva	#Screen_HEIGHT	Sprite_init_lines
+Sprite_initFlatSprite_line
+	cpx	#Screen_HEIGHT+1
+	scs:mva	Sprite_init_fill	Sprite_fillFlatSprite_lo,x
+	mva	Sprite_init_fill+1	Sprite_fillFlatSprite_hi,x+
+	mva	#{ldy #}	(Sprite_init_fill),0
+	inw	Sprite_init_fill
+	mva	#{tay}	(Sprite_init_calcV),y+
+	mva	#{lsr @}	(Sprite_init_calcV),y+
+	sta	(Sprite_init_calcV),y+
+	sta	(Sprite_init_calcV),y+
+	mva	#{sta a:}	(Sprite_init_calcV),y+
+	mva	Sprite_init_fill	(Sprite_init_calcV),y+
+	mva	Sprite_init_fill+1	(Sprite_init_calcV),y+
+	mva	#{txa}	(Sprite_init_calcV),y+
+	mva	#{clc}	(Sprite_init_calcV),y+
+	mva	#{adc Sprite_drawSprite_dv}	(Sprite_init_calcV),y+
+	mva	#Sprite_drawSprite_dv	(Sprite_init_calcV),y+
+	mva	#{tax}	(Sprite_init_calcV),y+
+	mva	#{tya}	(Sprite_init_calcV),y+
+	mva	#{adc Sprite_drawSprite_dv+1}	(Sprite_init_calcV),y+
+	mva	#Sprite_drawSprite_dv+1	(Sprite_init_calcV),y
+	ldy	#1
+	mva	#{lda (),y}	(Sprite_init_fill),y+
+	mva	#Sprite_drawSprite_texturePtr	(Sprite_init_fill),y+
+	mva	#{beq}	(Sprite_init_fill),y+
+:!Picture_REVERSE_TRANSPARENCY	mva	#11	(Sprite_init_fill),y+
+:Picture_REVERSE_TRANSPARENCY	mva	#10	(Sprite_init_fill),y+
+	mva	#{eor Screen_screen1,x}	(Sprite_init_fill),y+
+	mva	Sprite_init_screen	(Sprite_init_fill),y+
+	mva	Sprite_init_screen+1	(Sprite_init_fill),y+
+:!Picture_REVERSE_TRANSPARENCY	mva	#{and Sprite_drawSprite_mask}	(Sprite_init_fill),y+
+:Picture_REVERSE_TRANSPARENCY	mva	#{ora Sprite_drawSprite_mask}	(Sprite_init_fill),y+
+	mva	#Sprite_drawSprite_mask	(Sprite_init_fill),y+
+	ift	!Picture_REVERSE_TRANSPARENCY
+	mva	#{eor Screen_screen1,x}	(Sprite_init_fill),y+
+	mva	Sprite_init_screen	(Sprite_init_fill),y+
+	mva	Sprite_init_screen+1	(Sprite_init_fill),y+
+	els
+	mva	#{eor (),y}	(Sprite_init_fill),y+
+	mva	#Sprite_drawSprite_texturePtr	(Sprite_init_fill),y+
+	eif
+	mva	#{sta Screen_screen1,x}	(Sprite_init_fill),y+
+	mva	Sprite_init_screen	(Sprite_init_fill),y+
+	add	#Screen_WIDTH/2
+	sta	Sprite_init_screen
+	mva	Sprite_init_screen+1	(Sprite_init_fill),y+
+	adc	#0
+	sta	Sprite_init_screen+1
+	lda	#15
+	add:sta	Sprite_init_calcV
+	scc:inc	Sprite_init_calcV+1
+:!Picture_REVERSE_TRANSPARENCY	lda	#16
+:Picture_REVERSE_TRANSPARENCY	lda	#15
+	add:sta	Sprite_init_fill
+	scc:inc	Sprite_init_fill+1
+	dec	Sprite_init_lines
+	jne	Sprite_initFlatSprite_line
+:!Picture_REVERSE_TRANSPARENCY	lda	<Sprite_fillFlatSprite_unrolled1+17*Screen_HEIGHT
+:Picture_REVERSE_TRANSPARENCY	lda	<Sprite_fillFlatSprite_unrolled1+16*Screen_HEIGHT
+	sta	Sprite_fillFlatSprite_lo+Screen_HEIGHT
+	mva	Sprite_init_fill+1	Sprite_fillFlatSprite_hi,x+
+	mva	#{rts}	Sprite_calcFlatV1+15*Screen_HEIGHT-8
+	sta	Sprite_calcFlatV2+15*Screen_HEIGHT-8
+	rts
+
+* Sprite_setPage
+Sprite_setPage
+	lda	Screen_drawnPage
+	cmp	>Screen_screen2
+	lda	>Sprite_calcFlatV1
+	scc:lda	>Sprite_calcFlatV2
+	sta	Sprite_jumpCalcV+2
+	lda	<Sprite_fillFlatSprite_hi
+	scc:lda	<Sprite_fillFlatSprite_hi+Screen_HEIGHT+1
+	sta	Sprite_drawSprite_loadFlatSpriteHi1+1
+	sta	Sprite_drawSprite_loadFlatSpriteHi2+1
+	rts
+
+* Sprite_drawSprite
+; Draw one sprite
+Sprite_drawSprite	| PROFILE
+	jsr	Project_calcInverseD
+	sty	Sprite_drawSprite_inverseD
+	sta	Sprite_drawSprite_inverseD+1
+	jsr	Project_setInverseD
+
+	ldx	Sprite_drawSprite_index
+	mva	World_spriteFlags,x	Sprite_drawSprite_flags
+	ldy	World_spritePicture,x
+	mva	Picture_column_lo,y	Sprite_drawSprite_columnPtr
+	mva	Picture_column_hi,y	Sprite_drawSprite_columnPtr+1
+	mva	Picture_width,y	Sprite_drawSprite_picWidth
+	mva	Picture_height,y	Sprite_drawSprite_picHeight
+
+	lda	World_spriteHeight,x
+	asl	@
+	tay
+	lda	#$40
+	rol	@
+	sta	Sprite_drawSprite_ySize
+; a = (hl * il) >> 8
+	lda	(Project_inverseDUU_lo+Math_MS_AL),y
+	cmp	(Project_inverseDUU_lo+Math_MS_SL),y
+	lda	(Project_inverseDUU_lo+Math_MS_AH),y
+	sbc	(Project_inverseDUU_lo+Math_MS_SH),y
+; a += (hl * ih)
+	add	(Project_inverseDUU_hi+Math_MS_AL),y
+	sub	(Project_inverseDUU_hi+Math_MS_SL),y
+; a += (hh * il)
+	ldy	Sprite_drawSprite_ySize
+	add	(Project_inverseDSU_lo+Math_MS_AL),y
+	sub	(Project_inverseDSU_lo+Math_MS_SL),y
+	sta	Sprite_drawSprite_ySize
+	sta	Math_word
+	lda	Sprite_drawSprite_picHeight
+	jsr	Math_shl3Div8uBy8u
+	sta	Sprite_drawSprite_dv
+	sty	Sprite_drawSprite_dv+1
+	lda	World_spriteZ,x
+	jsr	Project_calcScreenY
+	sta	Outline_y1
+	ldx	#Math_mulUS_hi
+	jsr	Math_setUS
+	ldy	Sprite_drawSprite_dv
+	lda	(Math_mulUS_hi+Math_MS_SL),y
+	sub	(Math_mulUS_hi+Math_MS_AL),y
+	tax
+	lda	(Math_mulUS_hi+Math_MS_SH),y
+	sbc	(Math_mulUS_hi+Math_MS_AH),y
+	ldy	Sprite_drawSprite_dv+1
+	add	(Math_mulUS_hi+Math_MS_SL),y
+	sub	(Math_mulUS_hi+Math_MS_AL),y
+	sta	Math_word
+	lda	#World_SPRITE_CENTER_VERT
+	and	Sprite_drawSprite_flags
+	bne	Sprite_drawSprite_center
+	mva	Outline_y1	Outline_y2
+	sub	Sprite_drawSprite_ySize
+	sta	Outline_y1
+	lda	Sprite_drawSprite_picHeight
+	asl	@
+	jmp	Sprite_drawSprite_setV
+Sprite_drawSprite_center
+	lda	Sprite_drawSprite_ySize
+	lsr	@
+	add	Outline_y1
+	sta	Outline_y2
+	sub	Sprite_drawSprite_ySize
+	sta	Outline_y1
+	lda	Sprite_drawSprite_picHeight
+Sprite_drawSprite_setV
+	asl:asl	@
+	adc	Math_word	-
+	ldy	Outline_y2
+	bmi	Sprite_drawSprite_return2
+	cpy	#Screen_HEIGHT
+	smi:mvy	#Screen_HEIGHT	Outline_y2
+	ldy	Outline_y1
+	spl:mvy	#0	Outline_y1
+	cpy	Outline_y2
+	scc
+Sprite_drawSprite_return2
+	rts
+Sprite_jumpCalcV
+	jsr	Sprite_calcFlatV1
+
+	ldx	Sprite_drawSprite_index
+	lda	World_spriteWidth,x
+	asl	@
+	tay
+	lda	#$40
+	rol	@
+	sta	Sprite_drawSprite_xSize
+; a = (wl * il) >> 8
+	lda	(Project_inverseDUU_lo+Math_MS_AL),y
+	cmp	(Project_inverseDUU_lo+Math_MS_SL),y
+	lda	(Project_inverseDUU_lo+Math_MS_AH),y
+	sbc	(Project_inverseDUU_lo+Math_MS_SH),y
+; a += (wl * ih)
+	add	(Project_inverseDUU_hi+Math_MS_AL),y
+	sub	(Project_inverseDUU_hi+Math_MS_SL),y
+; a += (wh * il)
+	ldy	Sprite_drawSprite_xSize
+	add	(Project_inverseDSU_lo+Math_MS_AL),y
+	sub	(Project_inverseDSU_lo+Math_MS_SL),y
+	sta	Sprite_drawSprite_xSize
+
+	ldy	View_calcRotate_c
+	lda	View_calcRotate_c+1
+	jsr	Project_calcScreenX
+	sta	Sprite_drawSprite_xCenter
+
+	lda	Sprite_drawSprite_xSize
+	lsr	@
+	eor	#$ff
+	sec:adc	Sprite_drawSprite_xCenter
+	sta	Outline_x1
+	add	Sprite_drawSprite_xSize
+	cmp	#Screen_WIDTH
+	bcc	Sprite_drawSprite_rightOnScreen
+	bmi	Sprite_drawSprite_return2
+	lda	#Screen_WIDTH
+Sprite_drawSprite_rightOnScreen
+	sta	Outline_x2
+	lda	Outline_x1
+	cmp	#Screen_WIDTH
+	bcc	Sprite_drawSprite_leftOnScreen
+	bpl	Sprite_drawSprite_return2
+	mva	#0	Outline_x1
+Sprite_drawSprite_leftOnScreen
+	cmp	Outline_x2
+	bcs	Sprite_drawSprite_return2
+	tax
+Sprite_drawSprite_setOutlines
+	mva	Outline_y1	Outline_wallTop,x
+	mva	Outline_y2	Outline_wallBottom,x
+	inx:cpx	Outline_x2
+	bcc	Sprite_drawSprite_setOutlines
+
+; clip with walls
+	mva	#0	Sprite_drawSprite_clipIgnore
+	ldy	Sprite_clipIndex
+	jmp	Sprite_drawSprite_clipWallsLoop
+Sprite_drawSprite_clipWallsNext
+	ldy	Sprite_drawSprite_clipIndex
+Sprite_drawSprite_clipWallsLoop
+	jeq	Sprite_drawSprite_clipWallsEnd
+	dey
+	sty	Sprite_drawSprite_clipIndex
+	lda	Sprite_clipType,y
+	bit	Sprite_drawSprite_clipIgnore
+	bne	Sprite_drawSprite_clipWallsNext
+	ldx	Sprite_clipWall,y
+	lda	Engine_wallScreenX1,x
+	cmp	Outline_x2
+	bcs	Sprite_drawSprite_clipWallsNext
+	lda	Outline_x1
+	cmp	Engine_wallScreenX2,x
+	bcs	Sprite_drawSprite_clipWallsNext
+	lda	Sprite_drawSprite_inverseD
+	cmp	Engine_wallInverseD1_lo,x
+	lda	Sprite_drawSprite_inverseD+1
+	sbc	Engine_wallInverseD1_hi,x
+	ror	@
+	tay
+	lda	Sprite_drawSprite_inverseD
+	cmp	Engine_wallInverseD2_lo,x
+	lda	Sprite_drawSprite_inverseD+1
+	sbc	Engine_wallInverseD2_hi,x
+	tya
+	ror	@
+	cmp	#$40
+	bcc	Sprite_drawSprite_clipWallsBehind
+	bmi	Sprite_drawSprite_clipWallsNext
+; Sprite_wallFront
+	ldy	Engine_wallIndex,x
+	ldx	World_wallNext,y
+	lda	World_wallX_lo,x
+	sub	World_wallX_lo,y
+	sta	Math_word
+	lda	World_wallX_hi,x
+	sbc	World_wallX_hi,y
+	sta	Math_word+1
+	lda	World_wallY_lo,x
+	sub	World_wallY_lo,y
+	sta	Math_word4
+	lda	World_wallY_hi,x
+	sbc	World_wallY_hi,y
+	sta	Math_word4+1
+	ldx	Sprite_drawSprite_index
+	lda	World_spriteX_lo,x
+	sub	World_wallX_lo,y
+	sta	Math_word3
+	lda	World_spriteX_hi,x
+	sbc	World_wallX_hi,y
+	sta	Math_word3+1
+	lda	World_spriteY_lo,x
+	sub	World_wallY_lo,y
+	sta	Math_word2
+	lda	World_spriteY_hi,x
+	sbc	World_wallY_hi,y
+	sta	Math_word2+1
+	jsr	Math_mulCmp
+	bpl	Sprite_drawSprite_jClipWallsNext
+	ldy	Sprite_drawSprite_clipIndex
+	ldx	Sprite_clipWall,y
+Sprite_drawSprite_clipWallsBehind
+	mvy	Engine_wallScreenX1,x	Sprite_drawSprite_clipPtr
+	cpy	Outline_x1
+	scs:ldy	Outline_x1
+	lda	Engine_wallScreenX2,x
+	cmp	Outline_x2
+	bcc	Sprite_drawSprite_clipWallsZeroWhole
+	lda	Outline_x2
+	cpy	Outline_x1
+Sprite_drawSprite_clipWallsZeroWhole
+	php
+	sta	Sprite_drawSprite_xLimit
+	ldx	Sprite_drawSprite_clipIndex
+	lda	Sprite_clipType,x
+	bne	Sprite_drawSprite_clipPartial
+	plp
+	sne:rts
+Sprite_drawSprite_clipFull
+	sta	Outline_wallBottom,y
+	iny:cpy	Sprite_drawSprite_xLimit
+	bcc	Sprite_drawSprite_clipFull
+Sprite_drawSprite_jClipWallsNext
+	jmp	Sprite_drawSprite_clipWallsNext
+Sprite_drawSprite_clipPartial
+	lda	Sprite_clipOutlineStart_lo,x
+	sub:sta	Sprite_drawSprite_clipPtr
+	lda	Sprite_clipOutlineStart_hi,x
+	sbc	#0
+	sta	Sprite_drawSprite_clipPtr+1
+	lda	Sprite_clipType,x
+	plp
+	bne	Sprite_drawSprite_clipPartial2
+	ora:sta	Sprite_drawSprite_clipIgnore
+	lda	Sprite_clipType,x
+Sprite_drawSprite_clipPartial2
+	lsr	@
+	bne	Sprite_drawSprite_clipBottom
+Sprite_drawSprite_clipTop
+	lda	(Sprite_drawSprite_clipPtr),y
+	cmp	Outline_wallTop,y
+	scc:sta	Outline_wallTop,y
+	iny:cpy	Sprite_drawSprite_xLimit
+	bcc	Sprite_drawSprite_clipTop
+	jmp	Sprite_drawSprite_clipWallsNext
+Sprite_drawSprite_clipBottom
+	lda	(Sprite_drawSprite_clipPtr),y
+	cmp	Outline_wallBottom,y
+	scs:sta	Outline_wallBottom,y
+	iny:cpy	Sprite_drawSprite_xLimit
+	bcc	Sprite_drawSprite_clipBottom
+	jmp	Sprite_drawSprite_clipWallsNext
+Sprite_drawSprite_clipWallsEnd
+
+	lda	Outline_x1
+	sub	Sprite_drawSprite_xCenter
+	ldx	#Math_mulUS_hi
+	jsr	Math_setUS
+	mva	Sprite_drawSprite_xSize	Math_word
+	lda	Sprite_drawSprite_picWidth
+	jsr	Math_shl3Div8uBy8u
+	sta	Sprite_drawSprite_du
+	sty	Sprite_drawSprite_du+1
+	tay
+	lda	(Math_mulUS_hi+Math_MS_AL),y
+	sub	(Math_mulUS_hi+Math_MS_SL),y
+	sta	Sprite_drawSprite_u
+	lda	(Math_mulUS_hi+Math_MS_AH),y
+	sbc	(Math_mulUS_hi+Math_MS_SH),y
+	ldy	Sprite_drawSprite_du+1
+	add	(Math_mulUS_hi+Math_MS_AL),y
+	sub	(Math_mulUS_hi+Math_MS_SL),y
+	sta	Sprite_drawSprite_u+1
+	eor	#$80
+	tay
+	lda	Sprite_drawSprite_picWidth
+	asl:asl	@
+	adc:sta	Sprite_drawSprite_u+1	-
+
+	ldx	Outline_x1
+Sprite_drawSprite_flatDrawLoop
+	ldy	Outline_wallTop,x
+	tya:cmp	Outline_wallBottom,x
+	bcs	Sprite_drawSprite_flatDrawNext
+	mva	Sprite_fillFlatSprite_lo,y	Sprite_drawSprite_flatJump+1
+Sprite_drawSprite_loadFlatSpriteHi1
+	mva	Sprite_fillFlatSprite_hi,y	Sprite_drawSprite_flatJump+2
+	ldy	Outline_wallBottom,x
+	mva	Sprite_fillFlatSprite_lo,y	Sprite_drawSprite_retPtr
+Sprite_drawSprite_loadFlatSpriteHi2
+	mva	Sprite_fillFlatSprite_hi,y	Sprite_drawSprite_retPtr+1
+	mva	#{rts}	(Sprite_drawSprite_retPtr),0
+	lda	Sprite_drawSprite_u+1
+	and	#$f8
+	lsr:lsr	@
+	tay
+	mva	(Sprite_drawSprite_columnPtr),y+	Sprite_drawSprite_texturePtr
+	mva	(Sprite_drawSprite_columnPtr),y	Sprite_drawSprite_texturePtr+1
+	txa
+	lsr	@
+	tax
+	lda	#$f0
+	scc:lda	#$0f
+	sta	Sprite_drawSprite_mask
+Sprite_drawSprite_flatJump
+	jsr	$2020
+	mva	#{ldy #}	(Sprite_drawSprite_retPtr),0
+Sprite_drawSprite_flatDrawNext
+	lda	Sprite_drawSprite_du
+	add:sta	Sprite_drawSprite_u
+	lda	Sprite_drawSprite_du+1
+	adc:sta	Sprite_drawSprite_u+1
+	inc:ldx	Outline_x1
+	cpx	Outline_x2
+	bcc	Sprite_drawSprite_flatDrawLoop
+Sprite_draw_return
+	rts
+
+* Sprite_draw
+; Draw all sprites
+Sprite_draw
+	ldy	World_sprites
+	beq	Sprite_draw_return
+	jsr	Sprite_setPage
+	mva	#0	Sprite_draw_onScreenIndex
+; check which sprites are on screen
+Sprite_draw_loop1
+	dey
+	sty	Sprite_draw_index
+	ldx	World_spriteSector,y
+	lda	Engine_gotSector,x
+	beq	Sprite_draw_next1
+	mva	World_spriteX_lo,y	View_calcRotate_x
+	mva	World_spriteX_hi,y	View_calcRotate_x+1
+	mva	World_spriteY_lo,y	View_calcRotate_y
+	mva	World_spriteY_hi,y	View_calcRotate_y+1
+	jsr	View_calcRotate
+	lda	View_calcRotate_d
+	cmp	<Sprite_DRAW_MIN_DISTANCE
+	lda	View_calcRotate_d+1
+	sbc	>Sprite_DRAW_MIN_DISTANCE
+	bmi	Sprite_draw_next1
+	ldy	Sprite_draw_index
+	lda	World_spriteWidth,y
+	add	View_calcRotate_d
+	tax
+	lda	#0
+	adc	View_calcRotate_d+1
+	sta	Math_word+1
+	cpx	View_calcRotate_c
+	sbc	View_calcRotate_c+1
+	bmi	Sprite_draw_next1
+	txa
+	add	View_calcRotate_c
+	lda	Math_word+1
+	adc	View_calcRotate_c+1
+	bmi	Sprite_draw_next1
+	ldx:inc	Sprite_draw_onScreenIndex
+	tya
+	sta	Sprite_onScreen,x
+	mva	View_calcRotate_c	Sprite_onScreenC_lo,x
+	mva	View_calcRotate_c+1	Sprite_onScreenC_hi,x
+	mva	View_calcRotate_d	Sprite_onScreenD_lo,x
+	mva	View_calcRotate_d+1	Sprite_onScreenD_hi,x
+Sprite_draw_next1
+	ldy	Sprite_draw_index
+	bne	Sprite_draw_loop1
+
+; bubble sort sprites on screen
+	ldx	Sprite_draw_onScreenIndex
+	bne	Sprite_draw_next2
+	rts
+Sprite_draw_loop2
+	stx	Sprite_draw_index
+Sprite_draw_loop3
+	lda	Sprite_onScreenD_lo,x
+	cmp	Sprite_onScreenD_lo-1,x
+	lda	Sprite_onScreenD_hi,x
+	sbc	Sprite_onScreenD_hi-1,x
+	bcs	Sprite_draw_next3
+	ldy	Sprite_onScreen,x
+	mva	Sprite_onScreen-1,x	Sprite_onScreen,x
+	tya:sta	Sprite_onScreen-1,x
+	ldy	Sprite_onScreenC_lo,x
+	mva	Sprite_onScreenC_lo-1,x	Sprite_onScreenC_lo,x
+	tya:sta	Sprite_onScreenC_lo-1,x
+	ldy	Sprite_onScreenC_hi,x
+	mva	Sprite_onScreenC_hi-1,x	Sprite_onScreenC_hi,x
+	tya:sta	Sprite_onScreenC_hi-1,x
+	ldy	Sprite_onScreenD_lo,x
+	mva	Sprite_onScreenD_lo-1,x	Sprite_onScreenD_lo,x
+	tya:sta	Sprite_onScreenD_lo-1,x
+	ldy	Sprite_onScreenD_hi,x
+	mva	Sprite_onScreenD_hi-1,x	Sprite_onScreenD_hi,x
+	tya:sta	Sprite_onScreenD_hi-1,x
+Sprite_draw_next3
+	inx
+	cpx	Sprite_draw_onScreenIndex
+	bcc	Sprite_draw_loop3
+	ldx	Sprite_draw_index
+Sprite_draw_next2
+	dex
+	bne	Sprite_draw_loop2
+
+; draw sprites on screen
+	jmp	Sprite_draw_next4
+Sprite_draw_loop4
+	ldy	Sprite_draw_onScreenIndex
+	mva	Sprite_onScreen,y	Sprite_drawSprite_index
+	mva	Sprite_onScreenC_lo,y	View_calcRotate_c
+	mva	Sprite_onScreenC_hi,y	View_calcRotate_c+1
+	ldx	Sprite_onScreenD_lo,y
+	lda	Sprite_onScreenD_hi,y
+	jsr Sprite_drawSprite
+Sprite_draw_next4
+	dec	Sprite_draw_onScreenIndex
+	bpl	Sprite_draw_loop4
+	rts
+
+	end

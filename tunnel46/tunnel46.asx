@@ -1,0 +1,2162 @@
+	icl	'../nex.asx'
+* Main constants
+SCR_HEIGHT equ 56
+SCR_WIDTH  equ 80
+SLICE_HEIGHT	equ 14
+MOVES_MAX equ 64
+DELAY_BETWEEN equ 0			* 0
+INIT_DELAY	equ 20
+SMALL_DELAY	equ 250
+
+DEBUG	equ	0
+	ert	DEBUG&&NUMEN
+
+* for small anims
+sinusSmall	equ $fa00
+div15		equ $fb00
+mod15		equ $fc00
+
+* System procedures from FOX :)
+
+Banks_SMALL_INDEX	equ	4
+Banks_TEXTURE_INDEX	equ	5
+
+HPOSP0	equ $d000
+HPOSP1	equ $d001
+HPOSP2	equ $d002
+HPOSP3	equ $d003
+HPOSM0	equ $d004
+HPOSM1	equ $d005
+HPOSM2	equ $d006
+HPOSM3	equ $d007
+SIZEP0	equ $d008
+SIZEP1	equ $d009
+SIZEP2	equ $d00a
+SIZEP3	equ $d00b
+SIZEM	equ $d00c
+GRAFP0	equ $d00d
+GRAFP1	equ $d00e
+GRAFP2	equ $d00f
+GRAFP3	equ $d010
+GRAFPM	equ $d011
+COLPM0	equ $d012
+COLPM1	equ $d013
+COLPM2	equ $d014
+COLPM3	equ $d015
+COLPF0	equ $d016
+COLPF1	equ $d017
+COLPF2	equ $d018
+COLPF3	equ $d019
+COLBAK	equ $d01a
+GTIACTL	equ $d01b
+
+
+* Main variables
+prog    equ $0900
+back	equ $1c00	   ;$400
+scr1    equ $2000      ;40x60b = $960
+dl     equ $2c00      ;<$200
+;;dl2     equ $2e00      ;<$200
+scr2    equ $3000
+code    equ $4000      ;autopised, 6 bankow po <$4000
+
+* Loaded data
+ctab    equ $a000       ;$1900   ; reserves $a000-$cfff, $d800-$d900
+rtab    equ $da00		;$f00    ; -"-
+atab    equ $e900       ;$f00    ; -"-
+
+* Data
+moveTextureSimple equ $8000   ;256*12 +1
+moveTextureSimple2 equ $9000
+hi2lo	equ $9f00	
+
+cadr    equ $0700   ;adresy stron dla ctab 
+csin    equ $0800   
+TextLo  equ $3a00
+TextHi  equ $3b00
+texture1 equ $3c00
+texture2 equ $3d00
+;texture3 equ $3e00
+;texture4 equ $3f00
+texture equ texture1
+
+; data organisation for small part (in bnkSmall)
+codeSmall	equ $4000	;(8*15)*6ins*4b = $0870
+dataSmall	equ $4a00	;8*(15+15) < $100
+moveSmall1	equ $5000	;(8*15)*5ins*4b = $0708
+moveSmall2	equ $5800	; -"-
+
+; data organisation for moving texture (in bnkTexture)
+moveTexture equ $4000   ;256*17 +1
+textConvsLo	equ $5200	;256*17
+textConvsHi	equ $6400	;256*17
+textSource0	equ $7600	; lo!
+textSource1	equ $7800
+;textSource2 equ $7a00
+;textSource3	equ $7c00
+;textSource4	equ $7e00
+; some special textures
+textSourceBlack	equ $7a00
+textSourceWhiteHi	equ $7c00
+textSourceWhiteLo	equ $7e00
+
+* 0 page
+zer_textureHi	equ $c0	; hi-nibbled textures
+zer_textureLo	equ $c2 ; lo-nibbled textures
+zer_convLo		equ $c4 ; conversion into hi nibbles
+zer_convHi		equ $c6 ; conversion into lo nibbles
+
+hlp  equ $e0
+hlp1 equ $e1
+hlp2 equ $e2
+hlp3 equ $e3
+zer  equ $f0
+zer1 equ $f2
+zer2 equ $f4
+zer3 equ $f6
+zer4 equ $f8
+zer5 equ $fa
+zerms	equ $fc
+
+    org cadr    ;50 adresow stron + lo2hi
+    dta b($a0,$a1,$a2,$a3,$a4,$a5,$a6,$a7)
+    dta b($a8,$a9,$aa,$ab,$ac,$ad,$ae,$af)
+    dta b($b0,$b1,$b2,$b3,$b4,$b5,$b6,$b7)
+    dta b($b8,$b9,$ba,$bb,$bc,$bd,$be,$bf)
+    dta b($c0,$c1,$c2,$c3,$c4,$c5,$c6,$c7)
+    dta b($c8,$c9,$ca,$cb,$cc,$cd,$ce,$cf)
+    dta b($d8,$d9)
+lo2hi   dta b($00,$10,$20,$30,$40,$50,$60,$70)
+        dta b($80,$90,$a0,$b0,$c0,$d0,$e0,$f0)
+
+    org csin
+    dta b(sin(128,127,256))
+
+ org prog
+    
+main    equ *
+	ift	!NUMEN
+    sei
+;    inc $d40e
+    lda $d40b
+    bne *-3
+    ldx #29
+    sta $d000,x
+    dex
+    bpl *-4
+    lda #$fe            
+    sta $d301
+    lda #0
+    sta $d400
+	eif
+   
+* start!
+
+    jsr prepCode
+    jsr prepCodeSmall
+    jsr prepMoveSmall
+    jsr prepTabSmall
+    jsr prepCTab
+    jsr prepMoveTexture
+    jsr prepConvTexture
+	jsr prepTextures    
+;    jmp qq
+    jsr shuffle
+;    jsr anim
+	lda >scr1
+	ldx #10
+	jsr cleanmem
+	lda >scr2
+	ldx #10
+	jsr cleanmem
+
+    lda $d40b
+    bne *-3
+    lda #$58			;GTIACTL
+    sta $d01b
+    lda #$22
+    sta $d400
+    mwa	#dl	^42
+    lda #$00
+    sta $d01a
+    sta COLPF3	;erusux;
+
+	lda #$ff
+	sta GRAFP2
+	lda #00
+	sta COLPM2
+	lda #$b0
+	sta HPOSP2
+	lda #$03		;03
+	sta SIZEP2
+	
+    lda #$ff
+    sta GRAFPM
+    sta SIZEM
+    lda #$b0
+    sta HPOSM0
+    lda #$b8
+    sta HPOSM1
+    lda #$c0
+    sta HPOSM2
+    lda #$c8
+    sta HPOSM3
+
+    jsr NEXT_PART
+
+	ift	NUMEN
+	mwa	#dli	Dli_vector
+* 	mwa	#all	Vbl_vector
+	mwa #MYALL  Vbl_vector
+	mwa	#-44*50	Vbl_clock		;60*50
+	jsr	Idle
+	mva	#{rts}	MYALL
+	lda:rne	^4b
+	sta	^40
+	ldx	#29
+	sta:rpl	^00,x-
+	mwa	#rts	Vbl_vector
+	jmp	NextBlock
+	els
+	MWA #nmi $fffa
+	MVA #$c0 $d40e
+	jmp	*
+	eif
+
+CURR_PART	dta b(0)
+PARTS_COUNT	equ 14+1		*** REMEMBER ABOUT THIS VALUE :)) ***
+PARTS_INITS	dta a(PART_1_INIT,PART_2_INIT,PART_3_INIT,PART_4_INIT)
+	dta a(PART_5_INIT,PART_6_INIT)
+
+	dta a(PART_A0,PART_NOP,PART_A1,PART_NOP,PART_A2,PART_NOP,PART_A3,PART_NOP)
+;	dta a(PART_NOP,PART_A0,PART_NOP,PART_A1,PART_NOP,PART_A2,PART_NOP,PART_A3)
+	
+	dta a(PART_EXIT,PART_NOP)
+;,PART_7_INIT)
+PARTS_RUNS	dta a(PART_1_RUN,PART_2_RUN,PART_3_RUN,PART_2_RUN)
+	dta a(PART_LO_HI,PART_HI_LO)
+
+	dta a(PART_WAIT,PART_LO_HI,PART_WAIT,PART_HI_LO,PART_WAIT,PART_LO_HI,PART_WAIT,PART_A3_RUN)
+	dta a(PART_WAIT,PART_NOP)
+;,PART_7_RUN)
+NEXT_PART	equ *
+	lda CURR_PART
+    asl @
+    tay
+    MWA PARTS_INITS,y PART_INIT+1
+    MWA PARTS_RUNS,y PART_RUN+1
+    lda #0
+    sta zer_convLo
+    sta zer_convHi
+PART_INIT	jsr PART_1_INIT
+	ldy CURR_PART
+    iny
+    cpy #PARTS_COUNT
+    bne PIN2
+ ift numen
+	ift	0
+	MVA #$ff HPOSP2
+	sta small_HPOSP2
+	sta small_HPOSP2+1
+	sta small_HPOSP2+2
+	sta small_HPOSP2+3
+	sta small_HPOSP2+4
+	eif
+	MWA #-2 VBL_clock
+ els
+    jmp *								* * 4FOX * TU WRZUCIC WYJSCIE Z EFEKTU
+ eif
+PIN2    sty CURR_PART
+	rts
+
+P_hlp	dta b(0)
+P_hlp2	dta b(0)
+PART_1_INIT	equ *                        ; from the darkness they came...
+    MWA #moveTexture PTR_moveTexture+1
+    MVA #14 PTR_sliceCount+1
+    MWA #textSourceBlack zer_textureHi
+    MWA #textSource0 zer_textureLo
+	MVA #$e1 PTR_addLo+1
+    MVA #0 P_hlp
+    rts
+PART_HI_LO  equ *
+    MWA #moveTexture PTR_moveTexture+1
+PART_1_RUN	equ *			; Hi->Lo
+    ldy P_hlp
+    jsr setConvs
+    iny
+    cpy #17
+    bne p1r
+    MWA #pom2+1 PTR_ldxpom+1
+;	MWA #moveTextureSimple PTR_moveTexture+1
+    jmp NEXT_PART
+p1r    sty P_hlp
+    rts
+
+PART_2_INIT equ *                        ; waited to see...
+	MWA #moveTextureSimple PTR_moveTexture+1
+    MVA #INIT_DELAY P_hlp    ; 4 secs
+    rts
+PART_2_RUN equ *			
+    ldy P_hlp
+    dey
+    bne *+5
+    jmp NEXT_PART
+    sty P_hlp
+    rts
+
+PART_3_INIT equ *                        ; solved a mistery...
+	rts
+PART_3_RUN equ *
+	jsr anim
+    lda ani_phase
+    ora ani_pos
+    bne *+5
+    jmp NEXT_PART
+    rts
+
+PART_4_INIT	equ *						 ; waited a bit...
+    MVA #50 P_hlp    ; 4s
+    rts
+
+PART_5_INIT equ *                        ; returned to darkness...
+    MWA #moveTexture PTR_moveTexture+1
+    MVA #16 P_hlp
+    rts
+PART_LO_HI	equ *
+    MWA #moveTexture PTR_moveTexture+1
+PART_5_RUN	equ *			; Lo->Hi
+    ldy P_hlp
+    jsr setConvs
+    dey
+    bpl p5r
+    MWA #pom2 PTR_ldxpom+1
+;    MWA #moveTextureSimple2 PTR_moveTexture+1
+    jmp NEXT_PART
+p5r    sty P_hlp
+    rts
+
+PART_6_INIT equ *						; and with the flash...
+    MVA #15 PTR_sliceCount+1
+    MWA #textSourceWhiteHi zer_textureHi
+    MWA #textSource0 zer_textureLo
+    MVA #0 P_hlp
+    rts
+
+PART_WAIT	equ *
+;    MWA #moveTextureSimple PTR_moveTexture+1
+	dec P_hlp2
+	beq *+3
+	rts
+	JMP NEXT_PART
+PART_NOP	rts
+PART_A0	equ *
+	MWA #textSource1 zer_textureHi
+	MVA #$e1 PTR_addHi+1
+	MVA #$50 P_hlp2		; DELAY
+	MVA #16 P_hlp		; for Lo->Hi
+	MWA #moveTextureSimple PTR_moveTexture+1
+	rts
+PART_A1	equ *
+	MVA #$1f PTR_addLo+1
+	MVA #$50 P_hlp2 	; DELAY
+	MVA #0 P_hlp		; for Hi->Lo
+	MWA #moveTextureSimple2 PTR_moveTexture+1
+	rts
+PART_A2	equ *
+	MVA #$21 PTR_addHi+1
+	MVA #$50 P_hlp2		; DELAY
+	MVA #16 P_hlp		; for Lo->Hi
+	MWA #moveTextureSimple PTR_moveTexture+1
+	rts	
+PART_A3	equ *
+	MVA #$50 P_hlp2 	; DELAY
+	MVA #0 P_hlp		; for Hi->Lo
+	MWA #textSourceBlack zer_textureLo
+	MWA #moveTextureSimple2 PTR_moveTexture+1
+	rts
+PA3_hlp	dta b($d0)
+PART_A3_RUN equ *
+	ldx PA3_hlp
+;;	stx HP2_VISIBLE
+;;	stx HP2_HIDDEN
+	dex
+	stx PA3_hlp
+	txa
+	and #1
+	beq *+5
+	jmp PART_HI_LO
+	rts
+PART_EXIT MVA #$80 P_hlp2
+	rts
+	
+	
+setConvs	equ *	; set zer_convLo & zer_convHi according to Y value
+    tya
+    clc
+    adc >textConvsHi
+    sta zer_convHi+1
+    tya
+    clc
+    adc >textConvsLo
+    sta zer_convLo+1
+	rts
+
+	ift	DEBUG
+qq  lda 53770
+    sta $d01a
+    jmp qq
+mark    lda 53770
+	ora #$0f
+    sta $d40a
+    sta $d01a
+    lda #0
+    sta $d40a
+    sta $d01a
+    rts
+	eif
+
+prepTextures equ *
+	mva	Banks_forEffect+Banks_TEXTURE_INDEX	^31
+    lda #$f0		; bit mask
+    ldx >texture2 	; source
+    ldy >textSource1	;destination
+    jsr prepTexture
+    lda #$0f
+    ldx >texture1
+    ldy >textSource0
+    jsr prepTexture
+;    lda #$f0
+;    ldx >texture4
+;    ldy >textSource3
+;    jsr prepTexture
+;    lda #$0f
+;    ldx >texture3
+;    ldy >textSource2
+;    jsr prepTexture
+    ldy #0
+_pt1	lda #0
+	sta textSourceBlack,y
+    sta textSourceBlack+$100,y
+	sta	TextLo,y	;erusux; he he
+	sta	TextHi,y	;erusux;!!!
+    lda #$F0
+    sta textSourceWhiteHi,y
+    sta textSourceWhiteHi+$100,y
+    lda #$0F
+    sta textSourceWhiteLo,y
+    sta textSourceWhiteLo+$100,y
+    iny
+    bne _pt1
+	rts
+
+slice_moves org *+MOVES_MAX
+slice_map equ *
+	dta b(0,1,2,3)
+    dta b(4,5,6,7)
+    dta b(8,9,10,11)
+    dta b(12,13,14,15)
+slice_empty dta b(15)
+; moves:
+; 00 - left
+; 01 - up
+; 02 - down
+; 03 - right
+; 00 <-> xor 03 <-> 03
+; 01 <-> xor 03 <-> 02
+ani_delay	dta b(0)
+ani_pos	dta b(MOVES_MAX)
+ani_phase	dta b(0),b(0)
+ani_procs	dta a(move_left,move_up,move_down,move_right)
+ani_back	dta b(0)
+ani_back_ptr dta a(0)
+anim	equ *
+;    rts
+    lda ani_delay
+    beq anim_go
+    dec ani_delay
+    rts
+anim_go ldy ani_phase
+	bne anim_cont
+    ldy ani_pos
+    bne anim_go2
+    RTS	; RUN should detect if ani_phase | ani_pos = 0
+anim_go2   dey
+    sty ani_pos
+	lda slice_moves,y
+    asl @
+    tax
+    MWA ani_procs,x anim_cont+1
+    ldy ani_back
+    tya
+    lsr @
+    ora >back
+    sta ani_back_ptr+1
+    tya
+    lsr @
+    ror @
+    and #$80
+    sta ani_back_ptr
+    iny
+    cpy #8
+    bne *+4
+    ldy #0
+    sty ani_back
+    ldy #0
+anim_cont jmp move_left
+anim_ex	rts
+
+slice_addr dta a(0)
+slice_curr dta b(0)
+
+
+;mu_tab dta a(0,0,80,160,240,320,400,480,560)
+mu_tab dta a(0,0,80,160,240,320,400,480,520)
+;mu_ypos dta b(0,0,2,4,6,8,10,12,14)
+mu_ypos dta b(0,0,2,4,6,8,10,12,13)
+;mu_cleanadd dta a(600,600,680,760,840,920,1000,1040,1040) ; MAX 600+440 (440+160=600)
+mu_cleanadd dta a(560,560,640,720,800,880,960,960,960) ; MAX 600+440 (440+160=600)
+; mu_ypos dta b(0,0,1,3,5,7,9,11,14)
+move_up equ * 		; black moved up, now move it down, so move piece up
+	cpy #0
+	bne mu_1
+    ldx slice_empty
+    lda slice_empty
+    clc
+    adc #4
+    sta slice_empty
+    lda slice_map+4,x
+	sta slice_map,x
+    sta slice_curr
+    txa
+    asl @
+    tax
+    MWA sl_scr,x slice_addr
+	ldy #9
+mu_1 dey
+	sty ani_phase
+    tya
+    asl @
+    tay
+    sty ani_phase+1
+    lda slice_addr
+    clc
+    adc mu_tab,y
+    sta zerms
+    lda slice_addr+1
+	adc mu_tab+1,y
+    sta zerms+1
+    ldy slice_curr
+    jsr moveslice
+	ldy ani_phase+1
+	lda slice_addr
+	clc
+	adc mu_cleanadd,y
+	sta zerms
+	lda slice_addr+1
+	adc mu_cleanadd+1,y
+	sta zerms+1	
+    ldx ani_phase
+    ldy mu_ypos,x
+    jsr back_hor
+	ldy ani_phase
+    bne mu_ex
+    lda #DELAY_BETWEEN
+	sta ani_delay
+mu_ex	rts
+
+;md_tab dta a(600,600,520,440,360,280,200,120,80)
+md_tab dta a(560,560,520,440,360,280,200,120,80)
+;md_ypos dta b(11,11,9,7,5,3,1,0,0)
+md_ypos dta b(10,10,9,7,5,3,1,0,0)
+;md_cleanadd dta a(440,440,360,280,200,120,40,0,0)
+md_cleanadd dta a(400,400,360,280,200,120,40,0,0)
+move_down equ * 	; black moved down, now move it up, so move piece down
+	cpy #0
+	bne md_1
+    lda slice_empty
+    sec
+    sbc #4
+    sta slice_empty
+    ldx slice_empty
+    lda slice_map,x
+	sta slice_map+4,x
+    sta slice_curr
+    txa
+    asl @
+    tax
+    MWA sl_scr,x slice_addr
+	ldy #9
+md_1 dey
+	sty ani_phase
+    tya
+    asl @
+    tay
+    sty ani_phase+1
+    lda slice_addr
+    clc
+    adc md_tab,y
+    sta zerms
+    lda slice_addr+1
+	adc md_tab+1,y
+    sta zerms+1
+    ldy slice_curr
+    jsr moveslice
+
+    ldy ani_phase+1
+    lda slice_addr
+    clc
+    adc md_cleanadd,y
+    sta zerms
+    lda slice_addr+1
+    adc md_cleanadd+1,y
+    sta zerms+1
+    ldx ani_phase
+    ldy md_ypos,x
+    jsr back_hor
+	ldy ani_phase
+    bne md_ex
+    lda #DELAY_BETWEEN
+	sta ani_delay
+md_ex	rts
+
+ml_tab dta b(0,0,1,2,3,4,5,6,7)
+ml_tabadd dta b(0,0,1,2,3,4,5,6,6)
+ml_tabadd8 dta b(8,8,9,10,11,12,13,14,14)
+move_left equ *		; black moved left, now move it right, so move piece left
+	cpy #0
+	bne ml_1
+    ldx slice_empty
+    inc slice_empty
+    lda slice_map+1,x
+	sta slice_map,x
+    sta slice_curr
+    txa
+    asl @
+    tax
+    MWA sl_scr,x slice_addr
+	ldy #9
+ml_1 dey
+	sty ani_phase
+    lda slice_addr
+    clc
+    adc ml_tab,y
+    sta zerms
+    lda slice_addr+1
+	adc #0
+    sta zerms+1
+    ldy slice_curr
+    jsr moveslice
+    ldx ani_phase
+    lda slice_addr
+    clc
+    adc ml_tabadd8,x
+    sta zerms
+    lda slice_addr+1
+    adc #0
+    sta zerms+1
+    ldy ml_tabadd,x
+    jsr back_vert
+	ldy ani_phase
+    bne ml_ex
+    lda #DELAY_BETWEEN
+	sta ani_delay
+ml_ex	rts
+
+mr_tab dta b(8,8,7,6,5,4,3,2,1)
+mr_tabadd dta b(6,6,5,4,3,2,1,0,0)
+move_right equ *	; black moved right, now move it left, so move piece right
+	cpy #0
+	bne mr_1
+    dec slice_empty
+    ldx slice_empty
+    lda slice_map,x
+	sta slice_map+1,x
+    sta slice_curr
+    txa
+    asl @
+    tax
+    MWA sl_scr,x slice_addr
+	ldy #9
+mr_1 dey
+	sty ani_phase
+    lda slice_addr
+    clc
+    adc mr_tab,y
+    sta zerms
+    lda slice_addr+1
+	adc #0
+    sta zerms+1
+    ldy slice_curr
+    jsr moveslice
+    ldx ani_phase
+    lda slice_addr
+    clc
+    adc mr_tabadd,x
+    sta zerms
+    lda slice_addr+1
+    adc #0
+    sta zerms+1
+    ldy mr_tabadd,x
+    jsr back_vert
+	ldy ani_phase
+    bne mr_ex
+    lda #DELAY_BETWEEN
+	sta ani_delay
+mr_ex	rts
+
+; draws one vertical line from 'back'
+back_vert	equ * ;y - xpos , zerms - scr offset
+    tya
+    ora ani_back_ptr
+    sta zer2
+    lda ani_back_ptr+1
+    sta zer2+1
+    lda zerms
+    sta zer1
+    ldy frame
+	lda scrHis,y
+	clc
+	adc zerms+1
+    sta zer1+1
+    ldx #SLICE_HEIGHT
+_bv0	ldy #0
+	lda (zer2),y
+    sta (zer1),y
+    iny
+    lda (zer2),y
+    sta (zer1),y
+	lda zer2
+	clc
+	adc #8
+	sta zer2
+;	bcc *+4
+;	inc zer2+1	    
+	lda zer1
+	clc
+	adc #40
+	sta zer1
+	bcc *+4
+	inc zer1+1
+	dex
+    bne _bv0
+    rts
+
+; draws *four* horizontal lines from 'back'
+back_hor	equ *	;y -ypos , zerms - scr offset 
+    tya
+    asl @
+    asl @
+    asl @
+    ora ani_back_ptr
+    sta zer2
+    lda ani_back_ptr+1
+    sta zer2+1
+    lda zerms		;scrs start at $2000
+    sta zer1
+	ldy frame
+	lda scrHis,y
+	clc
+	adc zerms+1
+    sta zer1+1
+    ldx #4
+_bh ldy #7
+_bh0	equ *
+	lda (zer2),y
+	sta (zer1),y
+    dey
+    bpl _bh0
+    lda zer2
+    clc
+    adc #8
+    sta zer2
+    lda zer1
+    clc
+    adc #40
+    sta zer1
+    bcc *+4
+    inc zer1+1
+    dex
+    bne _bh
+  	rts
+
+last_move	dta b(77)
+shloop	dta b(0)
+shtmp	dta b(0)
+
+shuffle equ *
+	ldy #0
+sh1	ldx slice_empty
+rerandom	lda 53770
+    and #3
+    eor #3
+    cmp last_move
+    beq rerandom
+    eor #3
+    sta slice_moves,y
+    cmp #0
+    beq sh_left
+    cmp #1
+    beq sh_up
+    cmp #2
+    beq sh_down
+sh_right	txa
+	and #3
+    cmp #3
+    beq rerandom
+    lda slice_map+1,x
+    sta slice_map,x
+    inc slice_empty
+    jmp sh_next
+sh_left	txa
+	and #3
+    beq rerandom
+    lda slice_map-1,x
+    sta slice_map,x
+    dec slice_empty
+    jmp sh_next
+sh_up	txa
+	and #$0c
+    beq rerandom
+    lda slice_map-4,x
+    sta slice_map,x
+    txa
+    sec
+    sbc #4
+    sta slice_empty
+    jmp sh_next
+sh_down txa
+	and #$0c
+    cmp #$0c
+    beq rerandom
+    lda slice_map+4,x
+    sta slice_map,x
+    txa
+    clc
+    adc #4
+    sta slice_empty
+sh_next lda slice_moves,y
+    sta last_move
+	iny
+    cpy #MOVES_MAX
+    bne sh1
+;;; shuffled, now modify code
+	ldy #15
+sh2	sty shloop
+	cpy slice_empty
+    beq sh2end
+    lda slice_map,y
+    sta shtmp
+    tya
+    asl @
+    tay
+    lda sl_scr,y
+    sta zerms
+    lda sl_scr+1,y
+    sta zerms+1
+    lda #1
+    sta frame
+    ldy shtmp
+    jsr moveslice
+    dec frame
+    ldy shtmp
+    jsr moveslice
+sh2end	ldy shloop
+    dey
+    bpl sh2
+    rts
+
+;;coli dta b(0)
+;;tmpy dta b(0)
+;;small_cols dta b(0,0,0,0,0)
+small_HPOSP2	dta $b0	;;b(0,0,0,0,0)
+
+	ift	!NUMEN
+nmi	pha
+	bit	^4f
+	bmi	dli
+	txa:pha
+	tya:pha
+* 	jsr	all
+	jsr MYALL
+	pla:tay
+	pla:tax
+	pla
+	rti
+	eif
+dli
+	txa:pha
+	lda	^4b
+	and	#2
+	bne	plsuplus
+	lda	^4b
+	lsr	@
+	sbc	#3
+	tax
+cyp1	lda:tax	div15,x
+	sta	^4a
+	lda	smallColors,x
+	sne:mva	#$b0	^02
+	sta	^19
+	pla:tax
+	pla
+	rti
+
+plsuplus
+	lda	^4b
+	cmp	#7+112
+	bcs	dli_last
+	lsr	@
+	sbc	#3
+	tax
+cyp2	lda:tax	div15,x
+	sta	^4a
+	mva	#13	^45
+	mva	#3	^45
+	lda	smallColors,x
+	sne:mva	#$b0	^02
+	sta	^19
+	pla:tax
+	pla:rti
+
+dli_last
+	sta	^4a
+	mva	#13	^45
+	mva	#3	^45
+	mva	#0	^19
+	pla:tax
+	pla:rti
+
+	ift	0
+    sty tmpy
+    ldy coli
+    iny
+    lda small_cols,y
+    sty coli
+    sta $d40a
+    sta COLPF3
+    lda small_HPOSP2,y
+    sta HPOSP2
+;    sty coli
+    ldy tmpy
+    pla
+    rti
+    eif
+
+prepTabSmall equ *
+	lda #0
+	sta _pts1+1
+	tay
+	tax
+_pts1	stx mod15
+	sta div15,y
+	inx
+	cpx #SLICE_HEIGHT			;15 or 14
+	bne _pts2
+	ldx #0
+	clc
+	adc #1
+_pts2	inc _pts1+1
+	iny
+	bne _pts1
+_pts3	tya
+:4	lsr @
+	sta hi2lo,y
+	iny
+	bne _pts3
+	rts
+
+actSmallY	dta b(64)
+plsSmallY	dta b(1)
+smallY	dta b(0)
+
+smallColors	equ *
+	dta b($10,$70,$d0,$30,$90,$f0,$50,$b0,$20,$80,$e0,$00,$a0,$60,$a0)
+	dta b($10,$70,$d0,$30,$90,$f0,$50,$b0,$20,$80,$e0,$40,$a0,$60,$a0)
+smallDelay	dta b(SMALL_DELAY,0)
+;;HP2_VISIBLE dta b($ff)
+;;HP2_HIDDEN	dta b($ff)	;$b0
+anim_small	equ *
+	lda smallDelay
+	beq ass
+	dec smallDelay
+;;	lda #$b0
+;;	sta small_HPOSP2
+	rts
+ass	equ *
+ mva #$ff small_HPOSP2
+;	lda smallDelay+1		; ? :)
+;	eor #1
+;	sta smallDelay+1
+;	bne *+3
+;	rts
+	mva	Banks_forEffect+Banks_TEXTURE_INDEX	^31
+
+	lda	smallY
+	lsr	@
+	bcc	ncdl
+	asl	@
+	eor	#14
+	tax
+	bne	cdl_not0
+	mva	#$6f	dl+1
+	lda	#$2f
+	bne	cdl_cont	!
+cdl_not0
+	mva	#$2f	dl+1,x
+cdl_cont
+	sta	dl+1+14,x
+	sta	dl+1+2*14,x
+	sta	dl+1+3*14,x
+ncdl
+
+	lda actSmallY
+	clc
+	adc plsSmallY
+	sta actSmallY
+	tax
+	ldy sinusSmall,x
+; ldy #164
+; 	ldy #15			* delme
+	sty	cyp1+1
+	sty	cyp2+1
+ cpy #80
+ scs
+ mva	#$40	smallColors+11
+	lda mod15,y
+	sta smallY
+	lsr	@
+	bcc	nsdl
+	asl	@
+	eor	#14
+	tax
+	cmp	#2
+	bne	sdl_not0
+	lda	#$6f+$80
+	sta	dl+1
+	lda	#$2f+$80
+	bne	sdl_cont	!
+sdl_not0
+	lda	#$2f+$80
+	sta	dl+1,x
+sdl_cont
+	sta	dl+1+14,x
+	sta	dl+1+2*14,x
+	sta	dl+1+3*14,x
+nsdl
+ ift 0
+	ldx div15,y
+	bne *+7
+	lda #$ff
+	sta HP2_HIDDEN
+	ldy HP2_VISIBLE
+	cpx #3+4
+	bmi *+5
+	ldy HP2_HIDDEN
+	sty small_HPOSP2+0
+	cpx #3+3
+	bmi *+5
+	ldy HP2_HIDDEN
+	sty small_HPOSP2+1
+	cpx #3+2
+	bmi *+5
+	ldy HP2_HIDDEN
+	sty small_HPOSP2+2
+	cpx #3+1
+	bmi *+5
+	ldy HP2_HIDDEN
+	sty small_HPOSP2+3
+;	cmp #0
+;	beq ass0
+	cpx #3+0
+	bmi *+5
+	ldy HP2_HIDDEN
+ass0 sty small_HPOSP2+4
+
+	lda smallColors,x
+	sta small_cols+0
+	lda smallColors+1,x
+	sta small_cols+1
+	lda smallColors+2,x
+	sta small_cols+2
+	lda smallColors+3,x
+	sta small_cols+3
+	ldy smallY
+	beq *+5
+	lda smallColors+4,x
+	sta small_cols+4
+    lda #0
+old_dl1 sta dl1+7
+old_dl2 sta dl1+7
+old_dl3 sta dl1+7
+old_dl4	sta dl1+7
+	lda #SLICE_HEIGHT-1
+	sec
+	sbc smallY
+	asl @
+	sta zer
+    asl @
+    adc zer			
+    adc #7			;*6, +7
+    sta zer
+    sta old_dl1+1
+    lda frame
+    eor #1
+    tay
+    lda dls,y
+    sta zer+1
+    sta old_dl1+2
+    ldy #0
+    lda #$80
+    sta (zer),y
+    lda zer
+    clc
+    adc #6*SLICE_HEIGHT
+    sta zer
+    sta old_dl2+1
+    lda zer+1
+    adc #0
+    sta zer+1
+    sta old_dl2+2
+    ldy #0
+    lda #$80
+    sta (zer),y
+    lda zer
+    clc
+    adc #6*SLICE_HEIGHT
+    sta zer
+    sta old_dl3+1
+    lda zer+1
+    adc #0
+    sta zer+1
+    sta old_dl3+2
+    ldy #0
+    lda #$80
+    sta (zer),y
+    
+    lda smallY
+    bne blah7
+    MWA #blah777 old_dl4+1
+    rts
+blah7    lda zer
+    clc
+    adc #6*SLICE_HEIGHT
+    sta zer
+    sta old_dl4+1
+    lda zer+1
+    adc #0
+    sta zer+1
+    sta old_dl4+2
+    ldy #0
+    lda #$80
+    sta (zer),y
+ eif
+    rts
+
+pom dta b(0)
+blah777	dta b(0)
+frame   dta b(0)
+pom2    dta b(0,143)
+scrHis dta b(>scr2,>scr1)
+;erusux;oldbank	dta b(0)	; dla emulkow
+xval	dta b(0)
+
+MYALL	equ *
+;;	mva	#0	^19
+;    jsr anim_small
+;;   	lda small_cols
+;;	sta COLPF3
+	lda small_HPOSP2
+	sta HPOSP2
+;;	lda #0
+;;	sta coli
+all	mva	#{rts}	all
+    jsr anim_small
+;:DEBUG    jsr mark
+PART_RUN	jsr PART_1_RUN                                 --------------------------------------------------------
+;:DEBUG	jsr mark
+;    jsr anim_small
+maincolor    lda #00
+    sta $d01a
+;    jsr tunnel
+;:DEBUG    jsr mark
+;    jsr anim
+;    lda #$90	; coby DLI sie nie pomieszali :)
+;    cmp $d40b
+;    bne *-3
+;:DEBUG    jsr mark
+
+tunnel  equ *
+    lda frame
+    eor #1
+    sta frame
+   	tay
+    asl @
+    sta _bankadd+1
+    tax
+    MWA smoves,x _ptrMoveSmall+1
+;    lda sbanks,y
+;    sta _smallbank+1
+	mva	scrHis,y	dl_scrh
+    lda pom     ; TU WLASCIWY TUNEL
+    clc
+    adc #$01
+    sta pom
+    tax
+    lda csin,x  ;
+    and #$7f
+    sta xval
+PTR_sliceCount	ldy #15
+;erusux;	sty oldbank
+_loopslice2	sty loopslice
+	lda sl_banks,y
+    clc
+_bankadd adc #0
+	tay
+    lda sl_bankvals,y
+;erusux;    cmp oldbank
+;erusux;    beq *+8
+;erusux;    sta oldbank
+    sta $d301
+    lda loopslice
+    asl @
+	tay
+    lda sl_code,y
+    sta _jsrslice+1
+    lda sl_code+1,y
+    sta _jsrslice+2
+	ldx xval
+_jsrslice	jsr $4800
+	ldy loopslice
+    dey
+    bpl _loopslice2
+; PART_RUN	jsr PART_1_RUN                                 --------------------------------------------------------
+
+	mva	Banks_forEffect+Banks_SMALL_INDEX	^31
+    ldx xval
+    jsr codeSmall
+    ldx smallY
+_ptrMoveSmall    jsr moveSmall1
+    lda pom2    
+    clc
+PTR_addHi    adc #$1f
+    sta pom2
+    sta zer_textureHi
+    lda pom2+1
+    clc
+PTR_addLo    adc #$e1
+    sta pom2+1
+    sta zer_textureLo
+	mva	Banks_forEffect+Banks_TEXTURE_INDEX	^31
+PTR_ldxpom	ldx pom2+1
+PTR_moveTexture	jsr moveTexture
+	mva	#{lda #}	all
+; PART_RUN	jsr PART_1_RUN                                 --------------------------------------------------------
+:DEBUG	jsr mark
+    rts
+
+moveSlice equ *  ; y= #slice, zerms=a(scr)
+    MWA zerms zer
+    sty hlp
+    lda frame
+    eor #1
+    asl @
+    sta hlp1
+    adc sl_banks,y
+    tax
+    lda sl_bankvals,x
+    sta $d301
+    ldx hlp1
+    lda zer
+    add sl_scrvals,x
+    sta zer
+    lda zer+1
+    adc sl_scrvals+1,x
+    sta zer+1
+
+    tya
+    asl @
+    tay
+    lda sl_code,y 		;#0
+    sta zer1
+    lda sl_code+1,y
+;    adc #0
+    sta zer1+1
+	ldx #SLICE_HEIGHT
+_loopy2 stx loopy
+	lda zer
+	cmp #$f9
+    jcc _fast
+	ldx zer
+    ldy #13
+    txa
+    sta (zer1),y
+    lda zer+1
+    iny
+    sta (zer1),y 
+    inx
+    bne *+4
+    inc zer+1
+    ldy #28
+    txa
+    sta (zer1),y
+    lda zer+1
+    iny
+    sta (zer1),y 
+    inx
+    bne *+4
+    inc zer+1
+    ldy #43
+    txa
+    sta (zer1),y
+    lda zer+1
+    iny
+    sta (zer1),y 
+    inx
+    bne *+4
+    inc zer+1
+    ldy #58
+    txa
+    sta (zer1),y
+    lda zer+1
+    iny
+    sta (zer1),y 
+    inx
+    bne *+4
+    inc zer+1
+    ldy #73
+    txa
+    sta (zer1),y
+    lda zer+1
+    iny
+    sta (zer1),y 
+    inx
+    bne *+4
+    inc zer+1
+    ldy #88
+    txa
+    sta (zer1),y
+    lda zer+1
+    iny
+    sta (zer1),y 
+    inx
+    bne *+4
+    inc zer+1
+    ldy #103
+    txa
+    sta (zer1),y
+    lda zer+1
+    iny
+    sta (zer1),y 
+    inx
+    bne *+4
+    inc zer+1
+    ldy #118
+    txa
+    sta (zer1),y
+    lda zer+1
+    iny
+    sta (zer1),y 
+;	stx zer
+
+;	lda zer	;increase screen ptr
+    txa
+    clc
+    adc #33
+    sta zer
+    bcc *+4
+    inc zer+1
+
+    jmp _after
+
+_fast	lda zer+1
+    ldy #14
+    sta (zer1),y
+    ldy #29
+    sta (zer1),y
+    ldy #44
+    sta (zer1),y
+    ldy #59
+    sta (zer1),y
+    ldy #74
+    sta (zer1),y
+    ldy #89
+    sta (zer1),y
+    ldy #104
+    sta (zer1),y
+    ldy #119
+    sta (zer1),y
+    lda zer
+    clc
+    ldy #13
+    sta (zer1),y
+    adc #1
+    ldy #28
+    sta (zer1),y
+    adc #1
+    ldy #43
+    sta (zer1),y
+    adc #1
+    ldy #58
+    sta (zer1),y
+    adc #1
+    ldy #73
+    sta (zer1),y
+    adc #1
+    ldy #88
+    sta (zer1),y
+    adc #1
+    ldy #103
+    sta (zer1),y
+    adc #1
+    ldy #118
+    sta (zer1),y
+
+	lda zer	;increase screen ptr
+    clc
+    adc #40
+    sta zer
+    bcc *+4
+    inc zer+1
+
+_after    lda zer1 ;increase code ptr
+    clc
+    adc #120
+    sta zer1
+    bcc *+4
+    inc zer1+1
+
+    ldx loopy
+    dex
+    jne _loopy2
+    rts
+
+
+; create 2*17 pages with color transitions
+hi16	dta b(0)
+lo16	dta b(0)
+prepConvTexture equ *
+	mva	Banks_forEffect+Banks_TEXTURE_INDEX	^31
+    MWA #textConvsLo _pct_Lo+1
+    MWA #textConvsHi _pct_Hi+1
+    ldy #0
+_pct_ratio	sty hlp
+	ldy #0
+_pct_value	sty hlp2
+    tya
+    lsr @
+    lsr @
+    lsr @
+    lsr @
+    sta hi16
+    tya
+    and #$0f
+    sta lo16
+
+    ldy hlp		; number of lo multiplications
+	lda #16
+    sec
+    sbc hlp
+    tax			; number of hi multiplications
+    lda #8
+_pct1	cpx #0
+	beq _pct2
+    clc
+    adc hi16
+    dex
+    bne _pct1
+_pct2   cpy #0
+    beq _pct3
+    clc
+    adc lo16
+    dey
+    bne _pct2
+_pct3   equ *
+	and #$f0
+_pct_Hi	sta textConvsHi
+	lsr @
+    lsr @
+    lsr @
+    lsr @
+_pct_Lo	sta textConvsLo
+
+    inc _pct_Lo+1
+    inc _pct_Hi+1
+
+    ldy hlp2
+    iny
+    bne _pct_value
+
+    inc _pct_Lo+2
+    inc _pct_Hi+2
+
+    ldy hlp
+    iny
+    cpy #17
+    bne _pct_ratio
+    rts
+
+; small routine copying one page into two with ANDing
+; A= bitmask, X= >src, Y= >dst
+prepTexture equ *
+    stx _ptxs+2
+    sty _ptxd1+2
+    iny
+    sty _ptxd2+2
+    sta _ptxmask+1
+	mva	Banks_forEffect+Banks_TEXTURE_INDEX	^31
+	ldy #0
+_ptxs	lda texture,y
+_ptxmask	and #$f0
+_ptxd1	sta textSource1,y
+_ptxd2	sta textSource1+$100,y
+	iny
+    bne _ptxs
+    rts
+
+	ift	0
+prepDL  equ *
+    lda <dl1
+    sta pd1+1
+    sta pd2+1
+    lda >dl1
+    sta pd1+2
+    lda >dl2
+    sta pd2+2
+    lda <scr1
+    sta zer1
+    lda <scr2
+    sta zer2
+    lda >scr1
+    sta zer1+1
+    lda >scr2
+    sta zer2+1
+    ldy #SCR_HEIGHT-1
+prp_dl1 equ *
+	cpy #SCR_HEIGHT-1
+	bne prp_dl_A
+    lda #$4f
+	jsr pd
+    lda zer1
+    jsr pd1
+    lda zer1+1
+    jsr pd1
+    lda zer2
+    jsr pd2
+    lda zer2+1
+    jsr pd2
+    jmp prp_dl_B
+prp_dl_A	lda #$0f
+	jsr pd
+prp_dl_B    lda #0
+    jsr pd
+    lda #$4f
+   	jsr pd
+    lda zer1
+    jsr pd1
+    lda zer1+1
+    jsr pd1
+    lda zer2
+    jsr pd2
+    lda zer2+1
+    jsr pd2
+    lda #0
+;    cpy #SCR_HEIGHT-7
+;    beq prp_dl10
+;    cpy #SCR_HEIGHT-22
+;    beq prp_dl10
+;    cpy #SCR_HEIGHT-37
+;	beq prp_dl10
+;    cpy #SCR_HEIGHT-52
+;    bne prp_dl11
+;prp_dl10 ora #$80
+prp_dl11    jsr pd
+
+    lda zer1
+    clc
+    adc #40
+    sta zer1
+    bcc *+4
+    inc zer1+1
+    lda zer2
+    clc
+    adc #40
+    sta zer2
+    bcc *+4
+    inc zer2+1
+
+    dey
+    bne prp_dl1
+
+	lda #$0f
+	jsr pd
+;    lda #$4f
+;    jsr pd
+;    lda zer1
+;    jsr pd1
+;    lda zer1+1
+;    jsr pd1
+;    lda zer2
+;    jsr pd2
+;    lda zer2+1
+;    jsr pd2
+    lda #0
+    jsr pd
+    lda #$4f
+    jsr pd
+    lda zer1
+    jsr pd1
+    lda zer1+1
+    jsr pd1
+    lda zer2
+    jsr pd2
+    lda zer2+1
+    jsr pd2
+            
+    lda #$41
+    jsr pd
+    lda <dl1
+    jsr pd
+    lda >dl1
+    jsr pd1
+    lda >dl2
+    jmp pd2
+pd  jsr pd2
+pd1 sta dl1
+    inc pd1+1
+    bne *+5
+    inc pd1+2
+    rts
+pd2 sta dl2
+    inc pd2+1
+    bne *+5
+    inc pd2+2
+    rts    
+
+	eif
+
+sscrs dta a(scr1+32,scr2+32)
+smoves dta a(moveSmall1,moveSmall2)
+
+;prepare code moving from dataSmall onto screen
+prepMoveSmall equ *
+	mva	Banks_forEffect+Banks_SMALL_INDEX	^31
+    ldy #0
+_pm_buf	sty loopbuf
+	tya
+    asl @
+    tay
+    MWA sscrs,y zer3
+    MWA smoves,y _pm+1
+
+    ldx #0
+_pm_x	stx loopx
+	txa
+    asl @	;*32
+    asl @
+    asl @
+    asl @
+    asl @
+    sta hlp1	; offset in dataSmall
+    txa
+    clc
+    adc zer3
+    sta zer4
+    lda zer3+1
+    adc #0
+    sta zer4+1 ; skrin address
+    
+    ldx #0
+_pm_y	stx loopy
+	lda #$bd	; LDA dataSmall,X
+    jsr _pm
+    txa
+    ora hlp1
+    jsr _pm
+    lda >dataSmall
+    jsr _pm
+
+    MWA zer4 zer5
+   	ldy #4
+_pm_s	lda #$8d	; STA skrin
+	jsr _pm
+    lda zer5
+    jsr _pm
+    lda zer5+1
+    jsr _pm
+    lda zer5
+    clc
+    adc <SLICE_HEIGHT*40
+    sta zer5
+    lda zer5+1
+    adc >SLICE_HEIGHT*40
+    sta zer5+1
+    dey
+    bne _pm_s
+
+    lda zer4
+    clc
+    adc #40
+    sta zer4
+    bcc *+4
+    inc zer4+1
+
+    inx
+    cpx #SLICE_HEIGHT
+    bne _pm_y
+
+    ldx loopx
+    inx
+    cpx #8
+    bne _pm_x
+    
+    lda #$60
+    jsr _pm
+
+    ldy loopbuf     
+    iny
+    cpy #2
+    jne _pm_buf
+	rts
+
+_pm sta moveSmall1
+    INW _pm+1
+    rts
+
+
+;prepare code writing into dataSmall
+prepCodeSmall equ *
+	mva	Banks_forEffect+Banks_SMALL_INDEX	^31
+	MWA #codeSmall _ps+1
+    ldx #0
+_ps_x 	stx loopx
+    txa					; x * 8
+    asl @
+    asl @
+    asl @
+    sta zer1
+    sta zer2
+    lda >atab
+    sta zer1+1
+    lda >rtab
+    sta zer2+1
+	lda loopx	        ; *32
+    asl @				
+    asl @
+    asl @
+    asl @
+    asl @
+    sta hlp1            ; offset in dataSmall
+
+    ldx #0
+_ps_y	stx loopy
+	ldy #0
+    lda #$bc        ;code: LDY MojOkrag,x 
+    jsr _ps
+    lda (zer1),y    
+    jsr _ps			
+    lda (zer2),y
+    tay
+    lda cadr,y
+    jsr _ps			
+    lda #$b9        ;code: LDA TextureHi,Y
+    jsr _ps
+    lda <TextHi
+    jsr _ps
+    lda >TextHi
+    jsr _ps
+
+	ldy #4
+    lda #$bc        ;code: LDY MojOkrag,x
+    jsr _ps
+    lda (zer1),y
+    jsr _ps			
+    lda (zer2),y
+    tay
+    lda cadr,y
+    jsr _ps			
+    lda #$19        ;code: ORA TextureHi,Y
+    jsr _ps
+    lda <TextLo
+    jsr _ps
+    lda >TextLo
+    jsr _ps
+
+    lda #$8d		;code: STA dataSmall
+    jsr _ps
+    lda hlp1
+    jsr _ps
+    lda >dataSmall	
+    jsr _ps
+    lda #$8d		;code: STA dataSmall+15
+    jsr _ps
+    lda hlp1
+    clc
+    adc #SLICE_HEIGHT		;15
+    jsr _ps
+    lda >dataSmall
+    jsr _ps
+
+    inc zer1+1	;tak sie przyjemnie sklada ze 4*64=256 :)
+    inc zer2+1
+
+    inc hlp1
+    ldx loopy
+    inx
+    cpx #SLICE_HEIGHT			;#15
+    bne _ps_y
+
+    ldx loopx
+    inx
+    cpx #8
+    jne _ps_x
+    
+    lda #$60
+_ps sta codeSmall
+    INW _ps+1
+    rts
+
+	ift	!NUMEN
+Banks_forEffect	dta	$82,$86,$8a,$8e,$e2,$e6
+	eif
+sl_bankvals	equ	Banks_forEffect
+sl_scrvals equ *
+	dta a(scr1,scr2)
+sl_banks equ *
+	dta b(0,0,0,0)   ;  0  1  2  3
+    dta b(0,0,0,0)   ;  4  5  6  7
+    dta b(1,1,1,1)   ;  8  9 10 11
+    dta b(1,1,1,1)   ; 12 13 14 15
+sl_code equ *
+	dta a($4000,$4800,$5000,$5800)
+	dta a($6000,$6800,$7000,$7800)
+	dta a($4000,$4800,$5000,$5800)
+	dta a($6000,$6800,$7000,$7800)
+TAB_NB	equ SLICE_HEIGHT*$40
+sl_tab equ *
+	dta a(0*TAB_NB,0*TAB_NB+$10,0*TAB_NB+$20,0*TAB_NB+$30)
+	dta a(1*TAB_NB,1*TAB_NB+$10,1*TAB_NB+$20,1*TAB_NB+$30)
+	dta a(2*TAB_NB,2*TAB_NB+$10,2*TAB_NB+$20,2*TAB_NB+$30)
+	dta a(3*TAB_NB,3*TAB_NB+$10,3*TAB_NB+$20,3*TAB_NB+$30)
+;	dta a($0000,$0010,$0020,$0030)
+;	dta a($03c0,$03d0,$03e0,$03f0)
+;	dta a($0780,$0790,$07a0,$07b0)
+;	dta a($0b40,$0b50,$0b60,$0b70)
+SCR_NB	equ SLICE_HEIGHT*40
+sl_scr equ *
+	dta a(0*SCR_NB,0*SCR_NB+8,0*SCR_NB+16,0*SCR_NB+24)
+	dta a(1*SCR_NB,1*SCR_NB+8,1*SCR_NB+16,1*SCR_NB+24)
+	dta a(2*SCR_NB,2*SCR_NB+8,2*SCR_NB+16,2*SCR_NB+24)
+	dta a(3*SCR_NB,3*SCR_NB+8,3*SCR_NB+16,3*SCR_NB+24)
+
+loopbuf    dta b(0)
+loopslice  dta b(0)
+loopx      dta b(0)
+loopy      dta b(0)
+
+prepCode    equ *
+    ldy #1
+_loopbuf    sty loopbuf
+	tya
+    asl @
+    tay
+    sty hlp
+    ldx #15
+_loopslice	stx loopslice
+    lda hlp
+    ADD sl_banks,x
+    tay
+    lda sl_bankvals,y
+    sta $d301
+    txa
+    asl @
+    tax
+    ldy hlp
+    lda sl_scrvals,y
+    ADD sl_scr,x
+    sta zer3
+    lda sl_scrvals+1,y
+    adc sl_scr+1,x
+    sta zer3+1
+
+    lda <atab
+    ADD sl_tab,x
+    sta zer1
+    lda >atab
+    adc sl_tab+1,x
+    sta zer1+1
+    lda <rtab
+    ADD sl_tab,x
+    sta zer2
+    lda >rtab
+    adc sl_tab+1,x
+    sta zer2+1
+
+    MWA sl_code,x ppc+1
+
+    MVA #SLICE_HEIGHT loopy
+_loopy equ *
+	MVA #8 loopx
+    ldy #0
+_loopx equ *
+    lda #$bc        ;LDY MojOkrag,x
+    jsr ppc
+    lda (zer1),y
+    jsr ppc
+    lda (zer2),y
+    tax
+    lda cadr,x
+    jsr ppc
+    lda #$b9        ;LDA TextureHi,Y
+    jsr ppc
+    lda <TextHi
+    jsr ppc
+    lda >TextHi
+    jsr ppc
+   	
+    iny
+    
+    lda #$bc        ;LDY MojOkrag,x
+    jsr ppc
+    lda (zer1),y
+    jsr ppc
+    lda (zer2),y
+    tax
+    lda cadr,x
+    jsr ppc
+    lda #$19        ;ORA TextureHi,Y
+    jsr ppc
+    lda <TextLo
+    jsr ppc
+    lda >TextLo
+    jsr ppc
+
+    iny
+
+    lda #$8d        ;StA Skrin
+    jsr ppc
+    lda zer3
+    jsr ppc
+    lda zer3+1
+    jsr ppc
+
+    INW zer3
+
+    dec loopx
+    bne _loopx
+    lda zer1
+    ADD #64
+    sta zer1
+    bcc *+4
+    inc zer1+1
+    lda zer2
+    ADD #64
+    sta zer2
+    bcc *+4
+    inc zer2+1
+    lda zer3
+    ADD #32 		;40 - 8
+    sta zer3
+    bcc *+4
+    inc zer3+1
+    lda zer+1
+:DEBUG    sta $d01a
+    dec loopy
+    jne _loopy
+    
+    lda #$60
+    jsr ppc
+
+    ldx loopslice
+    dex
+    jpl _loopslice
+    ldy loopbuf
+    dey
+    jpl _loopbuf
+    rts
+ppc sta $4000
+    INW ppc+1
+    rts
+
+prepMoveTexture     equ *
+    MWA #moveTexture _mt+1
+	mva	Banks_forEffect+Banks_TEXTURE_INDEX	^31
+    ldy #0
+_mt1    sty hlp
+	lda #$a0	; ldy #y
+   	jsr _mt
+    tya
+    jsr _mt
+    lda #$b1	; lda (zer_textureHi),y
+    jsr _mt
+    lda #zer_textureHi
+    jsr _mt
+    lda #$11	; ora (zer_textureLo),y
+    jsr _mt
+    lda #zer_textureLo
+    jsr _mt
+    lda #$a8	; tay
+    jsr _mt
+    lda #$b1	; lda (zer_convLo),y
+    jsr _mt
+    lda #zer_convlo
+    jsr _mt
+    lda #$8d	; sta TextLo+y
+    jsr _mt
+    tya
+    jsr _mt
+    lda >TextLo
+    jsr _mt
+    lda #$b1	; lda (zer_convHi),y
+    jsr _mt
+    lda #zer_convhi
+    jsr _mt
+    lda #$8d	; sta TextHi+y
+    jsr _mt
+    tya
+    jsr _mt
+    lda >TextHi
+    jsr _mt
+    iny
+    bne _mt1
+    lda #$60
+    jsr _mt
+
+    MWA #moveTextureSimple _mt+1
+    MWA #moveTextureSimple2 _mtXXX+1
+    ldy #0
+_mt2    sty hlp
+    lda #$bc    ; LDY DblText,X			;1&2
+    jsr _mt
+    jsr _mtXXX
+    lda hlp
+    jsr _mt
+    jsr _mtXXX
+;    jsr _mtXXX
+    lda >textSource0
+    jsr _mt
+    lda >textSource1
+    jsr _mtXXX
+    lda #$8c    ; STY TextLo			;1
+    jsr _mt
+    lda hlp
+    jsr _mt
+    lda >TextLo
+    jsr _mt
+    lda #$b9    ; lda lo2hi,y			;1
+    jsr _mt
+    lda <lo2hi
+    jsr _mt
+    lda >lo2hi
+    jsr _mt
+    lda #$8d    ; STA TextHi			;1
+    jsr _mt
+	lda #$8c	; STY TextHi			;2
+    jsr _mtXXX
+    lda hlp
+    jsr _mt
+    jsr _mtXXX
+    lda >TextHi
+    jsr _mt
+    jsr _mtXXX
+    lda #$b9	; lda hi2lo,y			;2
+    jsr _mtXXX
+    lda <hi2lo
+    jsr _mtXXX
+    lda >hi2lo
+    jsr _mtXXX
+    lda #$8d	; STA textlo			;2
+    jsr _mtXXX
+    lda hlp
+    jsr _mtXXX
+    lda >TextLo
+    jsr _mtXXX
+    ldy hlp
+    iny
+    bne _mt2
+    lda #$60
+    jsr _mtXXX
+_mt  sta moveTexture
+    INW _mt+1
+    rts
+_mtXXX sta moveTexture
+	INW _mtXXX+1
+	rts
+
+prepCTab    equ *
+    lda <ctab+49*128
+    sta zer1
+    lda >ctab+49*128
+    sta zer1+1
+    ldy #49
+_pc0    sty hlp
+    lda #0
+    sta zer2
+    lda #$80
+    sta zer3
+    lda cadr,y
+    sta zer2+1
+    sta zer3+1
+    ldy #$7f
+_pc1    lda (zer1),y
+    sta (zer2),y
+    sta (zer3),y
+    dey
+    bpl _pc1
+    lda zer1
+    sec
+    sbc #$80
+    sta zer1
+    bcs *+4
+    dec zer1+1
+    ldy hlp
+    dey
+    bpl _pc0
+    rts
+
+cleanmem	equ * ;	A-HiAddress, X-#pages
+	sta zer+1
+	ldy #0
+	sty zer
+	tya
+_clmem	sta (zer),y
+	iny
+	bne _clmem
+	inc zer+1
+	dex
+	bne _clmem
+	rts
+		
+ org back
+	ins  'tqa.dat'
+
+ org texture1
+    ins 'bmap4.dat'
+ org texture2
+    ins 'bmap7.dat'
+; org texture3
+;    ins 'bmap8.dat'		* 
+; org texture4
+;    ins 'bmap2.dat'		* 
+
+ org rtab
+    ins 'tabr.dat',64*2,64*56
+
+ org atab
+    ins 'taba.dat',64*2,64*56
+    
+ org ctab
+    ins 'tabc.dat'
+ 
+ org sinusSmall
+ dta b(sin(82,82,256))
+;	dta b(sin(104,104,256)) 
+
+	org	dl
+	dta	$f0
+dl_scrh	equ	*+2
+	dta	$6f,a(scr1),$8f
+:27	dta	$2f,$8f
+	dta	$41,a(dl)
+
+    end

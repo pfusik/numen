@@ -1,0 +1,62 @@
+* Map
+; sectors
+World_sectorFlags	equ	$7000
+World_sectorEffect	equ	$7040
+World_sectorParameter	equ	$7080
+World_sectorWall	equ	$70c0
+World_ceilingZ		equ	$7100
+World_floorZ		equ	$7140
+World_ceilingPicture	equ	$7180
+World_floorPicture	equ	$71c0
+; walls
+World_wallFlags		equ	$7200
+World_wallX_lo		equ	$7300
+World_wallX_hi		equ	$7400
+World_wallY_lo		equ	$7500
+World_wallY_hi		equ	$7600
+World_wallNext		equ	$7700
+World_wallReverse	equ	$7800
+World_wallSector	equ	$7900
+World_wallPicture	equ	$7a00
+; sprites
+World_spriteFlags	equ	$7b00
+World_spriteX_lo	equ	$7b40
+World_spriteX_hi	equ	$7b80
+World_spriteY_lo	equ	$7bc0
+World_spriteY_hi	equ	$7c00
+World_spriteZ		equ	$7c40
+World_spriteSector	equ	$7c80
+World_spritePicture	equ	$7cc0
+World_spriteWidth	equ	$7d00
+World_spriteHeight	equ	$7d40
+; total
+World_sectors		equ	$7d80
+World_walls		equ	$7d81
+World_sprites		equ	$7d82
+World_beginX		equ	$7d83
+World_beginY		equ	$7d85
+World_beginZ		equ	$7d87
+World_beginAngle	equ	$7d88
+World_beginSector	equ	$7d89
+World_colors		equ	$7d8a
+
+* Tiles
+; sky
+Picture_skyColumn_lo	equ	$7da0
+Picture_skyColumn_hi	equ	$7e00
+; sprites
+Picture_column_lo	equ	$7e80
+Picture_column_hi	equ	$7ea0
+Picture_width		equ	$7ec0
+Picture_height		equ	$7ee0
+; graphics
+	ift	numen
+Picture_columns		equ	$e000
+	els
+Picture_columns		equ	$9800
+	eif
+
+* Track
+World_beginHorizon	equ	$6e00
+World_track		equ	$6e01
+			end

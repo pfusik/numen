@@ -1,0 +1,163 @@
+	icl	'../pilot.asx'
+	icl	'map.asx'
+	icl	'tiles.asx'
+	icl	'track.asx'
+
+	ift	NUMEN
+Picture_SKY_WIDTH	equ	32
+
+Math_word	equ	$97
+Math_word2	equ	$99
+Math_sin	equ	$4700
+Math_cos	equ	Math_sin+$40
+	eif
+
+Duke_DOOR_SECTOR	equ	$15
+Duke_BOX_WALL		equ	164
+Duke_BOX_CENTERX	equ	[$880+$a00]/2
+Duke_BOX_CENTERY	equ	[$1300+$1480]/2
+Duke_GUARD1_SPRITE	equ	4
+Duke_GUARD2_SPRITE	equ	5
+Duke_GUARD_HEIGHT	equ	140
+
+	org	$f000
+main
+	mva	World_ceilingZ+Duke_DOOR_SECTOR	Duke_doorTop
+	mva	World_floorZ+Duke_DOOR_SECTOR	World_ceilingZ+Duke_DOOR_SECTOR
+	lda	#0
+	sta	World_spriteWidth+Duke_GUARD1_SPRITE
+	sta	World_spriteHeight+Duke_GUARD1_SPRITE
+	sta	World_spriteWidth+Duke_GUARD2_SPRITE
+	sta	World_spriteHeight+Duke_GUARD2_SPRITE
+	jmp	Pilot_main
+
+Duke_openDoor
+	mva	#{nop}	Duke_animateUpdate1
+	rts
+
+Duke_growGuards
+	mva	#{nop}	Duke_animateUpdate2
+	rts
+
+Duke_animateUpdate1
+	rts
+	lda	World_ceilingZ+Duke_DOOR_SECTOR
+	sub	Time_ticks
+	bcc	Duke_animateUpdate_opened
+	cmp	Duke_doorTop
+	scs
+Duke_animateUpdate_opened
+	lda	Duke_doorTop
+	sta	World_ceilingZ+Duke_DOOR_SECTOR
+
+	lda	Time_ticks
+	add:sta	Duke_boxAngle
+	tax
+	mva	#0	Math_word+1
+	sta	Math_word2+1
+	lda	Math_cos,x
+	spl:dec	Math_word+1
+;	cmp	#$80
+;	ror	@
+;	adc	Math_cos,x
+	asl	@	;
+	sta	Math_word
+	lda	Math_sin,x
+	spl:dec	Math_word2+1
+;	cmp	#$80
+;	ror	@
+;	adc	Math_sin,x
+	asl	@	;
+	sta	Math_word2
+
+ 	ldy	World_wallReverse+Duke_BOX_WALL+3
+	lda	<Duke_BOX_CENTERX
+	add	Math_word
+	sta	World_wallX_lo+Duke_BOX_WALL
+	sta	World_wallX_lo,y
+	lda	>Duke_BOX_CENTERX
+	adc	Math_word+1
+	sta	World_wallX_hi+Duke_BOX_WALL
+	sta	World_wallX_hi,y
+	lda	<Duke_BOX_CENTERY
+	add	Math_word2
+	sta	World_wallY_lo+Duke_BOX_WALL
+	sta	World_wallY_lo,y
+	lda	>Duke_BOX_CENTERY
+	adc	Math_word2+1
+	sta	World_wallY_hi+Duke_BOX_WALL
+	sta	World_wallY_hi,y
+	ldy	World_wallReverse+Duke_BOX_WALL
+	lda	<Duke_BOX_CENTERX
+	sub	Math_word2
+	sta	World_wallX_lo+Duke_BOX_WALL+1
+	sta	World_wallX_lo,y
+	lda	>Duke_BOX_CENTERX
+	sbc	Math_word2+1
+	sta	World_wallX_hi+Duke_BOX_WALL+1
+	sta	World_wallX_hi,y
+	lda	<Duke_BOX_CENTERY
+	add	Math_word
+	sta	World_wallY_lo+Duke_BOX_WALL+1
+	sta	World_wallY_lo,y
+	lda	>Duke_BOX_CENTERY
+	adc	Math_word+1
+	sta	World_wallY_hi+Duke_BOX_WALL+1
+	sta	World_wallY_hi,y
+	ldy	World_wallReverse+Duke_BOX_WALL+1
+	lda	<Duke_BOX_CENTERX
+	sub	Math_word
+	sta	World_wallX_lo+Duke_BOX_WALL+2
+	sta	World_wallX_lo,y
+	lda	>Duke_BOX_CENTERX
+	sbc	Math_word+1
+	sta	World_wallX_hi+Duke_BOX_WALL+2
+	sta	World_wallX_hi,y
+	lda	<Duke_BOX_CENTERY
+	sub	Math_word2
+	sta	World_wallY_lo+Duke_BOX_WALL+2
+	sta	World_wallY_lo,y
+	lda	>Duke_BOX_CENTERY
+	sbc	Math_word2+1
+	sta	World_wallY_hi+Duke_BOX_WALL+2
+	sta	World_wallY_hi,y
+	ldy	World_wallReverse+Duke_BOX_WALL+2
+	lda	<Duke_BOX_CENTERX
+	add	Math_word2
+	sta	World_wallX_lo+Duke_BOX_WALL+3
+	sta	World_wallX_lo,y
+	lda	>Duke_BOX_CENTERX
+	adc	Math_word2+1
+	sta	World_wallX_hi+Duke_BOX_WALL+3
+	sta	World_wallX_hi,y
+	lda	<Duke_BOX_CENTERY
+	sub	Math_word
+	sta	World_wallY_lo+Duke_BOX_WALL+3
+	sta	World_wallY_lo,y
+	lda	>Duke_BOX_CENTERY
+	sbc	Math_word+1
+	sta	World_wallY_hi+Duke_BOX_WALL+3
+	sta	World_wallY_hi,y
+
+Duke_animateUpdate2
+	rts
+	lda	World_spriteHeight+Duke_GUARD1_SPRITE
+	add	Time_ticks
+	cmp	#Duke_GUARD_HEIGHT
+	scc:lda	#Duke_GUARD_HEIGHT
+	sta	World_spriteWidth+Duke_GUARD1_SPRITE
+	sta	World_spriteHeight+Duke_GUARD1_SPRITE
+	sta	World_spriteHeight+Duke_GUARD2_SPRITE
+:2	lsr	@
+	eor	#$ff
+	sec:adc	World_spriteHeight+Duke_GUARD1_SPRITE
+	sta	World_spriteWidth+Duke_GUARD2_SPRITE
+	rts
+
+Duke_boxAngle	dta	0
+Duke_doorTop	org	*+1
+
+	org	Pilot_update+1
+	dta	a(Duke_animateUpdate1)
+
+	end

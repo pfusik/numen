@@ -1,0 +1,408 @@
+	ift	NUMEN
+	icl	'../../numendef.asx'
+	opt	h-
+	dta	b(0),a(main-1)
+	opt	h+
+	els
+	run	main
+	eif
+
+USE_IDLE	equ	NUMEN
+
+Screen_screen1	equ	$1000	(Screen_WIDTH*Screen_HEIGHT/2)
+Screen_screen2	equ	$1800	(Screen_WIDTH*Screen_HEIGHT/2)
+Pilot_main	equ	$7d94
+Pilot_update	equ	$7d97
+Pilot_drawOne	equ	$7d9a
+
+Time_ticks	equ	$8e
+
+	ift	NUMEN&&LEVEL!=1
+Screen_displayList	equ	$1f80
+Screen_displayPage	equ	$1f85
+Screen_displayListInterrupt equ	$1fbb
+	icl	'../world.equ'
+	els
+Screen_lineOffset_lo	equ	$1780	(Screen_HEIGHT)
+Screen_lineOffset_hi	equ	$17b0	(Screen_HEIGHT)
+
+Pilot_frameClock equ	$eb
+Pilot_trackPtr	equ	$ec	2
+Pilot_pointFrames equ	$ee
+Pilot_pointClock equ	$ef
+Pilot_pointX	equ	$f0	2
+Pilot_pointY	equ	$f2	2
+Pilot_pointZ	equ	$f4
+Pilot_pointAngle equ	$f5
+Pilot_pointHorizon equ	$f6
+Pilot_deltaX	equ	$f8	2
+Pilot_deltaY	equ	$fa	2
+Pilot_deltaZ	equ	$fc
+Pilot_deltaAngle equ	$fd
+Pilot_deltaHorizon equ	$fe
+ ift USE_IDLE
+Pilot_controlByte equ	$ff
+ eif
+
+	icl	'../engine.asx'
+;	icl	'animate.asx'
+
+Move_x	equ	View_x
+Move_y	equ	View_y
+	icl	'../upsector.asx'
+
+Pilot_run
+	jsr	Math_init
+	jsr	View_init
+	jsr	Project_init
+	jsr	Picture_init
+	jsr	Fill_init
+	jsr	Sprite_init
+
+	ldx	#Reloc_length-1
+	ert	Reloc_length>$80
+	mva:rpl	Reloc_source,x	Reloc_target,x-
+
+	lda	#0
+	tax
+	tay
+Screen_init_lineOffset
+	sta	Screen_lineOffset_lo,y
+	txa:sta	Screen_lineOffset_hi,y
+	lda	Screen_lineOffset_lo,y
+	add	#Screen_WIDTH/2
+	scc:inx
+	iny
+	cpy	#Screen_HEIGHT
+	bcc	Screen_init_lineOffset
+
+	mva	>Screen_screen1	Screen_drawnPage
+
+	mva	#0	Time_ticks
+	sta	Pilot_frameClock
+	mva	World_beginX	View_x
+	sta	Pilot_pointX
+	mva	World_beginX+1	View_x+1
+	sta	Pilot_pointX+1
+	mva	World_beginY	View_y
+	sta	Pilot_pointY
+	mva	World_beginY+1	View_y+1
+	sta	Pilot_pointY+1
+	mva	World_beginZ	View_z
+	sta	Pilot_pointZ
+	mva	World_beginAngle	View_angle
+	sta	Pilot_pointAngle
+	mva	World_beginSector	View_sector
+	mva	World_beginHorizon	Project_horizon
+	sta	Pilot_pointHorizon
+
+	mwa	#World_track	Pilot_trackPtr
+	mva	#0	Pilot_pointFrames
+	sta	Pilot_pointClock
+	jsr	Engine_draw
+	jsr	Sprite_draw
+
+	lda:rne	^4b
+	mva	#$22	^40
+	mwa	#Screen_displayList	^42
+	mwa	#Screen_verticalBlankInterrupt	Vbl_vector
+	mwa	#Screen_displayListInterrupt	Dli_vector
+:!NUMEN	mwa	#nmi	$fffa
+:!NUMEN	mva	#$c0	^4e
+	ldx	#9
+	mva:rpl	World_colors,x	^12,x-
+
+Pilot_loop
+	jsr	Pilot_update
+	ldy	View_sector
+	jsr	Move_updateSector
+	sty	View_sector
+	jsr	Engine_draw
+	jsr	Sprite_draw
+
+	mva	Screen_drawnPage	Screen_displayPage
+	eor	>Screen_screen1^Screen_screen2
+	sta	Screen_drawnPage
+
+	ldy	#0
+	lda:sty	Pilot_frameClock
+	sta	Time_ticks
+	add	Pilot_pointClock
+Pilot_intp1
+	cmp	Pilot_pointFrames
+	bcc	Pilot_intp2
+	sbc	Pilot_pointFrames	+
+	pha
+	lda	Pilot_pointFrames
+	jsr	Math_setUUSU1
+	jsr	Pilot_addToPoint
+Pilot_intp0
+	lda	(Pilot_trackPtr),0
+	beq	Pilot_exit
+	jsr	Pilot_nextPoint
+	pla
+	jmp	Pilot_intp1
+Pilot_intp2
+	sta	Pilot_pointClock
+	jsr	Math_setUUSU1
+	ift	USE_IDLE
+	bit	Pilot_controlByte
+	jvs	Pilot_stay
+	eif
+	jsr	Pilot_addToView
+	jmp	Pilot_loop
+
+Pilot_exit
+	pla
+	ift	NUMEN
+;	mwa	#-100	Vbl_clock
+	jmp	numend
+	els
+	jmp	*
+	eif
+
+* Pilot_mulY44Frames
+; A = (Y * Pilot_frameClock) >> 4
+; input: Y - biased (i.e. $81 means +1, $7e means -2, etc.)
+; return: A - result
+Pilot_mulY44Frames
+	lda	(Math_mulSU_lo+Math_MS_AL),y
+	sub	(Math_mulSU_lo+Math_MS_SL),y
+	sta	Math_word
+	lda	(Math_mulSU_lo+Math_MS_AH),y
+	sbc	(Math_mulSU_lo+Math_MS_SH),y
+	asl	Math_word
+	rol	@
+	asl	Math_word
+	rol	@
+	asl	Math_word
+	rol	@
+	asl	Math_word
+	rol	@
+	rts
+
+* Pilot_mulY8A8Frames
+; X:A = (Y:A * Pilot_frameClock) >> 8
+; input: Y - biased high byte, A - low byte
+; return: X - result hi, A - result lo
+Pilot_mulY8A8Frames
+	sta	Math_word+1
+	lda	(Math_mulSU_lo+Math_MS_AL),y
+	sub	(Math_mulSU_lo+Math_MS_SL),y
+	sta	Math_word
+	lda	(Math_mulSU_lo+Math_MS_AH),y
+	sbc	(Math_mulSU_lo+Math_MS_SH),y
+	tax
+	ldy	Math_word+1
+	lda	(Math_mulUU_lo+Math_MS_AL),y
+	cmp	(Math_mulUU_lo+Math_MS_SL),y
+	lda	(Math_mulUU_lo+Math_MS_AH),y
+	sbc	(Math_mulUU_lo+Math_MS_SH),y
+	add	Math_word
+	scc:inx
+	rts
+
+Pilot_nextPoint
+	iny
+	sta	Pilot_pointFrames
+	lda	(Pilot_trackPtr),y+
+:USE_IDLE sta	Pilot_controlByte
+	lsr	@
+	sta	Math_word
+	lda	#0
+	bcc	Pilot_nextPoint_noX
+	mva	(Pilot_trackPtr),y+	Pilot_deltaX
+	lda	(Pilot_trackPtr),y+
+Pilot_nextPoint_noX
+	sta	Pilot_deltaX+1
+	lda	#0
+	lsr	Math_word
+	bcc	Pilot_nextPoint_noY
+	mva	(Pilot_trackPtr),y+	Pilot_deltaY
+	lda	(Pilot_trackPtr),y+
+Pilot_nextPoint_noY
+	sta	Pilot_deltaY+1
+	lda	#0
+	lsr	Math_word
+	scc:lda	(Pilot_trackPtr),y+
+	sta	Pilot_deltaZ
+	lda	#0
+	lsr	Math_word
+	scc:lda	(Pilot_trackPtr),y+
+	sta	Pilot_deltaAngle
+	lda	#0
+	lsr	Math_word
+	scc:lda	(Pilot_trackPtr),y+
+	sta	Pilot_deltaHorizon
+	lsr	Math_word
+	bcc	Pilot_nextPoint_noRun
+	lda:pha	(Pilot_trackPtr),y+
+	lda:pha	(Pilot_trackPtr),y
+Pilot_nextPoint_noRun
+	tya
+	adc:sta	Pilot_trackPtr
+	scc:inc	Pilot_trackPtr+1
+	rts
+
+Pilot_addToPoint
+	ldy	Pilot_deltaX+1
+	beq	Pilot_addToPoint_noX
+	lda	Pilot_deltaX
+	jsr	Pilot_mulY8A8Frames
+	add:sta	Pilot_pointX
+	sta	View_x
+	txa
+	adc:sta	Pilot_pointX+1
+	sta	View_x+1
+Pilot_addToPoint_noX
+	ldy	Pilot_deltaY+1
+	beq	Pilot_addToPoint_noY
+	lda	Pilot_deltaY
+	jsr	Pilot_mulY8A8Frames
+	add:sta	Pilot_pointY
+	sta	View_y
+	txa
+	adc:sta	Pilot_pointY+1
+	sta	View_y+1
+Pilot_addToPoint_noY
+	ldy	Pilot_deltaZ
+	beq	Pilot_addToPoint_noZ
+	jsr	Pilot_mulY44Frames
+	add:sta	Pilot_pointZ
+	sta	View_z
+Pilot_addToPoint_noZ
+	ldy	Pilot_deltaAngle
+	beq	Pilot_addToPoint_noAngle
+	jsr	Pilot_mulY44Frames
+	add:sta	Pilot_pointAngle
+	sta	View_angle
+Pilot_addToPoint_noAngle
+	ldy	Pilot_deltaHorizon
+	beq	Pilot_addToPoint_noHorizon
+	jsr	Pilot_mulY44Frames
+	add:sta	Pilot_pointHorizon
+	sta	Project_horizon
+Pilot_addToPoint_noHorizon
+	rts
+
+Pilot_addToView
+	ldy	Pilot_deltaX+1
+	beq	Pilot_addToView_noX
+	lda	Pilot_deltaX
+	jsr	Pilot_mulY8A8Frames
+	add	Pilot_pointX
+	sta	View_x
+	txa
+	adc	Pilot_pointX+1
+	sta	View_x+1
+Pilot_addToView_noX
+	ldy	Pilot_deltaY+1
+	beq	Pilot_addToView_noY
+	lda	Pilot_deltaY
+	jsr	Pilot_mulY8A8Frames
+	add	Pilot_pointY
+	sta	View_y
+	txa
+	adc	Pilot_pointY+1
+	sta	View_y+1
+Pilot_addToView_noY
+	ldy	Pilot_deltaZ
+	beq	Pilot_addToView_noZ
+	jsr	Pilot_mulY44Frames
+	add	Pilot_pointZ
+	sta	View_z
+Pilot_addToView_noZ
+	ldy	Pilot_deltaAngle
+	beq	Pilot_addToView_noAngle
+	jsr	Pilot_mulY44Frames
+	add	Pilot_pointAngle
+	sta	View_angle
+Pilot_addToView_noAngle
+	ldy	Pilot_deltaHorizon
+	beq	Pilot_addToView_noHorizon
+	jsr	Pilot_mulY44Frames
+	add	Pilot_pointHorizon
+	sta	Project_horizon
+Pilot_addToView_noHorizon
+	rts
+
+; for 3window
+Pilot_drawOne_do
+	ldy	View_sector
+	jsr	Move_updateSector
+	sty	View_sector
+	jmp	Engine_draw
+; end for 3window
+
+	ift	!NUMEN
+nmi	pha
+	bit	^4f
+	spl
+	jmp	*
+Dli_vector	equ	*-2
+	txa:pha
+	tya:pha
+	jsr	*
+Vbl_vector	equ	*-2
+	pla:tay
+	pla:tax
+	pla:rti
+	eif
+
+Reloc_source
+Reloc_target	equ	$1f80
+Reloc_diff	equ	Reloc_target-Reloc_source
+Screen_displayList	equ	*+Reloc_diff
+	dta	$70,$70,$f0,$6f,a(Screen_screen1)
+Screen_displayPage	equ	*-1+Reloc_diff
+:23	dta	$8f,$2f
+	dta	$0f,$41,a(Screen_displayList)
+
+Screen_verticalBlankInterrupt	equ	*+Reloc_diff
+	inc	Pilot_frameClock
+	ift	!NUMEN
+rts
+	eif
+	rts
+
+* Screen_displayListInterrupt
+; Toggle VSCROL to keep "++" mode
+Screen_displayListInterrupt	equ	*+Reloc_diff
+	sta	^4a
+	mva	#13	^45
+	mva	#3	^45
+	pla
+	rti
+
+	ift	NUMEN
+numend	equ	*+Reloc_diff
+;	jsr	Idle
+	lda:rne	^4b
+	sta	^40
+	mwa	#rts	Vbl_vector
+	jmp	NextBlock
+	eif
+
+	ift	USE_IDLE
+Pilot_stay	equ	*+Reloc_diff
+	lda	Pilot_pointClock
+	sub	Pilot_pointFrames
+	sta	Vbl_clock
+	mva	#-1	Vbl_clock+1
+	jsr	Idle
+	mva	Banks_table	^31
+	mva:pha	#0	Pilot_frameClock
+	jmp	Pilot_intp0
+	eif
+
+Reloc_length	equ	*-Reloc_source
+
+	org	Pilot_main
+	jmp	Pilot_run
+	org	Pilot_update
+	jmp	rts
+	org	Pilot_drawOne
+	jmp	Pilot_drawOne_do
+
+	eif
+	end

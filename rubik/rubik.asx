@@ -1,0 +1,2091 @@
+	icl	'../nex.asx'
+
+Musk_show	equ	$100
+
+* Modules:
+* TEST	Test
+* DL	Display List
+* SCR	Screen
+* CLS	Clear Screen
+* ROTM	Rotation Matrix
+* CAPO	Calculate Points
+* PERS	Perspective
+* LINE	Line
+* FILL	Fill
+* RECT	Rectangle
+* DRAW	Draw
+* SHOW	Show
+* RUBI	Rubik
+
+*** Test
+TEST_shif equ	0
+TEST_frames equ	0
+TEST_bars equ	0
+TEST_stop equ	0
+TEST_nocls equ	0
+TEST_bak  equ	$00
+TEST_mang equ	$ff
+TEST_line equ	0
+
+*** Constants
+SCR_ln	equ	59	Screen lines
+ROTM_sa	equ	4396
+CAPO_l	equ	8
+CAPO_m	equ	1
+CAPO_rf	equ	15
+CAPO_qq	equ	$100
+PERS_c	equ	32
+PERS_d	equ	70
+PERS_qq	equ	$108
+LINE_an	equ	LINE_ht-LINE_lt	Angles
+LINE_mr	equ	50	Max. line length
+FILL_mb	equ	26	Max. bytes per span
+DRAW_v1	equ	4
+DRAW_v3	equ	12
+RUBI_n	equ	30
+FADE	equ	NUMEN
+
+*** Memory
+
+** SCR
+SCR_1	equ	$30a0
+SCR_2	equ	$38a0
+
+** CLS
+CLS_1	equ	$e000	$f00
+CLS_2	equ	$ef00	$f00
+
+** ROTM
+ROTM_sin equ	$d800	$800
+ROTM_ks	equ	$3040	22
+
+** CAPO
+CAPO_rt	equ	$2000	$1000
+CAPO_tab equ	$c000	$900
+CAPO_tl	equ	$c900
+CAPO_th	equ	$ca00
+CAPO_ul	equ	$cb00
+CAPO_uh	equ	$cc00
+
+** PERS
+PERS_tab equ	$4000
+PERS_xl	equ	$cd00
+PERS_zh	equ	$ce00
+
+** LINE
+LINE_ang equ	$4040
+LINE_tan equ	LINE_ang+LINE_mr
+LINE_adc equ	$be00
+LINE_sbc equ	$bf00
+LINE_pl	equ	$3000
+LINE_ph	equ	$3800
+
+** FILL
+FILL_pro equ	$8000
+FILL_l1	equ	$bd00
+FILL_l2	equ	$bd40
+FILL_h1	equ	$bd80
+FILL_h2	equ	$bdc0
+FILL_br	equ	$cf00
+
+** RUBI
+RUBI_sf	equ	$fe00
+RUBI_sc	equ	$fe60
+RUBI_ry	equ	$fec0
+
+*** Variables
+
+** Temporary
+si	equ	$7c	;$10
+di	equ	$7e	;$12
+bx	equ	$be	;$14
+t1	equ	$16
+t2	equ	$18
+
+** DL
+DL_h	equ	$1a
+
+** ROTM
+ROTM_ax	equ	$1b
+ROTM_ay	equ	ROTM_ax+1
+ROTM_az	equ	ROTM_ax+2
+ROTM_bx	equ	ROTM_ax+3
+ROTM_by	equ	ROTM_ax+4
+ROTM_bz	equ	ROTM_ax+5
+ROTM_cx	equ	ROTM_ax+6
+ROTM_cy	equ	ROTM_ax+7
+ROTM_cz	equ	ROTM_ax+8
+ROTM_kv	equ	$24	22
+ROTM_ka	equ	$3a
+ROTM_kb	equ	ROTM_ka+1
+ROTM_kc	equ	ROTM_ka+2
+ROTM_va	equ	$3d
+ROTM_vb	equ	ROTM_va+1
+ROTM_vc	equ	ROTM_va+2
+
+** CAPO
+CAPO_ra	equ	$40
+CAPO_ax	equ	$41
+CAPO_ay	equ	CAPO_ax+1
+CAPO_az	equ	CAPO_ax+2
+CAPO_bx	equ	CAPO_ax+3
+CAPO_by	equ	CAPO_ax+4
+CAPO_bz	equ	CAPO_ax+5
+CAPO_cx	equ	CAPO_ax+6
+CAPO_cy	equ	CAPO_ax+7
+CAPO_cz	equ	CAPO_ax+8
+CAPO_dx	equ	CAPO_ax+9
+CAPO_dy	equ	CAPO_ax+10
+CAPO_dz	equ	CAPO_ax+11
+CAPO_ex	equ	CAPO_ax+12
+CAPO_ey	equ	CAPO_ax+13
+CAPO_ez	equ	CAPO_ax+14
+CAPO_x1	equ	$50
+CAPO_y1	equ	CAPO_x1+1
+CAPO_x2	equ	CAPO_x1+2
+CAPO_y2	equ	CAPO_x1+3
+CAPO_x3	equ	CAPO_x1+4
+CAPO_y3	equ	CAPO_x1+5
+CAPO_x4	equ	CAPO_x1+6
+CAPO_y4	equ	CAPO_x1+7
+CAPO_il	equ	$41	(init only)
+CAPO_ih	equ	$4a	(init only)
+
+** LINE
+LINE_x1	equ	$58
+LINE_y1	equ	LINE_x1+1
+LINE_x2	equ	LINE_x1+2
+LINE_y2	equ	LINE_x1+3
+
+** FILL
+FILL_us	equ	$5c
+FILL_ds	equ	$5d
+FILL_rv	equ	$5e	2
+FILL_xx	equ	$60	color $xx
+FILL_xo	equ	$61	color $x0
+FILL_ox	equ	$62	color $0x
+FILL_ls	equ	$80	60
+FILL_rs	equ	$c0	60
+
+** RECT
+RECT_nx	equ	$63
+RECT_ny	equ	RECT_nx+1
+RECT_nz	equ	RECT_nx+2
+RECT_ux	equ	$66
+RECT_uy	equ	RECT_ux+2
+RECT_uz	equ	RECT_ux+4
+RECT_vx	equ	$6c
+RECT_vy	equ	RECT_vx+2
+RECT_vz	equ	RECT_vx+4
+RECT_pu	equ	$72
+RECT_pv	equ	RECT_pu+1
+RECT_du	equ	$74
+RECT_dv	equ	RECT_du+1
+
+** DRAW
+DRAW_s	equ	$76
+
+** RUBI
+RUBI_ru	equ	$77
+RUBI_r2	equ	$78
+RUBI_ri	equ	$79
+RUBI_fi	equ	$7a
+
+** FADE
+	ift	FADE
+FADE_counter equ $7b
+	eif
+
+*** Code
+
+	org	$500
+DL	dta	$90,$6f,a(SCR_1)
+SCR_h	equ	*-1
+:29	dta	$8f,$2f
+	dta	$41,a(DL)
+
+main
+:NUMEN	mva	Banks_forEffect	^31
+	jsr	SCR_init
+	jsr	CLS_init
+	jsr	ROTM_init
+	jsr	CAPO_init
+	jsr	PERS_init
+	jsr	LINE_init
+	jsr	FILL_init
+	jsr	RUBI_init
+:TEST_nocls	jsr	CLS_1
+:TEST_nocls	jsr	CLS_2
+
+	mva	#$20	ROTM_ka
+	mva	#$10	ROTM_kb
+	mva	#$30	ROTM_kc
+	ift	TEST_stop
+	mva	#0	ROTM_va
+	sta	ROTM_vb
+	sta	ROTM_vc
+	els
+	mva	#3	ROTM_va
+	mva	#4	ROTM_vb
+	mva	#6	ROTM_vc
+	eif
+	jsr	ROTM_set
+
+* Show
+	ift	NUMEN
+
+	jsr	Idle
+:FADE	mva	#18	FADE_counter
+	mva	#-1	RUBI_fi
+	ldx	<-250
+	ldy	>-250
+	jsr	showMe
+	ldx	<-120
+	ldy	>-120
+	jsr	Musk_show
+	jsr	Idle
+	mva	#1	RUBI_fi
+	ldx	<-1500
+	ldy	>-1500
+	jsr	showMe
+
+	ldx	<-180
+	ldy	>-180
+	jsr	Musk_show
+	jsr	Idle
+	jsr	RUBI_init
+	mva	#13	ROTM_va
+	mva	#7	ROTM_vb
+	mva	#11	ROTM_vc
+	jsr	ROTM_set
+	mva	#{asl @}	RUBI_asl
+	mva	#CAPO_rf&~1	RUBI_rf+1
+	mva	Banks_forEffect	^31
+	jsr	SHOW
+	ldx	<-850
+	ldy	>-850
+	jsr	showMe
+;	ldx	<-550
+;	ldy	>-550
+;	jsr	Musk_show
+
+;	jsr	Idle
+	mva	#0	^40
+
+	jmp	NextBlock
+
+showMe
+	lda:rne	^4b
+	stx	Vbl_clock
+	sty	Vbl_clock+1
+	jsr	vblr
+	lda:rne	^4b
+	ldx	#9
+	mva:rpl	SCR_col,x	^12,x-
+	mva	#$21	^40
+	mwa	#DL	^42
+	mwa	#dli	Dli_vector
+	mwa	#vbl	Vbl_vector
+	mva	#{lda #}	vblr
+	jsr	Idle
+	ift	FADE
+	dec	FADE_counter
+	mwa	#-16	Vbl_clock
+	jsr	Idle
+	eif
+	mva	#{rts}	vblr
+	lda:rne	^4b
+	mwa	#rts	Vbl_vector
+	rts
+
+	els	!NUMEN
+	mva	#1	RUBI_fi
+	lda:rne	^4b
+	ldx	#9
+	mva:rpl	SCR_col,x	^12,x-
+	mva	#$21	^40
+	mwa	#DL	^42
+	mwa	#nmi	$fffa
+	stx	^4e
+:FADE	mva	#100	FADE_counter
+	jmp	*
+
+* Interrupts
+nmi	pha
+	bit	^4f
+	bmi	dli
+	txa:pha
+	tya:pha
+	jsr	vbl
+	pla:tay
+	pla:tax
+	pla:rti
+	eif	!NUMEN
+dli
+	lda	^4b
+:2	lsr	@
+	add	<BAR_tab
+	sta	BAR_load+1
+	sta	^4a
+	mva	#13	^45
+	ift	TEST_bars
+BAR_load	mva	BAR_tab	$100
+	els
+BAR_load	mva	BAR_tab	^12
+	eif
+	mva	#3	^45
+	pla:rti
+
+vbl
+	ift	FADE
+	ldx	FADE_counter
+	cpx	#16
+	jcs	FADE_no
+:NUMEN	dec	FADE_counter
+	lda	FADE_table2,x
+	sta	^19
+	seq:eor	#$c0
+	sta	^15
+	seq:eor	#$c0^$70
+	sta	^16
+	sta	BAR_tab
+	sta	BAR_tab+1
+	sta	BAR_tab+2
+	sta	BAR_tab+3
+	sta	BAR_tab+4
+	seq:eor	#$70^$50
+	sta	BAR_tab+25
+	sta	BAR_tab+26
+	sta	BAR_tab+27
+	sta	BAR_tab+28
+	sta	BAR_tab+29
+	sta	BAR_tab+30
+	lda	FADE_table4,x
+	seq:eor	#$20
+	sta	^14
+	seq:eor	#$20^$70
+	sta	BAR_tab+5
+	sta	BAR_tab+6
+	sta	BAR_tab+7
+	sta	BAR_tab+8
+	seq:eor	#$70^$50
+	sta	BAR_tab+21
+	sta	BAR_tab+22
+	sta	BAR_tab+23
+	sta	BAR_tab+24
+	lda	FADE_table6,x
+	seq:eor	#$70
+	sta	BAR_tab+9
+	sta	BAR_tab+10
+	seq:eor	#$70^$50
+	sta	BAR_tab+19
+	sta	BAR_tab+20
+	lda	FADE_table8,x
+	seq:eor	#$10
+	sta	^13
+	seq:eor	#$10^$70
+	sta	BAR_tab+11
+	sta	BAR_tab+12
+	seq:eor	#$70^$50
+	sta	BAR_tab+17
+	sta	BAR_tab+18
+	lda	FADE_tableA,x
+	seq:eor	#$70
+	sta	BAR_tab+13
+	seq:eor	#$70^$50
+	sta	BAR_tab+16
+	lda	FADE_tableC,x
+	sta	^17
+	seq:eor	#$70
+	sta	BAR_tab+14
+	seq:eor	#$70^$50
+	sta	BAR_tab+15
+	lda	FADE_tableE,x
+	seq:eor	#$e0
+	sta	^18
+FADE_no
+:!NUMEN	dec	FADE_counter
+	eif
+:!TEST_bars	mva	BAR_tab	^12
+:TEST_frames	ldx	#0
+:TEST_frames	inc	*-1
+vblr	mva	#{rts}	vblr
+:TEST_bars mva	#8	^12
+:TEST_frames	stx	$400
+:TEST_frames	inc	*-2
+:NUMEN	mva	Banks_forEffect	^31
+
+	ldx	RUBI_fi
+	bmi	RUBI_mx
+	lda	RUBI_ru
+	lsr	@
+	lda	#1
+	scc
+	lda	#-1
+RUBI_asl
+	nop
+	add	CAPO_ra
+	cmp	#CAPO_rf+1
+	bcc	RUBI_m1
+	bne	RUBI_m2
+	jsr	RUBI_r0
+	mva	#0	CAPO_ra
+RUBI_m2	ldx	RUBI_ri
+	stx	RUBI_fi
+	bmi	RUBI_mx
+	dec	RUBI_ri
+	mva	RUBI_ry,x	RUBI_ru
+	lsr	@
+	sta	RUBI_r2
+	lda	#0
+	bcc	RUBI_m1
+	jsr	RUBI_r1
+RUBI_rf	lda	#CAPO_rf
+RUBI_m1	sta	CAPO_ra
+RUBI_mx	jsr	SHOW
+
+:TEST_shif lda	#8
+:TEST_shif bit	^2f
+:TEST_shif sne:jsr	RUBI_init
+:TEST_bars mva	#0	^12
+	mva	#{lda #}	vblr
+	rts
+
+** SCR
+SCR_init
+	lda	#TEST_bak
+	ldx	>SCR_1
+	ldy	#0
+scri1	stx	scri2+2
+scri2	sta:rne	SCR_1&$ff00,y+
+	inx:cpx	>SCR_2+$780
+	bcc	scri1
+	rts
+
+** CLS
+CLS_init	mwa	#SCR_1	si
+	mwa	#CLS_1	di
+	mwa	#CLS_2	bx
+	ldx	#0
+
+clsi1	lda	CLS_tab,x
+	sec:rol	@
+	sta	t1
+
+clsi2	bcc	clsi3
+	mva	#{sta SCR_1}	(di),0
+	sta	(bx),y+
+	mva	si	(di),y
+	sta	(bx),y+
+	mva	si+1	(di),y
+	eor	>SCR_1^SCR_2
+	sta	(bx),y
+	lda	#3
+	add:sta	di
+	sta	bx
+	bcc	clsi3
+	inc	di+1
+	inc	bx+1
+clsi3	inw	si
+	asl	t1
+	bne	clsi2
+	inx:cpx	#4*SCR_ln
+	bcc	clsi1
+	mva	#{rts}	(di),0
+	sta	(bx),y
+	rts
+
+** ROTM
+* Compute unit vectors (5/7/97)
+ROTM	lda	(ROTM_kv+4),0
+	asl	@
+	tax
+	iny	#1
+	lda	(ROTM_kv+4),y
+	rol	@
+	cpx	#$80
+	rol	@
+	sta	ROTM_az
+	dey	#0
+	lda	(ROTM_kv),y
+	add	(ROTM_kv+2),y
+	tax
+	iny	#1
+	lda	(ROTM_kv),y
+	adc	(ROTM_kv+2),y
+	cpx	#$80
+	rol	@
+	sta	ROTM_ay
+	iny	#2
+	lda	(ROTM_kv),y
+	add	(ROTM_kv+2),y
+	tax
+	iny	#3
+	lda	(ROTM_kv),y
+	adc	(ROTM_kv+2),y
+	cpx	#$80
+	rol	@
+	sta	ROTM_ax
+	ldy	#0
+	lda	(ROTM_kv+18),y
+	add	(ROTM_kv+20),y
+	tax
+	iny	#1
+	lda	(ROTM_kv+18),y
+	adc	(ROTM_kv+20),y
+	cpx	#$80
+	rol	@
+	sta	ROTM_bz
+	iny	#2
+	lda	(ROTM_kv+18),y
+	add	(ROTM_kv+20),y
+	tax
+	iny	#3
+	lda	(ROTM_kv+18),y
+	adc	(ROTM_kv+20),y
+	cpx	#$80
+	rol	@
+	sta	ROTM_cz
+	dey	#2
+	lda	(ROTM_kv+16),y
+	asl	@
+	tax
+	iny	#3
+	lda	(ROTM_kv+16),y
+	rol	@
+	sta	t1+1
+	txa
+	add	(ROTM_kv+8),0
+	php
+	sub	(ROTM_kv+12),y
+	sta	t1
+	iny	#1
+	lda	t1+1
+	sbc	(ROTM_kv+12),y
+	plp
+	adc	(ROTM_kv+8),y
+	sta	t1+1
+	iny	#2
+	lda	(ROTM_kv+14),y
+	asl	@
+	tax
+	iny	#3
+	lda	(ROTM_kv+14),y
+	rol	@
+	sta	t2+1
+	txa
+	add	(ROTM_kv+10),0
+	php
+	sub	(ROTM_kv+6),y
+	sta	t2
+	iny	#1
+	lda	t2+1
+	sbc	(ROTM_kv+6),y
+	plp
+	adc	(ROTM_kv+10),y
+	sta	t2+1
+	lda	t1
+	add	t2
+	lda	t1+1
+	adc	t2+1
+	sta	ROTM_by
+	lda	t1
+	sub	t2
+	lda	t1+1
+	sbc	t2+1
+	sta	ROTM_cx
+	dey	#0
+	lda	(ROTM_kv+14),y
+	asl	@
+	tax
+	iny	#1
+	lda	(ROTM_kv+14),y
+	rol	@
+	sta	t1+1
+	iny	#2
+	txa
+	add	(ROTM_kv+10),y
+	php
+	sub	(ROTM_kv+6),y
+	sta	t1
+	iny	#3
+	lda	t1+1
+	sbc	(ROTM_kv+6),y
+	plp
+	adc	(ROTM_kv+10),y
+	sta	t1+1
+	lda	(ROTM_kv+16),0
+	asl	@
+	tax
+	iny	#1
+	lda	(ROTM_kv+16),y
+	rol	@
+	sta	t2+1
+	iny	#2
+	txa
+	add	(ROTM_kv+12),y
+	php
+	sub	(ROTM_kv+8),y
+	sta	t2
+	iny	#3
+	lda	t2+1
+	sbc	(ROTM_kv+8),y
+	plp
+	adc	(ROTM_kv+12),y
+	sta	t2+1
+	lda	t1
+	add	t2
+	lda	t1+1
+	adc	t2+1
+	sta	ROTM_bx
+	lda	t1
+	sub	t2
+	lda	t1+1
+	sbc	t2+1
+	sta	ROTM_cy
+
+	ldx	#20
+	clc
+addk	lda	ROTM_kv,x
+	adc	ROTM_ks,x	-
+	sta	ROTM_kv,x
+	lda	ROTM_kv+1,x
+	adc	ROTM_ks+1,x
+	and	#7
+	eor	>ROTM_sin
+	sta	ROTM_kv+1,x
+	dex
+	dex
+	bpl	addk
+	rts
+
+ROTM_set
+	ldx	#0
+	lda	ROTM_kb
+	add	ROTM_kc
+	tay
+	lda	ROTM_vb
+	add	ROTM_vc
+	jsr	pang
+	lda	ROTM_kc
+	sub	ROTM_kb
+	tay
+	lda	ROTM_vc
+	sub	ROTM_vb
+	jsr	pang
+	lda	#0
+	sub	ROTM_kb
+	tay
+	lda	#0
+	sub	ROTM_vb
+	jsr	pang
+	lda	ROTM_ka
+	add	ROTM_kb
+	add	ROTM_kc
+	tay
+	lda	ROTM_va
+	add	ROTM_vb
+	add	ROTM_vc
+	jsr	pang
+	lda	ROTM_ka
+	add	ROTM_kb
+	sub	ROTM_kc
+	tay
+	lda	ROTM_va
+	add	ROTM_vb
+	sub	ROTM_vc
+	jsr	pang
+	lda	ROTM_ka
+	sub	ROTM_kb
+	add	ROTM_kc
+	tay
+	lda	ROTM_va
+	sub	ROTM_vb
+	add	ROTM_vc
+	jsr	pang
+	lda	ROTM_ka
+	sub	ROTM_kb
+	sub	ROTM_kc
+	tay
+	lda	ROTM_va
+	sub	ROTM_vb
+	sub	ROTM_vc
+	jsr	pang
+	lda	#0
+	sub	ROTM_ka
+	sub	ROTM_kc
+	tay
+	lda	#0
+	sub	ROTM_va
+	sub	ROTM_vc
+	jsr	pang
+	lda	ROTM_ka
+	sub	ROTM_kc
+	tay
+	lda	ROTM_va
+	sub	ROTM_vc
+	jsr	pang
+	lda	ROTM_ka
+	add	ROTM_kb
+	tay
+	lda	ROTM_va
+	add	ROTM_vb
+	jsr	pang
+	lda	ROTM_ka
+	sub	ROTM_kb
+	tay
+	lda	ROTM_va
+	sub	ROTM_vb
+; pang
+
+pang	asl	@
+	rol	t1
+	asl	@
+	rol	t1
+	sta	ROTM_ks,x
+	lda	t1
+	and	#3
+	cmp	#2
+	scc:eor	#4
+	sta	ROTM_ks+1,x
+	tya
+	asl	@
+	rol	t1
+	asl	@
+	rol	t1
+	asl	@
+	rol	t1
+	sta	ROTM_kv,x+
+	lda	t1
+	and	#7
+	eor	>ROTM_sin
+	sta	ROTM_kv,x+
+	rts
+
+ROTM_init
+	ldx	#0
+	ldy	#0
+	lda	>ROTM_sin
+	sty	di
+	sta	di+1
+	jsr	*+3
+	jsr	psinco
+	inx
+	bpl	*-4
+	jsr	psinco
+	dex
+	bne	*-4
+	rts
+
+psinco	lda	di+1
+	jsr	putsin
+	lda	di+1
+	add	#2
+putsin	and	#7
+	cmp	#4
+	bcs	psineg
+	mva	ROTM_sl,x	(di),y
+	lda	ROTM_sh,x
+	bcc	psinst	!
+psineg	lda	#0
+	sbc	ROTM_sl,x	+
+	sta	(di),y
+	lda	#0
+	sbc	ROTM_sh,x
+psinst	iny
+	sta	(di),y+
+	sne:inc	di+1
+	txa
+	eor	#$7f
+	tax
+	inx
+	rts
+
+** CAPO
+CAPO_init
+	mwa	#CAPO_tab	capis+1
+	ldx	#8
+capi1	mva	<CAPO_qq	CAPO_il,x
+	lda	CAPO_ht,x
+	ror	@
+	lda	CAPO_lt,x
+	ror	@
+	eor	#$ff
+	add	>CAPO_qq
+	sta	CAPO_ih,x
+	dex:bpl	capi1
+
+	ldx	#128
+capi2	ldy	#8
+capi3	lda	CAPO_lt,y
+	add:sta	CAPO_il,y
+	lda	CAPO_ih,y
+capis	sta	CAPO_tab,y
+	adc	CAPO_ht,y
+	sta	CAPO_ih,y
+	dey:bpl	capi3
+	mva	capis+1	CAPO_tl,x
+	add	#9
+	sta	capis+1
+	mva	capis+2	CAPO_th,x
+	adc	#0
+	sta	capis+2
+	inx
+	cpx	#128
+	bne	capi2
+
+	ldx	#0
+	ldy	#0
+capi4	mva	CAPO_tl,x	CAPO_ul,y
+	mva	CAPO_th,x	CAPO_uh,y
+	dey:inx
+	bne	capi4
+
+	ldx	#CAPO_rf-1
+car1	stx	bx+1
+	txa
+	add	>CAPO_rt
+	sta	car2+2
+	sta	car3+2
+	mva	CAPO_st,x	bx
+	lda:tax	#0
+	sub	bx
+	sec:ror	@
+	scc:ldx	#$80
+	ldy	#$80
+car2	sta	CAPO_rt,y
+	txa
+	add	bx
+	tax
+car3	lda	CAPO_rt,y
+	adc	#0
+	iny
+	cpy	#$80
+	bne	car2
+	ldx	bx+1
+	dex:bne	car1
+
+;	ldx	#0
+carf	mva	#0	CAPO_rt,x
+	txa:sta	CAPO_rt+$f00,x+
+	bne	carf
+
+	mva	#0	CAPO_ra
+	rts
+
+** PERS
+PERS_init
+	ldx	#$3f
+persi1	stx	t2
+	txa
+	add	>PERS_tab
+	sta	persi2+2
+	sta	persi3+2
+	lda	PERS_zt,x
+	asl	@
+	sta	bx
+	lda	#$80
+	rol	@
+	sta	bx+1
+	lda	<PERS_qq
+	sbc	bx	+
+	sta	t1
+	lda	>PERS_qq
+	sbc	bx+1
+	asl	t1
+	rol	@
+	asl	t1
+	rol	@
+	asl	t1
+	rol	@
+	asl	t1
+	rol	@
+	asl	t1
+	rol	@
+	ldx	t1
+	ldy	#32
+persi2	sta	PERS_tab,y
+	txa
+	add	bx
+	tax
+persi3	lda	PERS_tab,y
+	adc	bx+1
+	iny
+	cpy	#64
+	sne:ldy	#0
+	cpy	#32
+	bne	persi2
+	ldx	t2
+	dex
+	bpl	persi1
+	ldx	#0
+persit	txa
+	lsr:lsr	@
+	sta	PERS_xl,x
+	add	>PERS_tab
+	sta	PERS_zh,x
+	inx
+	bne	persit
+	rts
+
+** LINE
+LINE	sta	LINE_y2
+	sub	LINE_y1
+	bcs	lin3
+	eor	#$ff
+	tax
+	lda	LINE_x1
+	sub	LINE_x2
+	ldy	LINE_pl+1,x
+	bcs	lin2
+	eor	#$ff
+	sty	ljp1+1
+	mvy	LINE_ph,x	lan1+2
+	ift	TEST_line
+	sty	lan1s+2
+	tax
+lan1	lda	LINE_ang+1,x
+	ora	#$80
+lan1s	sta	LINE_ang+1,x
+	and:tay	#$7f
+	els
+	tax
+lan1	ldy	LINE_ang+1,x
+	eif
+	ldx	LINE_y2
+	lda	LINE_x1
+ljp1	jmp	LINE_adc	-
+lin2	sty	ljp2+1
+	mvy	LINE_ph,x	lan2+2
+	ift	TEST_line
+	sty	lan2s+2
+	tax
+lan2	lda	LINE_ang,x
+	ora	#$80
+lan2s	sta	LINE_ang,x
+	and:tay	#$7f
+	els
+	tax
+lan2	ldy	LINE_ang,x
+	eif
+	ldx	LINE_y2
+	lda	LINE_x1
+ljp2	jmp	LINE_sbc	+
+lin3	tax
+	lda	LINE_y2
+	cmp	FILL_ds
+	scc:sta	FILL_ds
+	lda	LINE_y1
+	cmp	FILL_us
+	bcs	*+5
+	sta:sec	FILL_us
+	lda	LINE_x2
+	sbc	LINE_x1	+
+	ldy	LINE_pl,x
+	bcs	lin4
+	eor	#$ff
+	sty	ljp3+1
+	mvy	LINE_ph-1,x	lan3+2
+	ift	TEST_line
+	sty	lan3s+2
+	tax
+lan3	lda	LINE_ang+1,x
+;	ora	#$80
+lan3s	sta	LINE_ang+1,x
+	and:tay	#$7f
+	els
+	tax
+lan3	ldy	LINE_ang+1,x
+	eif
+	lda	LINE_y1
+	eor	#FILL_ls^FILL_rs
+	tax
+	lda	LINE_x2
+ljp3	jmp	LINE_adc	-
+lin4	sty	ljp4+1
+	mvy	LINE_ph-1,x	lan4+2
+	ift	TEST_line
+	sty	lan4s+2
+	tax
+lan4	lda	LINE_ang,x
+;	ora	#$80
+lan4s	sta	LINE_ang,x
+	and:tay	#$7f
+	els
+	tax
+lan4	ldy	LINE_ang,x
+	eif
+	lda	LINE_y1
+	eor	#FILL_ls^FILL_rs
+	tax
+	lda	LINE_x2
+ljp4	jmp	LINE_sbc	+
+
+LINE_init
+	ldy	#LINE_an
+lini0	mva	#$80	LINE_pl-1,y
+	asl	@
+	sta	LINE_ph-1,y-
+	bne	lini0
+
+	ldx	>LINE_ang
+lini1	stx	linsta+2
+	stx	linstt+2
+	ldy	#LINE_an
+lini2	lda	LINE_lt-1,y
+	add:sta	LINE_pl-1,y
+	lda	LINE_ht-1,y
+	adc	#0
+linstt	sta	LINE_tan-1,y
+	adc	LINE_ph-1,y	-
+	smi:sta	LINE_ph-1,y
+	dey:bne	lini2
+	ldx	#LINE_an-1
+	ldy	#LINE_mr-1
+lini3	tya
+	dta	{cmp #0}
+lini4	dex
+	cmp	LINE_ph,x
+	bcc	lini4
+	txa
+:TEST_mang!=$ff	and	#TEST_mang
+linsta	sta	LINE_ang,y
+	dey:bpl	lini3
+	ldx	linsta+2
+	inx
+	cpx	>LINE_ang+LINE_mr*$100
+	bcc	lini1
+
+linih	dex
+	txa
+	sta	LINE_ph->LINE_ang,x
+	cpx	>LINE_ang
+	bne	linih
+
+	ldx	#LINE_mr
+	ldy	#0
+	clc
+linip	mva	#{adc LINE_tan,y}	LINE_adc,y
+	mva	#{sbc LINE_tan,y}	LINE_sbc,y
+	mva	<LINE_tan	LINE_adc+1,y
+	sta	LINE_sbc+1,y
+	txa:adc	>LINE_tan	-
+	sta	LINE_adc+2,y
+	sta	LINE_sbc+2,y
+	mva	#{sta FILL_ls,x}	LINE_adc+3,y
+	sta	LINE_sbc+3,y
+	txa:adc	#FILL_ls	-
+	sta	LINE_adc+4,y
+	sta	LINE_sbc+4,y
+	tya
+	sta	LINE_pl+1,x
+	adc	#5	-
+	tay
+	dex
+	bpl	linip
+	sty	LINE_pl
+	mva	#{rts}	LINE_adc,y
+	sta	LINE_sbc,y
+	rts
+
+** FILL
+filia2	jsr	filia1
+filia1	mva	di	FILL_l1,y
+	mva	di+1	FILL_h1,y
+	iny
+	rts
+
+FILL_init
+	mwa	#SCR_1	si
+	mva	#FILL_ls+2	filpls
+	mva	#FILL_rs+2	filprs
+	sta	filqrs
+	mva	<FILL_pro	di
+	sta	FILL_rv
+	mva	>FILL_pro	di+1
+	sta	FILL_rv+1
+	ldy	#0
+	jsr	filia2
+fili1	sty	bx
+	lda	si
+	sta	filps1+1
+	sta	filps2+1
+	sta	filps3+1
+	sta	filps4+1
+	lda	si+1
+	sta	filps1+2
+	sta	filps2+2
+	sta	filps3+2
+	sta	filps4+2
+	mva	di+1	FILL_h1,y
+	tax
+	mva	di	FILL_l1,y
+	add	#filmov+1-FILL_pt
+	scc:inx
+	sta	filpmo
+	stx	filpmo+1
+	add	#filbra-filmov
+	scc:inx
+	sta	filpba
+	stx	filpba+1
+
+	ldx	si
+	ldy	#FILL_pl+3*FILL_mb-1
+filist	mva	si+1	(di),y-
+	txa:sta	(di),y-
+	inx
+	mva	#{sta a:,x}	(di),y-
+	cpy	#FILL_pl
+	bcs	filist
+	mva:rpl	FILL_pt,y	(di),y-
+
+	inc	filpls
+	inc	filprs
+	inc	filqrs
+	lda	#32
+	adc:sta	si	-
+	scc:inc	si+1
+	lda	#FILL_pl+3*FILL_mb
+	add:sta	di
+	scc:inc	di+1
+
+	ldy	bx
+	iny:cpy	#2+SCR_ln
+	bne	fili2
+:60-SCR_ln	jsr	filia1
+	jsr	filia2
+	jsr	filia2
+	mwa	#SCR_2	si
+	mva	#FILL_ls+2	filpls
+	mva	#FILL_rs+2	filprs
+	sta	filqrs
+fili2	cpy	#64+2+SCR_ln
+	jcc	fili1
+:60-SCR_ln	jsr	filia1
+	jsr	filia2
+
+	ldx	#0
+	lda	#$fe
+	sta:rne	FILL_br,x+
+	ldx	#31
+	lda	#3*FILL_mb
+filib	sta	FILL_br,x-
+	sbc	#3	+
+	bcs	filib
+	lda	#0
+	sta:rpl	FILL_br,x-
+	rts
+
+* ---xxxxxxxxxx-----
+*    ^         ^
+*    ls        rs
+* x - pixel  xx - byte
+
+FILL_pt	lda	FILL_ls
+filpls	equ	*-1
+	cmp	FILL_rs
+filqrs	equ	*-1
+	bcs	filpe+3*FILL_mb
+	lsr	@
+	tax
+	bcc	filp1
+filps1	lda	SCR_1,x
+	and	#$f0
+	eor	FILL_ox
+filps2	sta	SCR_1,x
+	inx
+filp1	lda	FILL_rs
+filprs	equ	*-1
+	lsr	@
+	bcc	filp2
+	tay
+filps3	lda	SCR_1,y
+	and	#$f
+	eor	FILL_xo
+filps4	sta	SCR_1,y
+	tya
+filp2	eor	<FILL_br+$1f
+	sta	filmov+1
+filpmo	equ	*-2
+	lda	FILL_xx
+filmov	mvy	FILL_br,x	filbra+1
+filpba	equ	*-2
+filbra	bne	*	!
+filpe	equ	*
+FILL_pl	equ	*-FILL_pt
+
+** RECT
+RECT_33	mvx	#3	RECT_du
+	stx	RECT_dv
+	ldx	#7
+	ldy	#7
+RECT_xy	sty	RECT_pv
+RECT_x	stx	RECT_pu
+RECT	sta	FILL_xx
+	and	#$f
+	sta	FILL_ox
+	eor	FILL_xx
+	sta	FILL_xo
+
+	lda	RECT_nz
+	ldy	RECT_pu
+	add	(RECT_uz),y
+	ldy	RECT_pv
+	add	(RECT_vz),y
+	pha
+	tay
+	ldx	PERS_zh,y
+	stx	perx1+2
+	stx	pery1+2
+	ldy	RECT_du
+	add	(RECT_uz),y
+	tay
+	ldx	PERS_zh,y
+	stx	perx2+2
+	stx	pery2+2
+	ldy	RECT_dv
+	add	(RECT_vz),y
+	tay
+	ldx	PERS_zh,y
+	stx	perx3+2
+	stx	pery3+2
+	pla
+	ldy	RECT_dv
+	add	(RECT_vz),y
+	tay
+	ldx	PERS_zh,y
+	stx	perx4+2
+	stx	pery4+2
+
+	lda	RECT_nx
+	ldy	RECT_pu
+	add	(RECT_ux),y
+	ldy	RECT_pv
+	add	(RECT_vx),y
+	pha
+	tay
+	ldx	PERS_xl,y
+perx1	ldy	PERS_tab,x
+	sty	CAPO_x1
+	ldy	RECT_du
+	add	(RECT_ux),y
+	tay
+	ldx	PERS_xl,y
+perx2	ldy	PERS_tab,x
+	sty	CAPO_x2
+	ldy	RECT_dv
+	add	(RECT_vx),y
+	tay
+	ldx	PERS_xl,y
+perx3	ldy	PERS_tab,x
+	sty	CAPO_x3
+	pla
+	ldy	RECT_dv
+	add	(RECT_vx),y
+	tay
+	ldx	PERS_xl,y
+perx4	ldy	PERS_tab,x
+	sty	CAPO_x4
+
+	lda	RECT_ny
+	ldy	RECT_pu
+	add	(RECT_uy),y
+	ldy	RECT_pv
+	add	(RECT_vy),y
+	pha
+	tay
+	ldx	PERS_xl,y
+pery1	ldy	PERS_tab,x
+	sty	CAPO_y1
+	ldy	RECT_du
+	add	(RECT_uy),y
+	tay
+	ldx	PERS_xl,y
+pery2	ldy	PERS_tab,x
+	sty	CAPO_y2
+	ldy	RECT_dv
+	add	(RECT_vy),y
+	tay
+	ldx	PERS_xl,y
+pery3	ldy	PERS_tab,x
+	sty	CAPO_y3
+	pla
+	ldy	RECT_dv
+	add	(RECT_vy),y
+	tay
+	ldx	PERS_xl,y
+pery4	ldy	PERS_tab,x
+	sty	CAPO_y4
+
+	mva	#80	FILL_us
+	mva	#0	FILL_ds
+	mva	CAPO_x1	LINE_x1
+	mva	CAPO_y1	LINE_y1
+	mva	CAPO_x2	LINE_x2
+	lda	CAPO_y2
+	jsr	LINE
+	mva	CAPO_x2	LINE_x1
+	mva	CAPO_y2	LINE_y1
+	mva	CAPO_x3	LINE_x2
+	lda	CAPO_y3
+	jsr	LINE
+	mva	CAPO_x3	LINE_x1
+	mva	CAPO_y3	LINE_y1
+	mva	CAPO_x4	LINE_x2
+	lda	CAPO_y4
+	jsr	LINE
+	mva	CAPO_x4	LINE_x1
+	mva	CAPO_y4	LINE_y1
+	mva	CAPO_x1	LINE_x2
+	lda	CAPO_y1
+	jsr	LINE
+
+	mva	#{lda 0}	(FILL_rv),0
+	ldx	FILL_us
+	ldy	FILL_ds
+	lda	SCR_h
+	cmp	>SCR_1
+	beq	db2
+	mva	FILL_l1,x	fjp1+1
+	mva	FILL_h1,x	fjp1+2
+	mva	FILL_l1,y	FILL_rv
+	mva	FILL_h1,y	FILL_rv+1
+	mva	#{rts}	(FILL_rv),0
+fjp1	jmp	$4c4c
+db2	mva	FILL_l2,x	fjp2+1
+	mva	FILL_h2,x	fjp2+2
+	mva	FILL_l2,y	FILL_rv
+	mva	FILL_h2,y	FILL_rv+1
+	mva	#{rts}	(FILL_rv),0
+fjp2	jmp	$4c4c
+
+** DRAW
+DRAW_33	sta	DRAW_s
+	lda	#$88
+	jsr	RECT_33
+	mva	#0	RECT_du
+	sta	RECT_dv
+	ldx	DRAW_s
+	lda	RUBI_sf,x
+	ldx	#4
+	ldy	#4
+	jsr	RECT_xy
+	ldx	DRAW_s
+	lda	RUBI_sf+1,x
+	ldx	#5
+	jsr	RECT_x
+	ldx	DRAW_s
+	lda	RUBI_sf+2,x
+	ldx	#6
+	jsr	RECT_x
+	ldx	DRAW_s
+	lda	RUBI_sf+7,x
+	ldx	#4
+	ldy	#5
+	jsr	RECT_xy
+	ldx	DRAW_s
+	lda	RUBI_sc,x
+	ldx	#5
+	jsr	RECT_x
+	ldx	DRAW_s
+	lda	RUBI_sf+3,x
+	ldx	#6
+	jsr	RECT_x
+	ldx	DRAW_s
+	lda	RUBI_sf+6,x
+	ldx	#4
+	ldy	#6
+	jsr	RECT_xy
+	ldx	DRAW_s
+	lda	RUBI_sf+5,x
+	ldx	#5
+	jsr	RECT_x
+	ldx	DRAW_s
+	lda	RUBI_sf+4,x
+	ldx	#6
+	jmp	RECT_x
+
+DRAW_23	sta	DRAW_s
+	mva	#2	RECT_du
+	mva	#3	RECT_dv
+	mva	#7	RECT_pu
+	sta	RECT_pv
+	lda	#$88
+	jsr	RECT
+	mva	#0	RECT_du
+	sta	RECT_dv
+	ldx	DRAW_s
+	lda	RUBI_sf+6,x
+	ldx	#4
+	ldy	#4
+	jsr	RECT_xy
+	ldx	DRAW_s
+	lda	RUBI_sf+7,x
+	ldx	#5
+	jsr	RECT_x
+	ldx	DRAW_s
+	lda	RUBI_sf+5,x
+	ldx	#4
+	ldy	#5
+	jsr	RECT_xy
+	ldx	DRAW_s
+	lda	RUBI_sc,x
+	ldx	#5
+	jsr	RECT_x
+	ldx	DRAW_s
+	lda	RUBI_sf+4,x
+	ldx	#4
+	ldy	#6
+	jsr	RECT_xy
+	ldx	DRAW_s
+	lda	RUBI_sf+3,x
+	ldx	#5
+	jmp	RECT_x
+
+DRAW_13	sta	DRAW_s
+	mva	#1	RECT_du
+	mva	#3	RECT_dv
+	mva	#8	RECT_pu
+	mva	#7	RECT_pv
+	lda	#$88
+	jsr	RECT
+	mva	#0	RECT_du
+	sta	RECT_dv
+	ldx	DRAW_s
+	lda	RUBI_sf,x
+	ldx	#6
+	ldy	#4
+	jsr	RECT_xy
+	ldx	DRAW_s
+	lda	RUBI_sf+1,x
+	ldx	#6
+	ldy	#5
+	jsr	RECT_xy
+	ldx	DRAW_s
+	lda	RUBI_sf+2,x
+	ldx	#6
+	ldy	#6
+	jmp	RECT_xy
+
+DRAW_tu0 ldx	#0
+DRAW_tu	ldy	CAPO_ax,x
+	mva	CAPO_tl,y	RECT_ux
+	mva	CAPO_th,y	RECT_ux+1
+	ldy	CAPO_ay,x
+	mva	CAPO_tl,y	RECT_uy
+	mva	CAPO_th,y	RECT_uy+1
+	ldy	CAPO_az,x
+	mva	CAPO_tl,y	RECT_uz
+	mva	CAPO_th,y	RECT_uz+1
+	rts
+
+DRAW_tv	ldy	CAPO_ax,x
+	mva	CAPO_tl,y	RECT_vx
+	mva	CAPO_th,y	RECT_vx+1
+	ldy	CAPO_ay,x
+	mva	CAPO_tl,y	RECT_vy
+	mva	CAPO_th,y	RECT_vy+1
+	ldy	CAPO_az,x
+	mva	CAPO_tl,y	RECT_vz
+	mva	CAPO_th,y	RECT_vz+1
+	rts
+
+DRAW_uv	ldy	CAPO_ax,x
+	mva	CAPO_ul,y	RECT_vx
+	mva	CAPO_uh,y	RECT_vx+1
+	ldy	CAPO_ay,x
+	mva	CAPO_ul,y	RECT_vy
+	mva	CAPO_uh,y	RECT_vy+1
+	ldy	CAPO_az,x
+	mva	CAPO_ul,y	RECT_vz
+	mva	CAPO_uh,y	RECT_vz+1
+	rts
+
+DRAW_1	lda	CAPO_az
+	bpl	dr1_1
+	cmp	#-DRAW_v3
+	bcs	dr1_1
+	sta	RECT_nz
+	mva	CAPO_ax	RECT_nx
+	mva	CAPO_ay	RECT_ny
+	ldx	#9
+	jsr	DRAW_tu
+	ldx	#12
+	jsr	DRAW_uv
+	ldx	RUBI_r2
+	lda	RUBI_s1,x
+	jsr	DRAW_33
+dr1_1	lda	#0
+	sub	CAPO_dz
+	bpl	dr1_2
+	cmp	#-DRAW_v3
+	bcs	dr1_2
+	sta	RECT_nz
+	lda	#0
+	sub	CAPO_dx
+	sta	RECT_nx
+	lda	#0
+	sub	CAPO_dy
+	sta	RECT_ny
+	jsr	DRAW_tu0
+	ldx	#12
+	jsr	DRAW_uv
+	ldx	RUBI_r2
+	lda	RUBI_s2,x
+	jsr	DRAW_13
+dr1_2	lda	CAPO_dz
+	bpl	dr1_3
+	cmp	#-DRAW_v3
+	bcs	dr1_3
+	sta	RECT_nz
+	mva	CAPO_dx	RECT_nx
+	mva	CAPO_dy	RECT_ny
+	jsr	DRAW_tu0
+	ldx	#12
+	jsr	DRAW_tv
+	ldx	RUBI_r2
+	lda	RUBI_s3,x
+	jsr	DRAW_13
+dr1_3	lda	#0
+	sub	CAPO_ez
+	bpl	dr1_4
+	cmp	#-DRAW_v3
+	bcs	dr1_4
+	sta	RECT_nz
+	lda	#0
+	sub	CAPO_ex
+	sta	RECT_nx
+	lda	#0
+	sub	CAPO_ey
+	sta	RECT_ny
+	jsr	DRAW_tu0
+	ldx	#9
+	jsr	DRAW_tv
+	ldx	RUBI_r2
+	lda	RUBI_s4,x
+	jsr	DRAW_13
+dr1_4	lda	CAPO_ez
+	bpl	dr1_5
+	cmp	#-DRAW_v3
+	bcs	dr1_5
+	sta	RECT_nz
+	mva	CAPO_ex	RECT_nx
+	mva	CAPO_ey	RECT_ny
+	jsr	DRAW_tu0
+	ldx	#9
+	jsr	DRAW_uv
+	ldx	RUBI_r2
+	lda	RUBI_s5,x
+	jmp	DRAW_13
+dr1_5	rts
+
+DRAW_2	lda	#0
+	sub	CAPO_az
+	bpl	dr2_1
+	cmp	#-DRAW_v3
+	bcs	dr2_1
+	sta	RECT_nz
+	lda	#0
+	sub	CAPO_ax
+	sta	RECT_nx
+	lda	#0
+	sub	CAPO_ay
+	sta	RECT_ny
+	ldx	#3
+	jsr	DRAW_tu
+	ldx	#6
+	jsr	DRAW_tv
+	ldx	RUBI_r2
+	lda	RUBI_s0,x
+	jsr	DRAW_33
+dr2_1	lda	#0
+	sub	CAPO_bz
+	bpl	dr2_2
+	cmp	#-DRAW_v3
+	bcs	dr2_2
+	sta	RECT_nz
+	lda	#0
+	sub	CAPO_bx
+	sta	RECT_nx
+	lda	#0
+	sub	CAPO_by
+	sta	RECT_ny
+	jsr	DRAW_tu0
+	ldx	#6
+	jsr	DRAW_uv
+	ldx	RUBI_r2
+	lda	RUBI_s2,x
+	jsr	DRAW_23
+dr2_2	lda	CAPO_bz
+	bpl	dr2_3
+	cmp	#-DRAW_v3
+	bcs	dr2_3
+	sta	RECT_nz
+	mva	CAPO_bx	RECT_nx
+	mva	CAPO_by	RECT_ny
+	jsr	DRAW_tu0
+	ldx	#6
+	jsr	DRAW_tv
+	ldx	RUBI_r2
+	lda	RUBI_s3,x
+	jsr	DRAW_23	
+dr2_3	lda	#0
+	sub	CAPO_cz
+	bpl	dr2_4
+	cmp	#-DRAW_v3
+	bcs	dr2_4
+	sta	RECT_nz
+	lda	#0
+	sub	CAPO_cx
+	sta	RECT_nx
+	lda	#0
+	sub	CAPO_cy
+	sta	RECT_ny
+	jsr	DRAW_tu0
+	ldx	#3
+	jsr	DRAW_tv
+	ldx	RUBI_r2
+	lda	RUBI_s4,x
+	jsr	DRAW_23
+dr2_4	lda	CAPO_cz
+	bpl	dr2_5
+	cmp	#-DRAW_v3
+	bcs	dr2_5
+	sta	RECT_nz
+	mva	CAPO_cx	RECT_nx
+	mva	CAPO_cy	RECT_ny
+	jsr	DRAW_tu0
+	ldx	#3
+	jsr	DRAW_uv
+	ldx	RUBI_r2
+	lda	RUBI_s5,x
+	jmp	DRAW_23
+dr2_5	rts
+
+** SHOW
+sh13	jsr	DRAW_tu0
+	ldy	#8
+	mva	(RECT_ux),y	RECT_nx
+	mva	(RECT_uy),y	RECT_ny
+	mva	(RECT_uz),y	RECT_nz
+	rts
+
+SHOW
+	lda	>SCR_1^SCR_2
+	eor:sta	SCR_h
+	ift	!TEST_nocls
+	cmp	>SCR_2
+	lda	#$00
+	bcc	cl2
+	jsr	CLS_1
+	bcs	clx	!
+cl2	jsr	CLS_2
+clx
+	eif
+	jsr	ROTM
+	ldx	#2
+	ldy	RUBI_r2
+	mva	SHOW_br,y	SHOW_bc+1
+SHOW_bc	bpl	*
+SHOW_c0	mva	ROTM_ax,x	CAPO_ax,x
+	mva	ROTM_bx,x	CAPO_bx,x
+	mva	ROTM_cx,x	CAPO_cx,x
+	dex
+	bpl	SHOW_c0
+	bmi	SHOW_cx	!
+SHOW_c1	mva	ROTM_bx,x	CAPO_ax,x
+	mva	ROTM_cx,x	CAPO_bx,x
+	mva	ROTM_ax,x	CAPO_cx,x
+	dex
+	bpl	SHOW_c1
+	bmi	SHOW_cx	!
+SHOW_c2	mva	ROTM_cx,x	CAPO_ax,x
+	mva	ROTM_ax,x	CAPO_bx,x
+	mva	ROTM_bx,x	CAPO_cx,x
+	dex
+	bpl	SHOW_c2
+	bmi	SHOW_cx	!
+SHOW_c3	lda	#0
+	sub	ROTM_bx,x
+	sta	CAPO_ax,x
+	lda	#0
+	sub	ROTM_ax,x
+	sta	CAPO_bx,x
+	lda	#0
+	sub	ROTM_cx,x
+	sta	CAPO_cx,x
+	dex
+	bpl	SHOW_c3
+	bmi	SHOW_cx	!
+SHOW_c4	lda	#0
+	sub	ROTM_cx,x
+	sta	CAPO_ax,x
+	lda	#0
+	sub	ROTM_bx,x
+	sta	CAPO_bx,x
+	lda	#0
+	sub	ROTM_ax,x
+	sta	CAPO_cx,x
+	dex
+	bpl	SHOW_c4
+	bmi	SHOW_cx	!
+SHOW_c5	lda	#0
+	sub	ROTM_ax,x
+	sta	CAPO_ax,x
+	lda	#0
+	sub	ROTM_cx,x
+	sta	CAPO_bx,x
+	lda	#0
+	sub	ROTM_bx,x
+	sta	CAPO_cx,x
+	dex
+	bpl	SHOW_c5
+SHOW_cx	lda	>CAPO_rt
+	add	CAPO_ra
+	sta	sdes1+3
+	sta	sdes2+3
+	lda	>CAPO_rt+$f00
+	sub	CAPO_ra
+	sta	sdec1+2
+	sta	sdec2+2
+	ldx	#2
+SHOW_de	ldy	CAPO_bx,x
+sdec1	lda	CAPO_rt,y
+	ldy	CAPO_cx,x
+sdes1	add	CAPO_rt,y
+	sta	CAPO_dx,x
+;	ldy	CAPO_cx,x
+sdec2	lda	CAPO_rt,y
+	ldy	CAPO_bx,x
+sdes2	sub	CAPO_rt,y
+	sta	CAPO_ex,x
+	dex:bpl	SHOW_de
+
+	lda	CAPO_az
+	bpl	sh12
+	cmp	#-DRAW_v1
+	bcs	sh12
+	jsr	DRAW_2
+	jsr	sh13
+	ldx	#6
+	jsr	DRAW_tu
+	ldx	#3
+	jsr	DRAW_tv
+	lda	#$77
+	jsr	RECT_33
+	jmp	DRAW_1
+sh12	jsr	DRAW_1
+	jsr	sh13
+	ldx	#12
+	jsr	DRAW_tu
+	ldx	#9
+	jsr	DRAW_uv
+	lda	#$77
+	jsr	RECT_33
+	jmp	DRAW_2
+
+** RUBI
+ruru	lda	#2
+rurul	sta	bx
+	add	t1
+	and	#$f7
+	tax
+	lda	bx
+	adc	t1+1	-
+	and	#$f7
+	tay
+	lda:pha	RUBI_sf,x
+	mva	RUBI_sf,y	RUBI_sf,x
+	sta	RUBI_sf+8,x
+	lda	bx
+	adc	t2	-
+	and	#$f7
+	tax
+	mva	RUBI_sf,x	RUBI_sf,y
+	sta	RUBI_sf+8,y
+	lda	bx
+	adc	t2+1	-
+	and	#$f7
+	tay
+	mva	RUBI_sf,y	RUBI_sf,x
+	sta	RUBI_sf+8,x
+	pla:sta	RUBI_sf,y
+	sta	RUBI_sf+8,y
+	lda	bx
+	sbc	#0	-
+	bcs	rurul
+	ldy	RUBI_r2
+	ldx	RUBI_s1,y
+	rts
+
+RUBI_r0	ldy	RUBI_r2
+	mva	RUBI_s4,y	t1
+	mva	RUBI_s2,y	t1+1
+	mva	RUBI_s5,y	t2
+	mva	RUBI_s3,y	t2+1
+	jsr	ruru
+	lda:pha	RUBI_sf,x
+	lda:pha	RUBI_sf+1,x
+	ldy	#6
+ruru0b	mva	RUBI_sf+2,x	RUBI_sf,x
+	sta	RUBI_sf+8,x+
+	txa:and	#$f7
+	tax
+	dey:bne	ruru0b
+	pla:sta	RUBI_sf+1,x
+	sta	RUBI_sf+9,x
+	pla:sta	RUBI_sf,x
+	sta	RUBI_sf+8,x
+	rts
+
+RUBI_r1	ldy	RUBI_r2
+	mva	RUBI_s3,y	t1
+	mva	RUBI_s5,y	t1+1
+	mva	RUBI_s2,y	t2
+	mva	RUBI_s4,y	t2+1
+	jsr	ruru
+	stx	t1
+	lda:pha	RUBI_sf+6,x
+	lda:pha	RUBI_sf+7,x
+	ldy	#6
+ruru1b	tya
+	sec:adc	t1
+	and	#$f7
+	tax
+	mva	RUBI_sf+6,x	RUBI_sf,x
+	sta	RUBI_sf+8,x
+	dey:bne	ruru1b
+	ldx	t1
+	pla:sta	RUBI_sf+1,x
+	sta	RUBI_sf+9,x
+	pla:sta	RUBI_sf,x
+	sta	RUBI_sf+8,x
+	rts
+
+RUBI_init
+	clc
+	lda	#$11
+	ldy	#0
+rubin1	ldx	#$10
+rubin2	sta	RUBI_sf,y
+	sta	RUBI_sc,y+
+	dex:bne	rubin2
+	adc	#$11
+	cpy	#$60
+	bcc	rubin1
+
+	ldx	#0
+rulo1	lda	^2a
+	and	#$f
+	cmp	#12
+	bcs	rulo1
+	eor	RUBI_ry-1,x
+	cmp	#1
+	beq	rulo1
+	eor	RUBI_ry-1,x
+	stx	di
+	sta	RUBI_ry,x
+	lsr	@
+	sta	RUBI_r2
+	bcs	rulo2
+	jsr	RUBI_r1
+	jmp	rulo3
+rulo2	jsr	RUBI_r0
+rulo3	ldx	di
+	inx:cpx	#RUBI_n
+	bcc	rulo1
+	dex:stx	RUBI_ri
+	mva	#1	RUBI_ru
+	sta	RUBI_fi
+;	sta	CAPO_ra
+	rts
+
+*** Data
+
+** SCR
+SCR_col	dta	$72,$18,$24,$c2,$72,$0c,$ee,$02,$00,$80
+
+** CLS
+CLS_tab	dta	%00000000,%01111111,%11111110,%00000000
+	dta	%00000000,%11111111,%11111111,%00000000
+	dta	%00000001,%11111111,%11111111,%10000000
+	dta	%00000011,%11111111,%11111111,%11000000
+	dta	%00000111,%11111111,%11111111,%11100000
+	dta	%00001111,%11111111,%11111111,%11110000
+	dta	%00001111,%11111111,%11111111,%11110000
+	dta	%00011111,%11111111,%11111111,%11111000
+	dta	%00011111,%11111111,%11111111,%11111000
+	dta	%00111111,%11111111,%11111111,%11111100
+	dta	%00111111,%11111111,%11111111,%11111100
+	dta	%00111111,%11111111,%11111111,%11111100
+	dta	%01111111,%11111111,%11111111,%11111110
+	dta	%01111111,%11111111,%11111111,%11111110
+	dta	%01111111,%11111000,%00011111,%11111110
+	dta	%01111111,%11110000,%00001111,%11111110
+	dta	%11111111,%11100000,%00000111,%11111111
+	dta	%11111111,%11000000,%00000011,%11111111
+	dta	%11111111,%11000000,%00000011,%11111111
+	dta	%11111111,%10000000,%00000001,%11111111
+	dta	%11111111,%10000000,%00000001,%11111111
+	dta	%11111111,%10000000,%00000001,%11111111
+	dta	%11111111,%10000000,%00000001,%11111111
+	dta	%11111111,%00000000,%00000000,%11111111
+	dta	%11111111,%00000000,%00000000,%11111111
+	dta	%11111111,%00000000,%00000000,%11111111
+	dta	%11111111,%00000000,%00000000,%11111111
+	dta	%11111111,%00000000,%00000000,%11111111
+	dta	%11111111,%00000000,%00000000,%11111111
+	dta	%11111111,%00000000,%00000000,%11111111
+	dta	%11111111,%00000000,%00000000,%11111111
+	dta	%11111111,%00000000,%00000000,%11111111
+	dta	%11111111,%00000000,%00000000,%11111111
+	dta	%11111111,%00000000,%00000000,%11111111
+	dta	%11111111,%00000000,%00000000,%11111111
+	dta	%11111111,%00000000,%00000000,%11111111
+	dta	%11111111,%10000000,%00000001,%11111111
+	dta	%11111111,%10000000,%00000001,%11111111
+	dta	%11111111,%10000000,%00000001,%11111111
+	dta	%11111111,%11000000,%00000011,%11111111
+	dta	%11111111,%11000000,%00000011,%11111111
+	dta	%11111111,%11000000,%00000011,%11111111
+	dta	%11111111,%11100000,%00000111,%11111111
+	dta	%11111111,%11110000,%00001111,%11111111
+	dta	%01111111,%11111100,%00111111,%11111110
+	dta	%01111111,%11111111,%11111111,%11111110
+	dta	%01111111,%11111111,%11111111,%11111110
+	dta	%01111111,%11111111,%11111111,%11111110
+	dta	%00111111,%11111111,%11111111,%11111100
+	dta	%00111111,%11111111,%11111111,%11111100
+	dta	%00111111,%11111111,%11111111,%11111100
+	dta	%00111111,%11111111,%11111111,%11111100
+	dta	%00011111,%11111111,%11111111,%11111000
+	dta	%00001111,%11111111,%11111111,%11110000
+	dta	%00001111,%11111111,%11111111,%11110000
+	dta	%00000111,%11111111,%11111111,%11100000
+	dta	%00000111,%11111111,%11111111,%11100000
+	dta	%00000011,%11111111,%11111111,%11000000
+	dta	%00000001,%11111111,%11111111,%10000000
+;	dta	%00000000,%00000000,%00000000,%00000000
+
+** ROTM
+ROTM_sl	dta	l(sin(0,ROTM_sa,512,0,128))
+ROTM_sh	dta	h(sin(0,ROTM_sa,512,0,128))
+
+** CAPO
+CAPO_lt	dta	l($100*[2*CAPO_l-2*CAPO_m]/[3*CAPO_l])
+	dta	l($100*[2*CAPO_l]/[3*CAPO_l])
+	dta	l($100*[4*CAPO_l]/[3*CAPO_l])
+	dta	l($100*[6*CAPO_l]/[3*CAPO_l])
+	dta	l($100*[-3*CAPO_l+CAPO_m]/[3*CAPO_l])
+	dta	l($100*[-CAPO_l+CAPO_m]/[3*CAPO_l])
+	dta	l($100*[CAPO_l+CAPO_m]/[3*CAPO_l])
+	dta	l($100*[-3*CAPO_l]/[3*CAPO_l])
+	dta	l($100*[CAPO_l]/[3*CAPO_l])
+CAPO_ht	dta	h($100*[2*CAPO_l-2*CAPO_m]/[3*CAPO_l])
+	dta	h($100*[2*CAPO_l]/[3*CAPO_l])
+	dta	h($100*[4*CAPO_l]/[3*CAPO_l])
+	dta	h($100*[6*CAPO_l]/[3*CAPO_l])
+	dta	h($100*[-3*CAPO_l+CAPO_m]/[3*CAPO_l])
+	dta	h($100*[-CAPO_l+CAPO_m]/[3*CAPO_l])
+	dta	h($100*[CAPO_l+CAPO_m]/[3*CAPO_l])
+	dta	h($100*[-3*CAPO_l]/[3*CAPO_l])
+	dta	h($100*[CAPO_l]/[3*CAPO_l])
+CAPO_st	dta	sin(0,$100,4*CAPO_rf,0,CAPO_rf-1)
+
+** PERS
+PERS_zt	dta	b($100*PERS_c/[PERS_d],$100*PERS_c/[PERS_d+1])
+	dta	b($100*PERS_c/[PERS_d+2],$100*PERS_c/[PERS_d+3])
+	dta	b($100*PERS_c/[PERS_d+4],$100*PERS_c/[PERS_d+5])
+	dta	b($100*PERS_c/[PERS_d+6],$100*PERS_c/[PERS_d+7])
+	dta	b($100*PERS_c/[PERS_d+8],$100*PERS_c/[PERS_d+9])
+	dta	b($100*PERS_c/[PERS_d+10],$100*PERS_c/[PERS_d+11])
+	dta	b($100*PERS_c/[PERS_d+12],$100*PERS_c/[PERS_d+13])
+	dta	b($100*PERS_c/[PERS_d+14],$100*PERS_c/[PERS_d+15])
+	dta	b($100*PERS_c/[PERS_d+16],$100*PERS_c/[PERS_d+17])
+	dta	b($100*PERS_c/[PERS_d+18],$100*PERS_c/[PERS_d+19])
+	dta	b($100*PERS_c/[PERS_d+20],$100*PERS_c/[PERS_d+21])
+	dta	b($100*PERS_c/[PERS_d+22],$100*PERS_c/[PERS_d+23])
+	dta	b($100*PERS_c/[PERS_d+24],$100*PERS_c/[PERS_d+25])
+	dta	b($100*PERS_c/[PERS_d+26],$100*PERS_c/[PERS_d+27])
+	dta	b($100*PERS_c/[PERS_d+28],$100*PERS_c/[PERS_d+29])
+	dta	b($100*PERS_c/[PERS_d+30],$100*PERS_c/[PERS_d+31])
+	dta	b($100*PERS_c/[PERS_d-32],$100*PERS_c/[PERS_d-31])
+	dta	b($100*PERS_c/[PERS_d-30],$100*PERS_c/[PERS_d-29])
+	dta	b($100*PERS_c/[PERS_d-28],$100*PERS_c/[PERS_d-27])
+	dta	b($100*PERS_c/[PERS_d-26],$100*PERS_c/[PERS_d-25])
+	dta	b($100*PERS_c/[PERS_d-24],$100*PERS_c/[PERS_d-23])
+	dta	b($100*PERS_c/[PERS_d-22],$100*PERS_c/[PERS_d-21])
+	dta	b($100*PERS_c/[PERS_d-20],$100*PERS_c/[PERS_d-19])
+	dta	b($100*PERS_c/[PERS_d-18],$100*PERS_c/[PERS_d-17])
+	dta	b($100*PERS_c/[PERS_d-16],$100*PERS_c/[PERS_d-15])
+	dta	b($100*PERS_c/[PERS_d-14],$100*PERS_c/[PERS_d-13])
+	dta	b($100*PERS_c/[PERS_d-12],$100*PERS_c/[PERS_d-11])
+	dta	b($100*PERS_c/[PERS_d-10],$100*PERS_c/[PERS_d-9])
+	dta	b($100*PERS_c/[PERS_d-8],$100*PERS_c/[PERS_d-7])
+	dta	b($100*PERS_c/[PERS_d-6],$100*PERS_c/[PERS_d-5])
+	dta	b($100*PERS_c/[PERS_d-4],$100*PERS_c/[PERS_d-3])
+	dta	b($100*PERS_c/[PERS_d-2],$100*PERS_c/[PERS_d-1])
+
+** LINE
+	ift	1
+	icl	'tan.asx'
+	els
+LINE_lt	dta	l($0000,$0006,$000C,$0012,$0019,$001F,$0025,$002C)
+	dta	l($0032,$0039,$0040,$0046,$004D,$0054,$005B,$0062)
+	dta	l($006A,$0071,$0079,$0080,$0088,$0091,$0099,$00A2)
+	dta	l($00AB,$00B4,$00BD,$00C7,$00D2,$00DC,$00E8,$00F3)
+	dta	l($0100,$010C,$011A,$0128,$0137,$0148,$0159,$016B)
+	dta	l($017F,$0194,$01AB,$01C3,$01DE,$01FC,$021D,$0241)
+	dta	l($026A,$0297,$02CB,$0306,$034B,$039D,$03FE,$0474)
+	dta	l($0506,$05C3,$06BD,$081B,$0A27,$0D8E,$145A,$28BC)
+LINE_ht	dta	h($0000,$0006,$000C,$0012,$0019,$001F,$0025,$002C)
+	dta	h($0032,$0039,$0040,$0046,$004D,$0054,$005B,$0062)
+	dta	h($006A,$0071,$0079,$0080,$0088,$0091,$0099,$00A2)
+	dta	h($00AB,$00B4,$00BD,$00C7,$00D2,$00DC,$00E8,$00F3)
+	dta	h($0100,$010C,$011A,$0128,$0137,$0148,$0159,$016B)
+	dta	h($017F,$0194,$01AB,$01C3,$01DE,$01FC,$021D,$0241)
+	dta	h($026A,$0297,$02CB,$0306,$034B,$039D,$03FE,$0474)
+	dta	h($0506,$05C3,$06BD,$081B,$0A27,$0D8E,$145A,$28BC)
+	eif
+
+** SHOW
+SHOW_br	dta	SHOW_c0-SHOW_c0,SHOW_c1-SHOW_c0,SHOW_c2-SHOW_c0
+	dta	SHOW_c3-SHOW_c0,SHOW_c4-SHOW_c0,SHOW_c5-SHOW_c0
+
+** RUBI
+RUBI_s0	dta	$00,$24,$46,$32,$50,$12
+RUBI_s1	dta	$10,$30,$56,$22,$44,$06
+RUBI_s2	dta	$20,$42,$04,$16,$36,$54
+RUBI_s3	dta	$30,$56,$10,$06,$22,$44
+RUBI_s4	dta	$40,$02,$26,$52,$14,$34
+RUBI_s5	dta	$50,$12,$32,$46,$00,$24
+
+** BAR
+BAR_tab
+:5	dta	$72
+:4	dta	$74
+	dta	$76,$76,$78,$78,$7a,$7c
+	dta	$5c,$5a,$58,$58,$56,$56
+:4	dta	$54
+:6	dta	$52
+
+	ift	FADE
+FADE_table0
+	dta	$0,$0,$0,$0,$0,$0,$0,$0,$0,$0,$0,$0,$0,$0,$0,$0
+FADE_table2
+	dta	$0,$0,$0,$0,$0,$0,$0,$0,$0,$0,$1,$1,$1,$1,$1,$1
+FADE_table4
+	dta	$0,$0,$0,$0,$1,$1,$1,$1,$1,$1,$1,$1,$3,$3,$3,$3
+FADE_table6
+	dta	$0,$0,$1,$1,$1,$1,$1,$1,$3,$3,$3,$3,$3,$5,$5,$5
+FADE_table8
+	dta	$0,$1,$1,$1,$1,$3,$3,$3,$3,$5,$5,$5,$5,$7,$7,$7
+FADE_tableA
+	dta	$0,$1,$1,$1,$3,$3,$3,$5,$5,$5,$7,$7,$7,$7,$9,$9
+FADE_tableC
+	dta	$0,$1,$1,$3,$3,$3,$5,$5,$7,$7,$7,$9,$9,$9,$b,$b
+FADE_tableE
+	dta	$0,$1,$3,$3,$3,$5,$5,$7,$7,$9,$9,$9,$b,$b,$d,$d
+	eif
+
+	end

@@ -1,0 +1,184 @@
+	icl	'numendef.asx'
+
+; from START.COM
+dl1	equ	$3c00
+dl2	equ	$3d00
+
+Mover_input	equ	$f0
+Mover_dest	equ	$f2
+Mover_len	equ	$f4
+
+PlayInf_packed	equ	$4006
+
+Runtime1_begin	equ	$ff00
+		ert	NextBlock!=Runtime1_begin-Reloc1_begin+NextBlock_reloc
+Mover		equ	Runtime1_begin-Reloc1_begin+Mover_reloc
+;_rts		equ	Runtime1_begin-Reloc1_begin+rts_reloc
+		ert	rts!=Runtime1_begin-Reloc1_begin+rts_reloc
+;_Runtime1_end	equ	Runtime1_begin-Reloc1_begin+Reloc1_end
+		ert	Runtime1_end!=Runtime1_begin-Reloc1_begin+Reloc1_end
+
+Banks_save	equ	$3b00
+
+	org	$3e00
+Banks_sig	org	*+3	; 'tQa'
+Loader_bankTable	org	*+17
+
+	org	$3e20
+Loader_moveToBank
+	lda:pha	^31
+	lda	Banks_sig
+	cmp	#'t'
+	bne	Banks_auto
+	lda	Banks_sig+1
+	cmp	#'Q'
+	bne	Banks_auto
+	lda	Banks_sig+2
+	cmp	#'a'
+	beq	Loader_startMove
+Banks_auto
+	sei:mva	#0	^4e
+	ldx:rne	^4b
+	stx	$22f
+	stx	^40
+	ldy	#0
+Banks_auto1
+	stx	^31
+	mva	$7fff	Banks_save,x
+	inx:inx
+	bne	Banks_auto1
+Banks_auto2
+	stx	^31
+	stx	$7fff
+	inx:inx
+	bne	Banks_auto2
+Banks_auto3
+	stx	^31
+	cpx	$7fff
+	bne	Banks_auto4
+	txa:sta	Loader_bankTable,y+
+	cpy	#Banks_MAIN_INDEX
+	bcs	Banks_auto5
+Banks_auto4
+	inx:inx
+	bne	Banks_auto3
+Banks_auto5
+	ldx	#0
+Banks_auto6
+	stx	^31
+	mva	Banks_save,x	$7fff
+	inx:inx
+	bne	Banks_auto6
+	cpy	#Banks_MAIN_INDEX
+	bcc	*
+	mva	#$fe	Loader_bankTable,y
+	pla:sta	^31
+	pha
+	mva:cli	#$40	^4e
+	mva	#'t'	Banks_sig
+	mva	#'Q'	Banks_sig+1
+	mva	#'a'	Banks_sig+2
+
+Loader_startMove
+	ldx	#Banks_LOAD_FIRST_INDEX
+Loader_bankIndex equ	*-1
+	lda	20
+	cmp:req	20
+	mva	#$f0	dl1+2
+	sta	dl2+2
+	mva	#$c0	^4e
+	lda	Loader_bankTable,x
+	ora	#1
+	ldx	<$8000
+	ldy	>$8000
+	jsr	Mover_reloc
+	ldx	Loader_bankIndex
+	cpx	#Banks_LOAD_LAST_INDEX
+	bcs	Loader_run
+	inc	Loader_bankIndex
+	pla:sta	^31
+	mva	#$70	dl1+2
+	sta	dl2+2
+	rts
+
+Loader_run
+	lda:rne	^4b
+	sei:sta	^4e
+	sta	^40
+	ldy	#29
+	sta:rpl	^00,y-
+	mva	#$fe	^31
+	lda	Loader_bankTable,x
+	ldx	<Reloc1_toLoad
+	ldy	>Reloc1_toLoad
+	jsr	Mover_reloc
+	ldx	#Banks_NUMBER-1
+	mva:rpl	Loader_bankTable,x	Banks_table,x-
+	txs	#$ff
+	stx	$33d	; reset=coldstart
+
+	lda:tax	#0
+	sta:rne	0,x+
+
+	mwa	#PlayInf_packed	Inflate_inputPointer
+	mva	#Banks_PLAYINF_INDEX	Inflate_inputBankIndex
+	jmp	NextBlock
+
+Reloc1_toLoad
+	dta	a(Runtime1_begin,Runtime1_end-1)
+Reloc1_begin
+NextBlock_reloc
+	lda	Banks_table+BANKS_PLAYINF_INDEX
+	ldx	<Inflate_toLoad
+	ldy	>Inflate_toLoad
+	jsr	Mover
+	jsr	Inflate
+	lda:pha	$8002
+	lda:pha	$8001
+	ldx	$8000
+	lda	Banks_table,x
+	ldx	<$8003
+	ldy	>$8003
+Mover_reloc
+	sta	^31
+	stx	Mover_input
+	sty	Mover_input+1
+Mover_loop
+	ldy	#3
+	mva:rpl	(Mover_input),y	Mover_dest,y-
+	lda	#4
+	add:sta	Mover_input
+	scc:inc	Mover_input+1
+	lda	Mover_len
+	sub	Mover_dest
+	sta	Mover_len
+	lda	Mover_len+1
+	sbc	Mover_dest+1
+	beq	Mover_moveLast
+	tax
+	iny	#0
+Mover_movePage
+	mva:rne	(Mover_input),y	(Mover_dest),y-
+	inc	Mover_input+1
+	inc	Mover_dest+1
+	dex
+	bne	Mover_movePage
+Mover_moveLast
+	ldy	Mover_len
+	beq	Mover_next
+	mva:rne	(Mover_input),y	(Mover_dest),y-
+Mover_next
+	mva	(Mover_input),y	(Mover_dest),y
+	lda	Mover_len
+	sec
+	adc:sta	Mover_input
+	scc:inc	Mover_input+1
+	lda	(Mover_input),y+
+	ora	(Mover_input),y
+	bne	Mover_loop
+rts_reloc
+	rts
+Reloc1_end
+	dta	a(0)
+
+	end

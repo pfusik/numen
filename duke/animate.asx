@@ -1,0 +1,502 @@
+* modules
+; Animate
+; - animates sectors
+
+* arrays
+; Door Doom Up: first point of sector - highest ceilingZ
+; Door Doom Down: first point of sector - lowest floorZ
+; Door Doom Split: first point of sector - lowest floorZ
+; Door Swing CCW, CW: first point of sector (pivot) - angle, other points - original X
+; Lift Floor Only, Ceiling & Floor: first point of sector - lowest floorZ
+Animate_wallX_lo                equ	$4300	(World_MAX_WALLS)
+
+; Door Swing CCW, CW: other points - original X
+; Lift Floor Only, Ceiling & Floor: first point of sector - highest floorZ
+Animate_wallX_hi                equ	$4400	(World_MAX_WALLS)
+
+; Door Swing CW, CCW: other points - original Y
+Animate_wallY_lo                equ	$4500	(World_MAX_WALLS)
+
+; Door Swing CW, CCW: other points - original Y
+Animate_wallY_hi                equ	$4600	(World_MAX_WALLS)
+
+* variables
+Time_ticks                      equ	$8e
+
+Animate_sector                  equ	$e4
+
+* Animate
+; No Effect, Water, Underwater, Door Doom Up
+; Door Doom Down, Door Doom Split, Door Swing CCW, Door Swing CW
+; Lift Floor Only, Lift Ceil Floor
+Animate_init_lo
+	dta	l(Animate_return,Animate_return,Animate_return,Animate_initDoorDoomUp)
+	dta	l(Animate_initDoorDoomDown,Animate_initDoorDoomSplit,Animate_initDoorSwingCCW,Animate_initDoorSwingCW)
+	dta	l(Animate_initLiftFloorOnly,Animate_initLiftCeilFloor)
+Animate_init_hi
+	dta	h(Animate_return,Animate_return,Animate_return,Animate_initDoorDoomUp)
+	dta	h(Animate_initDoorDoomDown,Animate_initDoorDoomSplit,Animate_initDoorSwingCCW,Animate_initDoorSwingCW)
+	dta	h(Animate_initLiftFloorOnly,Animate_initLiftCeilFloor)
+Animate_update_lo
+	dta	l(Animate_return,Animate_return,Animate_return,Animate_updateDoorDoomUp)
+	dta	l(Animate_updateDoorDoomDown,Animate_updateDoorDoomSplit,Animate_updateDoorSwingCCW,Animate_updateDoorSwingCW)
+	dta	l(Animate_updateLiftFloorOnly,Animate_updateLiftCeilFloor)
+Animate_update_hi
+	dta	h(Animate_return,Animate_return,Animate_return,Animate_updateDoorDoomUp)
+	dta	h(Animate_updateDoorDoomDown,Animate_updateDoorDoomSplit,Animate_updateDoorSwingCCW,Animate_updateDoorSwingCW)
+	dta	h(Animate_updateLiftFloorOnly,Animate_updateLiftCeilFloor)
+
+* Animate_init
+; Init Animate module
+Animate_init	| PROFILE
+	ldx	World_sectors
+	dex
+Animate_init_loop
+	ldy	World_sectorEffect,x
+	mva	Animate_init_lo,y	Animate_init_jump+1
+	mva	Animate_init_hi,y	Animate_init_jump+2
+	ldy	World_sectorWall,x
+	stx	Animate_sector
+Animate_init_jump
+	jsr	$2020
+	ldx	Animate_sector
+	dex
+	bpl	Animate_init_loop
+Animate_return
+	rts
+
+; Door Doom Up
+Animate_initDoorDoomUp
+; TODO: open/close
+	mva	World_ceilingZ,x	Animate_wallX_lo,y
+	mva	World_floorZ,x	World_ceilingZ,x
+	rts
+
+; Door Doom Down
+Animate_initDoorDoomDown
+	mva	World_floorZ,x	Animate_wallX_lo,y
+	mva	World_ceilingZ,x	World_floorZ,x
+	rts
+
+; Door Doom Split
+Animate_initDoorDoomSplit
+	mva	World_floorZ,x	Animate_wallX_lo,y
+	add	World_ceilingZ,x
+	ror	@
+	sta	World_ceilingZ,x
+	sta	World_floorZ,x
+	rts
+
+; Door Swing CCW
+Animate_initDoorSwingCCW
+	mva	#$80	Animate_wallX_lo,y
+	tya
+	ldy:dey	World_sectorWall+1,x
+	tax
+Animate_initDoorSwing_loop
+	mva	World_wallX_lo,y	Animate_wallX_lo,y
+	mva	World_wallX_hi,y	Animate_wallX_hi,y
+	mva	World_wallY_lo,y	Animate_wallY_lo,y
+	mva	World_wallY_hi,y	Animate_wallY_hi,y
+	dey
+	txa:cmp	Math_idTable,y
+	bcc	Animate_initDoorSwing_loop
+	rts
+
+; Door Swing CW
+Animate_initDoorSwingCW	equ	Animate_initDoorSwingCCW
+
+* Animate_initLift
+; Find height of raised lift and store in Animate_wallX_hi
+; input: X - lift sector
+Animate_initLift
+; Math_word = lift sector
+; Math_word+1 = lift floor height
+; Math_word2 = lift sector wall end
+; Math_word2+1 = found raised height
+	stx	Math_word
+	mva	World_floorZ,x	Math_word+1
+	sta	Animate_wallX_lo,y
+	mva	World_sectorWall+1,x	Math_word2
+	mva	#0	Math_word2+1
+Animate_initLift_loop
+	ldx	World_wallSector,y
+	bmi	Animate_initLift_next
+	lda	World_floorZ,x
+	cmp	Math_word+1
+	bcs	Animate_initLift_next
+	cmp	Math_word2+1
+	bcc	Animate_initLift_next
+	sta	Math_word2+1
+Animate_initLift_next
+	iny
+	cpy	Math_word2
+	bcc	Animate_initLift_loop
+	ldx	Math_word
+	ldy	World_sectorWall,x
+	mva	Math_word2+1	Animate_wallX_hi,y
+	rts
+
+; Lift Floor Only
+Animate_initLiftFloorOnly
+	jsr	Animate_initLift
+	lda	#World_SECTOR_LIFT_LOW
+	and	World_sectorFlags,x
+	sne:mva	Animate_wallX_hi,y	World_floorZ,x
+	rts
+
+; Lift Ceiling & Floor
+Animate_initLiftCeilFloor
+	jsr	Animate_initLift
+	lda	#World_SECTOR_LIFT_LOW
+	and	World_sectorFlags,x
+	bne	Animate_initLiftCeilFloor_return
+	mva	Animate_wallX_hi,y	World_floorZ,x
+	sub	Animate_wallX_lo,y
+	add:sta	World_ceilingZ,x
+Animate_initLiftCeilFloor_return
+	rts
+
+* Animate_update
+; Animate things
+Animate_update	| PROFILE
+	ldx	World_sectors
+	dex
+Animate_update_loop
+	lda	World_sectorFlags,x
+	and	#World_SECTOR_ANIMATE
+	beq	Animate_update_next
+	ldy	World_sectorEffect,x
+	mva	Animate_update_lo,y	Animate_update_jump+1
+	mva	Animate_update_hi,y	Animate_update_jump+2
+	ldy	World_sectorWall,x
+	lda	World_sectorFlags,x
+	stx	Animate_sector
+Animate_update_jump
+	jsr	$2020
+	ldx	Animate_sector
+Animate_update_next
+	dex
+	bpl	Animate_update_loop
+	rts
+
+* Animate_autoCloseDoor
+Animate_autoCloseDoor
+	lda	World_sectorParameter,x
+	beq	Animate_autoCloseDoor_never
+	lda	Animate_wallY_lo,y
+	sub	Time_ticks
+	sta	Animate_wallY_lo,y
+	lda	Animate_wallY_hi,y
+	sbc	#0
+	bcs	Animate_autoCloseDoor_notNow
+	lda	#~World_SECTOR_DOOR_OPEN
+	and	World_sectorFlags,x
+* Animate_toggleEffect
+Animate_toggleEffect
+	sta	World_sectorFlags,x
+	lda	World_sectorParameter,x
+	asl	@
+:2	rol	@
+	sta	Animate_wallY_lo,y
+	rol	@
+	and	#7
+Animate_autoCloseDoor_notNow
+	sta	Animate_wallY_hi,y
+	rts
+Animate_autoCloseDoor_never
+	lda	#~World_SECTOR_ANIMATE
+	and:sta	World_sectorFlags,x
+	rts
+
+; Door Doom Up
+Animate_updateDoorDoomUp
+	and	#World_SECTOR_DOOR_OPEN
+	bne	Animate_updateDoorDoomUp_open
+; close door
+	lda	World_ceilingZ,x
+	add	Time_ticks
+	bcs	Animate_updateDoorDoomUp_closed
+	cmp	World_floorZ,x
+	bcc	Animate_updateDoorDoomUp_notClosed
+Animate_updateDoorDoomUp_closed
+	lda	#~World_SECTOR_ANIMATE
+	and:sta	World_sectorFlags,x
+	lda	World_floorZ,x
+Animate_updateDoorDoomUp_notClosed
+	sta	World_ceilingZ,x
+	rts
+; open door
+Animate_updateDoorDoomUp_open
+	lda	World_ceilingZ,x
+	sub	Time_ticks
+	bcc	Animate_updateDoorDoomUp_opened
+	cmp	Animate_wallX_lo,y
+	bcs	Animate_updateDoorDoomUp_notOpened
+Animate_updateDoorDoomUp_opened
+	jsr	Animate_autoCloseDoor
+	lda	Animate_wallX_lo,y
+Animate_updateDoorDoomUp_notOpened
+	sta	World_ceilingZ,x
+	rts
+
+; Door Doom Down
+Animate_updateDoorDoomDown
+	and	#World_SECTOR_DOOR_OPEN
+	bne	Animate_updateDoorDoomDown_open
+; close door
+	lda	World_floorZ,x
+	sub	Time_ticks
+	bcc	Animate_updateDoorDoomDown_closed
+	cmp	World_ceilingZ,x
+	bcs	Animate_updateDoorDoomDown_notClosed
+Animate_updateDoorDoomDown_closed
+	lda	#~World_SECTOR_ANIMATE
+	and:sta	World_sectorFlags,x
+	lda	World_ceilingZ,x
+Animate_updateDoorDoomDown_notClosed
+	sta	World_floorZ,x
+	rts
+; open door
+Animate_updateDoorDoomDown_open
+	lda	World_floorZ,x
+	add	Time_ticks
+	bcs	Animate_updateDoorDoomDown_opened
+	cmp	Animate_wallX_lo,y
+	bcc	Animate_updateDoorDoomDown_notOpened
+Animate_updateDoorDoomDown_opened
+	jsr	Animate_autoCloseDoor
+	lda	Animate_wallX_lo,y
+Animate_updateDoorDoomDown_notOpened
+	sta	World_floorZ,x
+	rts
+
+; Door Doom Split
+Animate_updateDoorDoomSplit
+	and	#World_SECTOR_DOOR_OPEN
+	bne	Animate_updateDoorDoomSplit_open
+; close door
+	lda	World_floorZ,x
+	sub	World_ceilingZ,x
+	cmp	Time_ticks
+	bcc	Animate_updateDoorDoomSplit_closed
+	lda	Time_ticks
+	lsr	@
+	sta	Math_word
+	add:sta	World_ceilingZ,x
+	lda	World_floorZ,x
+	sub	Math_word
+	sta	World_floorZ,x
+	rts
+Animate_updateDoorDoomSplit_closed
+	lda	#~World_SECTOR_ANIMATE
+	and:sta	World_sectorFlags,x
+	lda	World_ceilingZ,x
+	add	World_floorZ,x
+	ror	@
+	sta	World_ceilingZ,x
+	sta	World_floorZ,x
+	rts
+; open door
+Animate_updateDoorDoomSplit_open
+	lda	Time_ticks
+	lsr	@
+	sta	Math_word
+	add	World_floorZ,x
+	bcs	Animate_updateDoorDoomSplit_opened
+	cmp	Animate_wallX_lo,y
+	bcs	Animate_updateDoorDoomSplit_opened
+	sta	World_floorZ,x
+	lda	World_ceilingZ,x
+	sub	Math_word
+	sta	World_ceilingZ,x
+	rts
+Animate_updateDoorDoomSplit_opened
+	jsr	Animate_autoCloseDoor
+	lda	World_floorZ,x
+	sub	Animate_wallX_lo,y
+	add:sta	World_ceilingZ,x
+	mva	Animate_wallX_lo,y	World_floorZ,x
+	rts
+
+* Animate_updateDoorSwing
+; Update swinging door.
+; input: A - angle ($40..$c0), X - door sector, Y - World_sectorWall,x
+Animate_updateDoorSwing
+	sty	Math_word
+	sta	Animate_wallX_lo,y
+	mva	World_sectorWall+1,x	Math_word+1
+	mva	World_wallX_lo,y	View_x
+	mva	World_wallX_hi,y	View_x+1
+	mva	World_wallY_lo,y	View_y
+	mva	World_wallY_hi,y	View_y+1
+	ldx	Animate_wallX_lo,y
+	lda	Math_cos128,x
+	ldy	Math_cos128-64,x
+	jsr	View_setCosSin
+	ldx:inx	Math_word
+Animate_updateDoorSwing_loop
+	mva	Animate_wallX_lo,x	View_calcRotate_x
+	mva	Animate_wallX_hi,x	View_calcRotate_x+1
+	mva	Animate_wallY_lo,x	View_calcRotate_y
+	mva	Animate_wallY_hi,x	View_calcRotate_y+1
+	jsr	View_calcRotate
+	ldy	World_wallReverse-1,x
+	lda	View_x
+	sub	View_calcRotate_d
+	sta	World_wallX_lo,x
+	sta	World_wallX_lo,y
+	lda	View_x+1
+	sbc	View_calcRotate_d+1
+	sta	World_wallX_hi,x
+	sta	World_wallX_hi,y
+	lda	View_y
+	sub	View_calcRotate_c
+	sta	World_wallY_lo,x
+	sta	World_wallY_lo,y
+	lda	View_y+1
+	sbc	View_calcRotate_c+1
+	sta	World_wallY_hi,x
+	sta	World_wallY_hi,y
+	inx
+	cpx	Math_word+1
+	bcc	Animate_updateDoorSwing_loop
+	rts
+
+; Door Swing CCW
+Animate_updateDoorSwingCCW
+	and	#World_SECTOR_DOOR_OPEN
+	bne	Animate_updateDoorSwingCCW_open
+; close door
+	lda	Animate_wallX_lo,y
+	sub	Time_ticks
+	bcc	Animate_updateDoorSwingCCW_closed
+	cmp	#$80
+	bcs	Animate_updateDoorSwingCCW_notClosed
+Animate_updateDoorSwingCCW_closed
+	lda	#~World_SECTOR_ANIMATE
+	and:sta	World_sectorFlags,x
+	lda	#$80
+Animate_updateDoorSwingCCW_notClosed
+	jmp	Animate_updateDoorSwing
+; open door
+Animate_updateDoorSwingCCW_open
+	lda	Animate_wallX_lo,y
+	add	Time_ticks
+	bcs	Animate_updateDoorSwingCCW_opened
+	cmp	#$c0
+	bcc	Animate_updateDoorSwingCCW_notOpened
+Animate_updateDoorSwingCCW_opened
+	jsr	Animate_autoCloseDoor
+	lda	#$c0
+Animate_updateDoorSwingCCW_notOpened
+	jmp	Animate_updateDoorSwing
+
+; Door Swing CW
+Animate_updateDoorSwingCW
+	and	#World_SECTOR_DOOR_OPEN
+	bne	Animate_updateDoorSwingCW_open
+; close door
+	lda	Animate_wallX_lo,y
+	add	Time_ticks
+	bcs	Animate_updateDoorSwingCW_closed
+	cmp	#$80
+	bcc	Animate_updateDoorSwingCW_notClosed
+Animate_updateDoorSwingCW_closed
+	lda	#~World_SECTOR_ANIMATE
+	and:sta	World_sectorFlags,x
+	lda	#$80
+Animate_updateDoorSwingCW_notClosed
+	jmp	Animate_updateDoorSwing
+; open door
+Animate_updateDoorSwingCW_open
+	lda	Animate_wallX_lo,y
+	sub	Time_ticks
+	bcc	Animate_updateDoorSwingCW_opened
+	cmp	#$40
+	bcs	Animate_updateDoorSwingCW_notOpened
+Animate_updateDoorSwingCW_opened
+	jsr	Animate_autoCloseDoor
+	lda	#$40
+Animate_updateDoorSwingCW_notOpened
+	jmp	Animate_updateDoorSwing
+
+; Lift Floor Only
+Animate_updateLiftFloorOnly
+	and	#World_SECTOR_LIFT_LOW
+	bne	Animate_updateLiftFloorOnly_down
+; lift up
+	lda	World_floorZ,x
+	sub	Time_ticks
+	bcc	Animate_updateLiftFloorOnly_raised
+	cmp	Animate_wallX_hi,y
+	bcs	Animate_updateLiftFloorOnly_notRaised
+Animate_updateLiftFloorOnly_raised
+	lda	#~World_SECTOR_ANIMATE
+	and:sta	World_sectorFlags,x
+	lda	Animate_wallX_hi,y
+Animate_updateLiftFloorOnly_notRaised
+	sta	World_floorZ,x
+	rts
+; lift down
+Animate_updateLiftFloorOnly_down
+	lda	World_floorZ,x
+	add	Time_ticks
+	bcs	Animate_updateLiftFloorOnly_lowered
+	cmp	Animate_wallX_lo,y
+	bcc	Animate_updateLiftFloorOnly_notLowered
+Animate_updateLiftFloorOnly_lowered
+	lda	#~World_SECTOR_ANIMATE
+	and:sta	World_sectorFlags,x
+	lda	Animate_wallX_lo,y
+Animate_updateLiftFloorOnly_notLowered
+	sta	World_floorZ,x
+	rts
+
+; Lift Ceiling & Floor
+Animate_updateLiftCeilFloor
+	and	#World_SECTOR_LIFT_LOW
+	bne	Animate_updateLiftCeilFloor_down
+; lift up
+	lda	World_floorZ,x
+	sub	Time_ticks
+	bcc	Animate_updateLiftCeilFloor_raised
+	cmp	Animate_wallX_hi,y
+	bcc	Animate_updateLiftCeilFloor_raised
+	sta	World_floorZ,x
+	lda	World_ceilingZ,x
+	sub	Time_ticks
+	sta	World_ceilingZ,x
+	rts
+Animate_updateLiftCeilFloor_raised
+	lda	#~World_SECTOR_ANIMATE
+	and:sta	World_sectorFlags,x
+	lda	World_ceilingZ,x
+	sub	World_floorZ,x
+	add	Animate_wallX_hi,y
+	sta	World_ceilingZ,x
+	mva	Animate_wallX_hi,y	World_floorZ,x
+	rts
+; lift down
+Animate_updateLiftCeilFloor_down
+	lda	World_floorZ,x
+	add	Time_ticks
+	bcs	Animate_updateLiftCeilFloor_lowered
+	cmp	Animate_wallX_lo,y
+	bcs	Animate_updateLiftCeilFloor_lowered
+	sta	World_floorZ,x
+	lda	World_ceilingZ,x
+	add	Time_ticks
+	sta	World_ceilingZ,x
+	rts
+Animate_updateLiftCeilFloor_lowered
+	lda	#~World_SECTOR_ANIMATE
+	and:sta	World_sectorFlags,x
+	lda	World_ceilingZ,x
+	sub	World_floorZ,x
+	add	Animate_wallX_lo,y
+	sta	World_ceilingZ,x
+	mva	Animate_wallX_lo,y	World_floorZ,x
+	rts
+
+	end

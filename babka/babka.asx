@@ -1,0 +1,405 @@
+	icl	'../nex.asx'
+
+FIRST_COL	equ	1
+LAST_COL	equ	31
+
+zbak	equ	$a0
+zdl1	equ	$c400
+zdl2	equ	$c800
+zscr	equ	$3600
+
+btab1	equ	$3c00
+btab2	equ	$3d00
+
+sp	equ	$a0
+as	equ	$a2
+cx	equ	$a4
+nx	equ	$a6
+ct	equ	$a7
+a_mask	equ	$a8
+
+zcnt	equ	$a9
+zd1	equ	$aa
+zd2	equ	$ac
+zs	equ	$ae
+
+	org	$1500
+masks
+:32	dta	$ff,$7f,$3f,$1f,$0f,$07,$03,$01
+
+	org	$1600
+dl1	dta	$4f,a(scr1)
+:63	dta	$f
+	dta	$4f,a(scr1+$800)
+:127	dta	$f
+	dta	$4f,a(scr1+$1800)
+:46	dta	$f
+	dta	$41,a(dl2)
+dl2	dta	$4f,a(scr2)
+:119	dta	$f
+	dta	$4f,a(scr2+$f00)
+:118	dta	$f
+	dta	$41,a(dl1)
+
+	org	zdl1
+:3	dta	$4f,a(zemp)
+	dta	$cf,a(zemp)
+:3	dta	$4f,a(zemp)
+	dta	$cf,a(zemp)
+zdl1do	org	*+56*4*3
+:3	dta	$4f,a(zemp)
+	dta	$cf,a(zemp)
+:3	dta	$4f,a(zemp)
+	dta	$41,a(zdl2)
+:8	dta	0	; to align zisbabka
+zemp
+:40	dta	0
+zisbabka
+:60	dta	0
+zorder	org	*+60
+
+	org	zdl2
+:3	dta	$4f,a(zemp)
+	dta	$cf,a(zemp)
+:3	dta	$4f,a(zemp)
+	dta	$cf,a(zemp)
+zdl2do	org	*+56*4*3
+:3	dta	$4f,a(zemp)
+	dta	$cf,a(zemp)
+:3	dta	$4f,a(zemp)
+	dta	$41,a(zdl1)
+
+	ift	NUMEN
+	org	$200
+	els
+	org	$cc00
+	eif
+	icl	'tan.asx'
+
+main
+	mwa	#zdl1do	zd1
+	mwa	#zdl2do	zd2
+	mwa	#zscr	zs
+	mva	#56	zcnt
+mzdl_four
+	ldy	#0
+	ldx	#3
+mzdl_line
+	mva	#$4f	(zd1),y
+	sta	(zd2),y+
+	mva	zs	(zd1),y
+	sta	(zd2),y+
+	mva	zs+1	(zd1),y
+	sta	(zd2),y+
+	dex
+	bne	mzdl_line
+	mva	#$cf	(zd1),y
+	sta	(zd2),y+
+	mva	zs	(zd1),y
+	sta	(zd2),y+
+	add	#40
+ ift 0
+	bpl	mzdl_sameScreenPage
+	lda	<zscr
+	sec
+mzdl_sameScreenPage
+ eif
+	sta	zs
+	mva	zs+1	(zd1),y
+	sta	(zd2),y
+	adc	#0
+	sta	zs+1
+	lda	#12
+	add:sta	zd1
+	sta	zd2
+	bcc	mzdl_sameDlPage
+	inc	zd1+1
+	inc	zd2+1
+mzdl_sameDlPage
+	dec	zcnt
+	bne	mzdl_four
+
+	ldx	#59
+mzord	txa:sta	zorder,x
+	dex:bpl	mzord
+
+	mwa	#-1000	zs
+ztas1	lda	^2a
+	and	#63
+	cmp	#60
+	bcs	ztas1
+	tax
+ztas2	lda	^2a
+	and	#63
+	cmp	#60
+	bcs	ztas2
+	tay
+	lda:pha	zorder,x
+	mva	zorder,y	zorder,x
+	pla:sta	zorder,y
+	inc	zs
+	bne	ztas1
+	inc	zs+1
+	bne	ztas1
+
+	mva	#59	zcnt
+	lda:rne	^4b
+	sta	^18
+	mva	#zbak	^1a
+	mva	#$41	^1b
+	mva	#$a	^17
+	mva	#$22	^40
+	mwa	#zdl1	^42
+	ift	NUMEN
+	mwa	#zdli	Dli_vector
+	mwa	#zvbl	Vbl_vector
+	mwa	#-60	Vbl_clock
+	jsr	Idle
+	els
+	mwa	#nmi	$fffa
+	mva	#$c0	^4e
+	lda:rpl	zcnt
+	eif
+
+	ldx	#238
+	lda	#FIRST_COL
+	ldy	#8
+	clc
+clb1	sta	btab1,x
+	sta	btab2,x
+	dey
+	bne	clb2
+	adc	#1	-
+	ldy	#8
+clb2	dex:bne	clb1
+	stx	ct
+	mva	>scr2+238*32	as
+
+	lda:rne	^4b
+;	sta	^18
+;	sta	^1a
+;	sta	^1b
+;	mva	#$a	^17
+;	mva	#$21	^40
+; TODO: czy dobry DL ?
+	mwa	#dl1	^42
+
+	ift	NUMEN
+	mwa	#-3*50	Vbl_clock
+	mwa	#rts	Vbl_vector
+	jsr	Idle
+	lda:rne	^4b
+	mwa	#-297	Vbl_clock
+	mwa	#vbl	Vbl_vector
+;	mva	#0	^40
+	jmp	NextBlock
+	els
+	mwa	#vbl	Vbl_vector
+	jmp	*
+
+nmi
+	pha
+	bit	^4f
+	bmi	zdli
+	txa:pha
+	tya:pha
+; lsr ^1a
+	jsr	zvbl
+; inc ^1a
+Vbl_vector	equ	*-2
+	pla:tay
+	pla:tax
+	pla:rti
+	eif
+
+zdli
+	ert	>zisbabka!=>[zisbabka+59]
+zxis	lda	zisbabka
+	jsr	zsetline
+	inc	zxis+1
+	pla
+	rti
+
+zvbl
+	ldx	zcnt
+	bmi	zvblr
+	dec	zcnt
+	lda	zorder,x
+z_set_babka
+	tax
+	inc	zisbabka,x
+	ldx	#4
+	cmp	#59
+	scc:dex
+	mvy	#0	zs
+	sta	zd1
+	lsr	@
+	ror	zs
+	adc	>scr1	-
+	sta	zs+1
+; zd1 = &zdl1[12 * A]
+; zd2 = &zdl2[12 * A]
+	lda	zd1
+	asl	@
+	adc	zd1	-
+	asl	@
+	sta	zd1
+	lda	>zdl1/4
+	rol	@
+	asl	zd1
+	rol	@
+	sta	zd1+1
+	adc	>zdl2-zdl1	-
+	sta	zd2+1
+	mva	zd1	zd2
+	ldy	#1
+;	clc
+;	ldx	#4
+z_set_babka_1
+	mva	zs	(zd1),y
+	sta	(zd2),y+
+	adc	#32
+	sta	zs
+	mva	zs+1	(zd1),y
+	add	>scr2-scr1
+	ert	scr2<scr1
+	sta	(zd2),y+
+	iny
+	dex
+	bne	z_set_babka_1
+
+	mva	<zisbabka+1	zxis+1
+	ldx	zisbabka
+
+zsetline
+	bne	zbabkaline
+	lda	#$62
+	sta	^4a
+	sta	^40
+	sta	^1b
+	mva	#zbak	^1a
+zvblr
+	rts
+
+zbabkaline
+	lda	#$21
+	sta	^4a
+	sta	^40
+	sta	^1b
+	mva	#0	^1a
+	rts
+
+vblx
+	mva	#0	^40
+:NUMEN	mwa	#rts	Vbl_vector
+vblr
+	rts
+
+vbl
+	ldx	ct
+	ift	NUMEN
+	bne	vbl_1
+	lda	Vbl_clock+1
+	bne	vblr
+vbl_1
+	eif
+	cpx	#ANGLES
+	bcs	vblx
+	inc	ct
+
+	lda	>[scr1+238*32]^[scr2+238*32]
+	eor:sta	as
+	sta	sp+1
+	mva	#0	cx
+	lda	tan_lo,x
+	ldy	tan_hi,x
+	bne	b
+	sta	a_dx_lo
+	sty	sp
+	mva	#$ff	a_mask
+	ldy	<scr1+238*32+FIRST_COL
+	ldx	#238
+a_line
+	lda	#0
+a_dx_lo	equ	*-1
+	add:sta	cx
+	bcc	a_same
+	lsr	a_mask
+	bne	a_clc
+	dec	a_mask
+	dta	{bit 0}
+a_clc	clc
+a_same
+	tya
+	sbc	#32
+	tay
+	bcs	a_2
+	dec	sp+1
+a_2
+	dey
+	mva	#0	(sp),y+
+	sta	(sp),y+
+	lda	a_mask
+	and:sta	(sp),y
+	dex
+	bne	a_line
+	rts
+
+b
+	sta	b_dx_lo
+	sty	b_dx_hi
+	mva	<scr1+238*32	sp
+	lda	>btab1^btab2
+	eor:sta	b_bh_1
+	sta	b_bh_2
+	mva	#FIRST_COL<<3	b_cx_hi
+	ldx	#238
+b_line
+	ldy	btab1,x
+b_bh_1	equ	*-1
+	cpy	#LAST_COL
+	bcs	b_x
+	lda	#0
+b_dx_lo	equ	*-1
+	adc:sta	cx	-
+	lda	#0
+b_dx_hi	equ	*-1
+	adc	b_cx_hi
+	bcs	b_0
+	sta	b_cx_hi
+:3	lsr	@
+	sec
+b_1	sta	nx
+	lda	sp
+	sbc	#32	+
+	sta	sp
+	bcs	b_2
+	dec	sp+1
+b_2	cpy	nx
+	bcs	b_4
+	lda	#0
+b_3	sta	(sp),y+
+	cpy	nx
+	bcc	b_3
+	tya:sta	btab1,x
+b_bh_2	equ	*-1
+b_4	lda	masks
+b_cx_hi	equ	*-2
+	and:sta	(sp),y
+b_5	dex
+	bne	b_line
+b_x
+; mva ^4b $600
+; inc *-2
+	rts
+
+b_0	lda	#LAST_COL+1
+	bcs	b_1	!
+
+	org	$1800
+scr1	ins	'babkav3.hr',0,239*32
+
+	org	$e100
+scr2	ins	'babkav3.hr',$2000,239*32
+
+	end

@@ -1,0 +1,41 @@
+	icl	'../pilot.asx'
+	icl	'map.asx'
+	icl	'tiles.asx'
+	icl	'track.asx'
+
+Duke_DOOR_SECTOR	equ	9
+
+main
+	mva	World_ceilingZ+Duke_DOOR_SECTOR	Duke_doorTop
+	mva	World_floorZ+Duke_DOOR_SECTOR	World_ceilingZ+Duke_DOOR_SECTOR
+	lda:rne	^4b
+	sta	^40
+	sta	^1a
+	sta	^1b
+	jmp	Pilot_main
+
+;break	lda	View_angle
+;	dta	2
+
+Duke_openDoor
+	mva	#{nop}	Duke_animateUpdate
+	rts
+
+Duke_animateUpdate
+	rts
+	lda	World_ceilingZ+Duke_DOOR_SECTOR
+	sub	Time_ticks
+	bcc	Duke_animateUpdate_opened
+	cmp	Duke_doorTop
+	scs
+Duke_animateUpdate_opened
+	lda	Duke_doorTop
+	sta	World_ceilingZ+Duke_DOOR_SECTOR
+	rts
+
+Duke_doorTop	org	*+1
+
+	org	Pilot_update+1
+	dta	a(Duke_animateUpdate)
+
+	end

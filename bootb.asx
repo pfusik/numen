@@ -1,0 +1,73 @@
+	opt	h-
+	org	$700
+	dta	$0f,2,a($700),a($e477)
+	mva	^1f	lastConsol
+	ldx	<text1
+	lda	#len1
+	jsr	print
+	jsr	wait
+	ldx	<text2
+	lda	#len2
+	jsr	print
+	jsr	wait
+	ldx	<text3
+	lda	#len3
+	jsr	print
+	jsr	wait
+	ldx	<text4
+	lda	#len4
+	jsr	print
+loop
+	jsr	wait
+	jmp	loop
+
+print
+	stx	$344
+	sta	$348
+	ert	>text1!=>text4
+	mva	>text1	$345
+	mvx	#0	$349
+	mva	#11	$342
+	jmp	$e456
+
+wait
+	ldx	#250
+wait_1
+	ldy	20
+wait_2
+	lda	$284
+	beq	reboot
+	lda	$2fc
+	cmp	#$ff
+	bne	reboot
+	lda	^2f
+	and	#8
+	beq	reboot
+	lda	^1f
+	cmp:sta	lastConsol
+	beq	wait_3
+	cmp	#7
+	bne	reboot
+wait_3
+	cpy	20
+	beq	wait_2
+	dex
+	bne	wait_1
+	rts
+
+reboot
+	jmp	$e477
+
+text1	dta	$9b,c'NUMEN',$9b
+len1	equ	*-text1
+text2	dta	$9b,c'This is side B of the disk.',$9b
+len2	equ	*-text2
+text3	dta	$9b,c'What are you waiting for?',$9b
+len3	equ	*-text3
+text4	dta	$9b,c'Insert side A',$9b
+	dta	c'and press any key to reboot!',$9b
+len4	equ	*-text4
+
+lastConsol	org	*+1
+
+	end

@@ -1,0 +1,63 @@
+start x=$80 y=$300 z=$80 a=$00 h=24
+
+# podejdz do lewej sciany
+after 1.0 a=$d0
+after 0.5 go $c0
+after 0.2 a=$c0 z +6
+after 0.1 a=$b8 z +2
+wait 0.3
+after 1.0 x +$40 y +$100 z -8 a=$f0
+# podejdz do prawej sciany
+after 0.4 x +$80 a=$20
+after 0.5 y +$100 a=$30
+after 0.5 y +$60 x +$80 a=$48
+wait 0.1
+# obejdz prawa kolumne
+after 0.5 y +$a0 a=$08
+after 0.5 x +$a0 a=$e0
+after 0.5 go $100 a=$d0
+after 0.5 go $100
+# spojrz na lewa kolumne
+after 0.5 a=$b8 h -6
+wait 0.2
+after 0.3 y=$300 h +6
+# otworz drzwi
+after 0.3 a=$00 code Duke_openDoor1
+after 0.1
+# dojdz do korytarza w lewo
+after 0.9 z +4
+after 1.0 x +$100
+after 1.0 x +$180 a=$e6
+wait 0.2
+# obroc sie
+after 1.0 a=$00
+after 0.5 a=$40 h -4
+after 0.5 a=$80 h -4
+after 0.5 a=$c0 h +4
+# dojrz do skretu w prawo
+after 0.5 x +$100 a=$00 h +4
+after 0.8 x +$100 a=$20
+after 0.5 x=$900 a=$40
+# idz w prawo
+after 0.8 y=$580 a=$60
+# obroc sie
+after 0.5 a=$b0
+after 0.5 a=$04
+# wejdz do zaokraglonego pomieszczenia
+after 1.0 go $340 a=$10
+after 1.0 go $140 a=$00
+after 0.5 x +$100 a=$e0
+after 1.0 go $200 a=$00
+# obroc sie
+after 0.5 a=$40
+wait 0.1
+after 0.5 a=$80
+after 0.5 a=$e0
+after 1.0 go $200 a=$c0
+# otworz drzwi
+after 1.0 x +$40 y -$40 code Duke_openDoor2
+after 1.0 y -$200 a=$f0
+after 0.3 y=$100 a=$00
+wait 0.2
+after 0.5 go $80
+# after 5.0

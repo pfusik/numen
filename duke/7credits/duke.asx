@@ -1,0 +1,433 @@
+; 7credits
+	icl	'../pilot.asx'
+	icl	'map.asx'
+	icl	'tiles.asx'
+	icl	'track.asx'
+
+Text_COUNT	equ	7
+Text_COLUMNS	equ	10	x 8 pixels
+Text_LINES	equ	20
+
+Scroll_pos	equ	$16
+DL_tmp		equ	$17
+
+	org	$f040
+DL
+	dta	$90
+DL_top
+:Text_LINES-1	dta	$5f,$5f,$5f
+	dta	$df,$df,$df
+	dta	$90
+	dta	$6f,a(Screen_screen1)
+DL_displayPage	equ	*-1
+:23	dta	$8f,$2f
+	dta	$0f
+	dta	$90
+DL_bottom
+:Text_LINES-1	dta	$5f,$5f,$5f
+	dta	$df,$df,$df
+	dta	$41,a(DL)
+
+Text_topIndex
+	dta	0,0	; code,code
+	dta	3*Text_COLUMNS	; gfx
+	dta	5*Text_COLUMNS	; msx
+Text_bottomIndex
+	dta	42-Text_COLUMNS+1*Text_COLUMNS,42-Text_COLUMNS+2*Text_COLUMNS	; Eru,Fox
+	dta	42-Text_COLUMNS+4*Text_COLUMNS	; Dracon
+	dta	42-Text_COLUMNS+6*Text_COLUMNS	; X-Ray
+
+	org	$f100
+DL_interrupt1
+	lda	Scroll_pos
+	sta	^4a
+	eor	#$ff
+	add	#$30+[40-Text_COLUMNS]*4
+	sta	^00
+	add	#32
+	sta	^04
+	mva	<DL_interrupt2	Dli_vector
+	pla
+	rti
+
+DL_interrupt2
+	sta	^4a
+	lda	#0
+	sta	^00
+	sta	^04
+	mva	Screen_displayPage	DL_displayPage
+	mva	#$41	^1b
+	lda	Scroll_pos
+	and	#3
+	eor	#$c
+	sta	^44
+	mva	<DL_interruptOriginal	Dli_vector
+	pla
+	rti
+
+DL_interruptOriginal
+	lda	^4b
+	cmp	#$6b
+	scc:mva	<DL_interrupt3	Dli_vector
+	jmp	Screen_displayListInterrupt
+
+DL_interrupt3
+	mva	#$01	^1b
+	lda	Scroll_pos
+	add	#$30
+	sta	^4a
+	sta	^00
+	adc	#32
+	sta	^04
+	mva	<DL_interrupt4	Dli_vector
+	pla
+	rti
+
+DL_interrupt4
+	sta	^4a
+	lda	#0
+	sta	^00
+	sta	^04
+	dec	Scroll_pos
+	bpl	DL_interrupt4_cont
+	mwa	#Screen_displayListInterrupt	Dli_vector
+	lda:rpl	^4b
+	mva	#$41	^1b
+	mwa	#Screen_displayList	^42
+	pla
+	rti
+
+DL_interrupt4_cont
+	mva	<DL_interrupt1	Dli_vector
+	lda	Scroll_pos
+	lsr	@
+	cmp	#$f
+	bcc	Scroll_setColor1
+	eor	#$ff
+	adc	#[40-Text_COLUMNS]*2-1
+	cmp	#$f
+	bcc	Scroll_setColor1
+	lda	#$f
+Scroll_setColor1
+	sta	^12
+	lda	Scroll_pos
+	and	#3
+	cmp	#3
+	bne	Scroll_dontSetDL
+	txa:pha
+	tya:pha
+	lda	Scroll_pos
+	lsr:lsr	@
+	add	#0
+Scroll_topText	equ	*-1
+	ldy	#DL_top-DL
+	jsr	DL_set
+	lda	Scroll_pos
+	lsr:lsr	@
+	eor	#$ff
+	adc	#42-Text_COLUMNS+2*Text_COLUMNS	+
+Scroll_bottomText	equ	*-1
+	ldy	#DL_bottom-DL
+	jsr	DL_set
+	pla:tay
+	pla:tax
+Scroll_dontSetDL
+	lda	Scroll_pos
+	eor	#$ff
+	and	#3
+	sta	^44
+	pla
+	rti
+
+	org	$f200+43-Text_COLUMNS
+Text
+	ins	'text.raw'
+
+Scroll_next
+	lda:rpl	^4b
+	mva	#$ff	^08
+	sta	^0c
+	sta	^0d
+	sta	^11
+	mva	#$01	^1b
+	sta	^12
+	mwa	#DL	^42
+	mwa	#DL_interrupt1	Dli_vector
+	mva	#[40-Text_COLUMNS]*4-1	Scroll_pos
+	ldx	#0
+Scroll_index	equ	*-1
+	inc	Scroll_index
+	mva	Text_topIndex,x	Scroll_topText
+	mva	Text_bottomIndex,x	Scroll_bottomText
+	rts
+
+DL_set
+	mvx	#Text_LINES	DL_tmp
+	ldx	>Text
+DL_set_1
+	iny
+	sta	DL,y
+	txa:sta	DL+1,y
+	lda	DL,y
+	iny
+	iny
+	add	#Text_COUNT*Text_COLUMNS
+	scc:inx
+	dec	DL_tmp
+	bne	DL_set_1
+	rts
+
+Duke_DOOR1_WALL1	equ	185
+Duke_DOOR1_WALL2	equ	179
+Duke_DOOR1_X1		equ	$280
+Duke_DOOR1_X2		equ	$400
+Duke_DOOR2_SECTOR1	equ	29
+Duke_DOOR2_SECTOR2	equ	32
+Duke_DOOR2_SECTOR3	equ	30
+Duke_DOOR3_WALL1	equ	166
+Duke_DOOR3_WALL2	equ	170
+Duke_DOOR4_WALL1	equ	174
+Duke_EXIT_SPRITE	equ	10
+Duke_EXIT0_PICTURE	equ	1
+Duke_EXIT1_PICTURE	equ	2
+
+	ift	NUMEN
+Math_word	equ	$97
+Math_word2	equ	$99
+Math_word3	equ	$9b
+Math_word4	equ	$9d
+
+Math_sin	equ	$4700
+Math_cos	equ	Math_sin+$40
+Math_cos128	equ	Math_sin+$13f
+	eif
+
+main
+	mva	World_ceilingZ+Duke_DOOR2_SECTOR1	Duke_door2Top
+	mva	World_floorZ+Duke_DOOR2_SECTOR1	World_ceilingZ+Duke_DOOR2_SECTOR1
+	sta	World_ceilingZ+Duke_DOOR2_SECTOR3
+	mva	World_floorZ+Duke_DOOR2_SECTOR2	Duke_door2Bottom
+	mva	World_ceilingZ+Duke_DOOR2_SECTOR2	World_floorZ+Duke_DOOR2_SECTOR2
+	jmp	Pilot_main
+
+Duke_updateDoorSwing
+	ldy	World_wallReverse,x
+	lda	World_wallX_lo,x
+	add	Math_word
+	sta	World_wallX_lo+1,x
+	sta	World_wallX_lo,y
+	lda	World_wallX_hi,x
+	adc	Math_word+1
+	sta	World_wallX_hi+1,x
+	sta	World_wallX_hi,y
+	lda	World_wallY_lo,x
+	add	Math_word2
+	sta	World_wallY_lo+1,x
+	sta	World_wallY_lo,y
+	lda	World_wallY_hi,x
+	adc	Math_word2+1
+	sta	World_wallY_hi+1,x
+	sta	World_wallY_hi,y
+	ldy	World_wallReverse+1,x
+	lda	World_wallX_lo+1,x
+	add	Math_word3
+	sta	World_wallX_lo+2,x
+	sta	World_wallX_lo,y
+	lda	World_wallX_hi+1,x
+	adc	Math_word3+1
+	sta	World_wallX_hi+2,x
+	sta	World_wallX_hi,y
+	lda	World_wallY_lo+1,x
+	add	Math_word4
+	sta	World_wallY_lo+2,x
+	sta	World_wallY_lo,y
+	lda	World_wallY_hi+1,x
+	adc	Math_word4+1
+	sta	World_wallY_hi+2,x
+	sta	World_wallY_hi,y
+	ldy	World_wallReverse+2,x
+	lda	World_wallX_lo,x
+	add	Math_word3
+	sta	World_wallX_lo+3,x
+	sta	World_wallX_lo,y
+	lda	World_wallX_hi,x
+	adc	Math_word3+1
+	sta	World_wallX_hi+3,x
+	sta	World_wallX_hi,y
+	lda	World_wallY_lo,x
+	add	Math_word4
+	sta	World_wallY_lo+3,x
+	sta	World_wallY_lo,y
+	lda	World_wallY_hi,x
+	adc	Math_word4+1
+	sta	World_wallY_hi+3,x
+	sta	World_wallY_hi,y
+	rts
+
+Duke_openDoor1
+	mva	#{nop}	Duke_animateUpdate1
+	rts
+
+Duke_openDoor2
+	mva	#{nop}	Duke_animateUpdate2
+	rts
+
+Duke_openDoor3
+	mva	#{nop}	Duke_animateUpdate3
+	rts
+
+Duke_openDoor4
+	mva	#{nop}	Duke_animateUpdate4
+	rts
+
+Duke_animateUpdate
+	lda	Time_ticks
+	add:sta	Duke_exitCounter
+	and	#16
+	seq:lda	#Duke_EXIT0_PICTURE^Duke_EXIT1_PICTURE
+	eor	#Duke_EXIT0_PICTURE
+	sta	World_spritePicture+Duke_EXIT_SPRITE
+Duke_animateUpdate1
+	rts
+	lda	World_wallX_lo+Duke_DOOR1_WALL1
+	ldx	World_wallX_hi+Duke_DOOR1_WALL1
+	sub	Time_ticks
+	scs:dex
+	cpx	>Duke_DOOR1_X1
+	ift	<Duke_DOOR1_X1!=0
+	sne
+	cmp	<Duke_DOOR1_X1
+	eif
+	bcs	Duke_animateUpdate1NotOpened1
+	lda	<Duke_DOOR1_X1
+	ldx	>Duke_DOOR1_X1
+Duke_animateUpdate1NotOpened1
+	sta	World_wallX_lo+Duke_DOOR1_WALL1
+	stx	World_wallX_hi+Duke_DOOR1_WALL1
+	sta	World_wallX_lo+Duke_DOOR1_WALL1+1
+	stx	World_wallX_hi+Duke_DOOR1_WALL1+1
+	lda	World_wallX_lo+Duke_DOOR1_WALL2
+	ldx	World_wallX_hi+Duke_DOOR1_WALL2
+	add	Time_ticks
+	scc:inx
+	cpx	>Duke_DOOR1_X2
+	ift	<Duke_DOOR1_X2!=0
+	sne
+	cmp	<Duke_DOOR1_X2
+	eif
+	bcc	Duke_animateUpdate1NotOpened2
+	lda	<Duke_DOOR1_X2
+	ldx	>Duke_DOOR1_X2
+Duke_animateUpdate1NotOpened2
+	sta	World_wallX_lo+Duke_DOOR1_WALL2
+	stx	World_wallX_hi+Duke_DOOR1_WALL2
+	sta	World_wallX_lo+Duke_DOOR1_WALL2+1
+	stx	World_wallX_hi+Duke_DOOR1_WALL2+1
+
+Duke_animateUpdate2
+	rts
+	lda	World_ceilingZ+Duke_DOOR2_SECTOR1
+	sub	Time_ticks
+	bcc	Duke_animateUpdate2Opened1
+	cmp	Duke_door2Top
+	scs
+Duke_animateUpdate2Opened1
+	lda	Duke_door2Top
+	sta	World_ceilingZ+Duke_DOOR2_SECTOR1
+	sta	World_ceilingZ+Duke_DOOR2_SECTOR3
+	lda	World_floorZ+Duke_DOOR2_SECTOR2
+	add	Time_ticks
+	bcs	Duke_animateUpdate2Opened2
+	cmp	Duke_door2Bottom
+	scc
+Duke_animateUpdate2Opened2
+	lda	Duke_door2Bottom
+	sta	World_floorZ+Duke_DOOR2_SECTOR2
+
+Duke_animateUpdate3
+	rts
+	lda	Duke_door3Angle
+	add	Time_ticks
+	cmp	#$40
+	scc:lda	#$3f
+	sta	Duke_door3Angle
+	tax
+	mva	#-1	Math_word+1
+	sta	Math_word2+1
+	sta	Math_word4+1
+	mva	#0	Math_word3+1
+	lda	Math_cos128+$80,x
+	sec:ror	@
+	adc	Math_cos128+$80,x
+	sta	Math_word
+	lda	Math_cos128+$40,x
+	sec:ror	@
+	adc	Math_cos128+$40,x
+	sta	Math_word2
+	lda	Math_sin,x
+	lsr	@
+	sta	Math_word3
+	lda	Math_cos128+$80,x
+	sec:ror	@
+	sta	Math_word4
+	ldx	#Duke_DOOR3_WALL1
+	jsr	Duke_updateDoorSwing
+	ldx	Duke_door3Angle
+	lda	Math_cos128+$40,x
+	sec:ror	@
+	sta	Math_word
+	lda	Math_cos128+$80,x
+	sec:ror	@
+	sta	Math_word2
+	lda	Math_cos128,x
+	lsr	@
+	adc	Math_cos128,x
+	sta	Math_word3
+	lda	Math_cos128+$40,x
+	sec:ror	@
+	adc	Math_cos128+$40,x
+	sta	Math_word4
+	ldx	#Duke_DOOR3_WALL2
+	jsr	Duke_updateDoorSwing
+
+Duke_animateUpdate4
+	rts
+	lda	Duke_door4Angle
+	add	Time_ticks
+	cmp	#$40
+	scc:lda	#$3f
+	sta	Duke_door4Angle
+	tax
+	mva	#0	Math_word+1
+	sta	Math_word3+1
+	sta	Math_word4+1
+	mva	#-1	Math_word2+1
+	lda	Math_cos128,x
+	lsr	@
+	sta	Math_word
+	lda	Math_cos128+$40,x
+	sec:ror	@
+	sta	Math_word2
+	lda	Math_sin,x
+	asl	@
+	add	Math_sin,x
+	sta	Math_word3
+	rol	Math_word3+1
+	lda	Math_cos,x
+	asl	@
+	add	Math_cos,x
+	sta	Math_word4
+	rol	Math_word4+1
+	ldx	#Duke_DOOR4_WALL1
+	jmp	Duke_updateDoorSwing
+
+Duke_exitCounter dta	0
+Duke_door3Angle	dta	0
+Duke_door4Angle	dta	0
+Duke_door2Top	org	*+1
+Duke_door2Bottom org	*+1
+
+	org	Pilot_update+1
+	dta	a(Duke_animateUpdate)
+
+	end

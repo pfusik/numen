@@ -1,0 +1,1034 @@
+* "Recursive zoomer with mipmapping and motion blur"
+* b. Fox/Tqa
+
+	icl	'../nex.asx'
+
+*       0123456789abcdef *$10
+* $7000 CCCC,,,HCCCC...L
+* $8000 CCCC;;;;CCCC,,,;
+* $9000 CCCCBB..CCCCBB..
+* $a000 CCCCBBA.CCCCBBA.
+
+* C - texture 64*64
+* B - texture 32*32
+* A - texture 16*16
+* ' - temporary 8*8 and 4*4 textures
+* , - multiplied pozl and pozh
+* H,L - "Eru Motion Blur" tables ;)
+* . - unused
+
+dark	equ	color+9
+light	equ	color+15
+
+stay	equ	0
+
+nexd	equ	$cd00	$100
+dpro	equ	$600	$6a00
+color	equ	$70
+texc	equ	$7000
+texb	equ	$9040
+texa	equ	$a060
+texe	equ	$b000
+cp	equ	$8040
+bp	equ	$80f0
+pozml	equ	$8840
+pozmh	equ	$88c0
+pozmm	equ	$7040
+;dl	equ	$ce00	$180
+;	ert	<dl!=0
+scr	equ	$d880	$780
+
+si	equ	$80
+di	equ	$82
+l1	equ	$84
+l2	equ	$86
+r1	equ	$88
+r2	equ	$8a
+ct	equ	$8c
+mask	equ	$8d
+c0	equ	$a0
+c1	equ	c0+1
+c2	equ	c0+2
+c3	equ	c0+3
+c4	equ	c0+4
+c5	equ	c0+5
+c6	equ	c0+6
+c7	equ	c0+7
+t0	equ	$a8
+t1	equ	t0+1
+t2	equ	t0+2
+t3	equ	t0+3
+t4	equ	t0+4
+t5	equ	t0+5
+t6	equ	t0+6
+t7	equ	t0+7
+wrap0	equ	$b0
+wrap1	equ	$b1
+	ert	wrap0!=>texe
+leti	equ	$b8
+type	equ	$b9
+tabi	equ	$ba
+fazi	equ	$bc
+st	equ	$bd
+fr	equ	$be
+tx	equ	$bf
+dlic	equ	$c0
+
+	org	$a800
+paktex	ins	'rzoom.gfx'
+
+dl	dta	$90,$6f,a(scr)
+:29	dta	$8f,$2f
+	dta	$41,a(dl)
+
+lets	equ	8
+letters	dta	%00000000
+	dta	%01111110
+	dta	%01111110
+	dta	%01111110
+	dta	%01111110
+	dta	%01111110
+	dta	%01111110
+	dta	%00000000
+
+	dta	%00000000
+	dta	%00000010
+	dta	%00000010
+	dta	%01111110
+	dta	%01111110
+	dta	%00000010
+	dta	%00000010
+	dta	%00000000
+
+	dta	%00000000
+	dta	%01111000
+	dta	%01111100
+	dta	%00100110
+	dta	%00100110
+	dta	%01111100
+	dta	%01111000
+	dta	%00000000
+
+	dta	%00000000
+	dta	%00111100
+	dta	%01111110
+	dta	%01000010
+	dta	%01100010
+	dta	%11111110
+	dta	%10111100
+	dta	%00000000
+
+	dta	%00000000
+	dta	%01111110
+	dta	%01111110
+	dta	%01000000
+	dta	%01000000
+	dta	%01111110
+	dta	%01111110
+	dta	%00000000
+
+	dta	%00000000
+	dta	%01111000
+	dta	%01111100
+	dta	%00100110
+	dta	%00100110
+	dta	%01111100
+	dta	%01111000
+	dta	%00000000
+
+	dta	%00000000
+	dta	%01111110
+	dta	%01111110
+	dta	%00010010
+	dta	%00110010
+	dta	%01111110
+	dta	%01001100
+	dta	%00000000
+
+	dta	%00000000
+	dta	%00000010
+	dta	%00000010
+	dta	%01111110
+	dta	%01111110
+	dta	%00000010
+	dta	%00000010
+	dta	%00000000
+
+	dta	%11111111
+	dta	%11111111
+	dta	%11111111
+	dta	%11111111
+	dta	%11111111
+	dta	%11111111
+	dta	%11111111
+	dta	%11111111
+
+	dta	%11111111
+	dta	%11111111
+	dta	%11111111
+	dta	%11111111
+	dta	%11111111
+	dta	%11111111
+	dta	%11111111
+	dta	%11111111
+
+;wx	dta	3,4,5,4,5,4,4,4
+;wy	dta	1,2,3,1,1,1,1,1
+wx	dta	2,2,6,3,5,1,5,4
+wy	dta	1,1,5,1,2,3,6,4
+
+fazy	ins	'rzoom.tab'
+stepy	equ	fazy+3
+pozl	equ	stepy+[*-stepy]/3
+pozh	equ	pozl+[*-stepy]/3
+
+lrt1	dta	a(dpro,hap1,lap1,lap2,rap1,rap2)
+lrt2	dta	a(450,hpal,4,4,4,4)
+
+bct1	dta	a(texb+$80,texc+$80,bap1,bap2,cap1,cap2)
+
+texht	dta	h(texa,texb,texc)
+texlt	dta	l(texa,texb,texc)
+texmt	dta	b(15,31,63)
+texst	dta	b(16,32,64)
+
+hpat	stx	a:0
+	sty	a:0
+	stx	a:0
+	sty	a:0
+	adc	st
+	scc:iny
+	iny
+	cpy	>texe
+	bcc	hpa1
+hpas	sty	a:0
+	ldy	0
+	inx
+	clc
+hpa1	equ	*
+hpal	equ	*-hpat
+
+bcpat	ldx	>bp
+	lsr	@
+	scc:inx
+	ert	>bp!=>cp
+
+put3	jsr	put
+	pha
+	lda	#color
+	jsr	put
+	jsr	put
+	pla
+	rts
+
+put	sta	dpro,y
+next	iny
+	sne:inc	put+2
+	rts
+
+*** Start program
+main
+	ift	NUMEN
+	mva	Banks_forEffect	^31
+	els
+	ldx	#29
+	lda	#0
+	sta:rpl	^00,x-
+	sta	^40
+	eif
+
+* Extract texture 0
+	ldx	#0
+xtx1	inc	xtx3+2
+	inc	xtx4+2
+	ldy	#0
+xtx2	lda	paktex,x
+	pha
+:4	lsr	@
+	eor	#color
+xtx3	sta	texc-$100,y+
+	pla
+	and	#$f
+	eor	#color
+xtx4	sta	texc-$100,y+
+	cpy	#64
+	inx
+	bcc	xtx2
+	bne	xtx1
+	inc:lda	xtx2+2
+	cmp	>paktex+$800
+	bcc	xtx1
+
+* Make texture 0 mipmaps
+
+* 64*64 -> 32*32
+	mva	>texc	si+1
+	mva	<texb-1	di
+	ldx	>texb
+mmip0	stx	di+1
+	ldy	#0
+mmip1	sty	si
+	lda	(si),y
+	inc	si+1
+	cmp	(si),y
+	scs:lda	(si),y
+	iny
+	cmp	(si),y
+	scs:lda	(si),y
+	dec	si+1
+	cmp	(si),y
+	scs:lda	(si),y
+	sta	(di),y
+	cpy	#32
+	bcc	mmip1
+:2	inc	si+1
+	inx
+	cpx	>texe
+	bcc	mmip0
+
+* 32*32 -> 16*16
+	clc
+	mva	>texb	si+1
+	mva	<texb-1	di
+	ldx	>texa
+mmip2	stx	di+1
+	ldy	#$20
+mmip3	sty	si
+	lda	(si),y
+	inc	si+1
+	cmp	(si),y
+	scs:lda	(si),y
+	iny
+	cmp	(si),y
+	scs:lda	(si),y
+	dec	si+1
+	cmp	(si),y
+	scs:lda	(si),y
+	sta	(di),y
+	cpy	#$30
+	bcc	mmip3
+:2	inc	si+1
+	inx
+	cpx	>texe
+	bcc	mmip2
+
+* 16*16 -> 8*8
+	mwa	#texa	si
+	ldx	#0
+mmip4	ldy	#0
+mmip5	lda	(si),y
+	inc	si+1
+	cmp	(si),y
+	scs:lda	(si),y
+	iny
+	cmp	(si),y
+	scs:lda	(si),y
+	dec	si+1
+	cmp	(si),y
+	scs:lda	(si),y
+	sta	cp,x+
+	iny
+	cpy	#16
+	bcc	mmip5
+:2	inc	si+1
+	cpx	#64
+	bcc	mmip4
+
+* 8*8 -> 4*4
+	ldx	#$36
+	ldy	#$f
+mmip6	lda	cp,x
+	cmp	cp+1,x
+	scs:lda	cp+1,x
+	cmp	cp+8,x
+	scs:lda	cp+8,x
+	cmp	cp+9,x
+	scs:lda	cp+9,x
+	sta	bp,y
+	dex:dex
+	txa
+	and	#$f7
+	tax
+	dey
+	bpl	mmip6
+
+* Make DPRO
+	ldx	<scr
+	ldy	#0
+	lda	>scr
+mdpr1	sta	si+1
+mdpr2	inx
+	lda	#{lda a:0}
+	jsr	put3
+	lda	#{adc a:0}
+	jsr	put3
+	lda	#{adc a:0,x}
+	jsr	put3
+	jsr	put3
+	lda	#{sta scr}
+	jsr	put
+	txa
+	jsr	put
+	lda	si+1
+	jsr	put
+	txa
+	and:cmp	#$1e
+	bcc	mdpr2
+	inx:inx
+	bne	mdpr2
+	txa	#0
+	adc	si+1	+
+	cmp	>scr+$780
+	bcc	mdpr1
+	lda	#{rts}
+	jsr	put
+
+* Make color add tables
+	clc
+mcol1	ldy	#$f
+mcol2	tya
+mcap1	adc	#0
+:2	lsr	@
+mcap2	sta	$70f0,y
+:4	asl	@
+mcap3	sta	$7070,y-
+	bpl	mcol2
+	inc	mcap1+1
+	inc	mcap2+2
+	inc	mcap3+2
+	bpl	mcol1
+
+* Make NEXD
+	lda	#6
+	ldx	#15
+mnxd1	sta	nexd
+	cpx	#10
+	sne:adc	#2
+	add	#1
+	dex
+	bne	mnxd2
+	ldx	#15
+	sbc	#2	-
+mnxd2	inc	mnxd1+1
+	bne	mnxd1
+
+* Make HPRO, LPRO and RPRO
+	ldx	#11
+	mva:rpl	lrt1,x	si,x-
+	mva	#60	ct
+	clc
+mlr1	ldy	#0
+	lda	#{lda 0}
+	sta	(l1),y
+	sta	(r1),y
+	lda	#{lda a:0,x}
+	sta	(l2),y
+	sta	(r2),y+
+	inw	l1
+	inw	r1
+	inw	l2
+	inw	r2
+	mwa	l1	hpat+1
+	mwa	r1	hpat+7
+	mva	#{sta a:0}	(l1),y
+	sta	(r1),y+
+	mva	l2	(l1),y
+	mva	r2	(r1),y+
+	mva	l2+1	(l1),y
+	mva	r2+1	(r1),y
+	inw	l2
+	inw	r2
+	mwa	l2	hpat+4
+	mwa	r2	hpat+10
+	ldy	#1
+	mva	#{sta a:0,y}	(l2),y
+	sta	(r2),y+
+	mva	si	(l2),y
+	add	#225
+	sta	(r2),y+
+	mva	si+1	(l2),y
+	adc	#0
+	sta	(r2),y
+	lda	di
+	adc	#hpas+4-hpat
+	sta	hpas+1
+	lda	di+1
+	adc	#0
+	sta	hpas+2
+	ldy	#hpal-1
+	mva:rpl	hpat,y	(di),y-
+	ldx	#10
+mlr2	lda	lrt2,x
+	adc:sta	si,x	-
+	lda	lrt2+1,x
+	adc:sta	si+1,x
+	dex:dex
+	bpl	mlr2
+	dec	ct
+	jne	mlr1
+
+* Make MAKEB and MAKEC
+	ldx	#11
+	mva:rpl	bct1,x	si,x-
+
+	mva	#8	ct
+mbc1	ldy	#5
+mbc2	mva	bcpat,y	(l1),y
+	sta	(r1),y-
+	bpl	mbc2
+	lda	#6
+	add:sta	l1
+	scc:inc	l1+1
+	lda	#6
+	add:sta	r1
+	scc:inc	r1+1
+
+	ldx	#0
+mbc3	mva	#{lda bp,x}	(l2),0
+	inw	l2
+	txa
+:2	asl	@
+	eor	<bp
+	sta	(l2),y
+	inw	l2
+	mva	#{stx a:0}	(l1),y
+	inw	l1
+	mva	l2	(l1),y
+	inw	l1
+	mva	l2+1	(l1),y
+	inw	l1
+	iny	#1
+	mva	#{sta texb,y}	(l2),y+
+	mva	si	(l2),y+
+	mva	si+1	(l2),y
+	inc	si+1
+	lda	#4
+	add:sta	l2
+	scc:inc	l2+1
+	inx:cpx	#4
+	bcc	mbc3
+
+	ldx	#0
+mbc4	mva	#{lda cp,x}	(r2),0
+	inw	r2
+	txa
+:3	asl	@
+	eor	<cp
+	sta	(r2),y
+	inw	r2
+	mva	#{stx a:0}	(r1),y
+	inw	r1
+	mva	r2	(r1),y
+	inw	r1
+	mva	r2+1	(r1),y
+	inw	r1
+	iny	#1
+	mva	#{sta texc,y}	(r2),y+
+	mva	di	(r2),y+
+	mva	di+1	(r2),y
+	inc	di+1
+	lda	#4
+	add:sta	r2
+	scc:inc	r2+1
+	inx:cpx	#8
+	bcc	mbc4
+
+	dec	ct
+	jne	mbc1
+
+* Make POZML and POZMH
+	ldy	#pozh-pozl-1
+
+mpozm1	lda	stepy,y
+	asl	@
+	sta	fr
+	lda	#1
+	rol	@
+	sta	si
+	lda	#0
+	sta	si+1
+
+	lda	>pozml
+mpozm2	sta	mpml+2
+	sta	mpmh+2
+	eor	>pozmm^pozml
+	sta	mpmm+2
+	ldx	#0
+	cpy	fazy
+	scc:inx
+	cpy	fazy+1
+	scc:inx
+	lda	fr
+mpml	sta	pozml,y
+	lda	si
+	and	texmt,x
+mpmh	sta	pozmh,y
+	lda	si+1
+	ror	@
+	lda	si
+:3	ror	@
+	ror	@
+	dex
+	bpl	*-2
+	and	#7
+mpmm	sta	pozmm,y
+	lda	pozl,y
+	add:sta	fr
+	lda	pozh,y
+	adc:sta	si
+	lda	#0
+	adc:sta	si+1
+	lda	mpml+2
+	adc	#1	-
+	cmp	>pozml+$800
+	bcc	mpozm2
+
+	dey
+	bpl	mpozm1
+
+* Clear screen
+	ldy	#0
+	tya
+	ldx	#8
+cls1	sta:rne	scr&$ff00,y+
+	inc	cls1+2
+	dex:bne	cls1
+
+* Init variables
+	mva	#0	tabi
+	ldx	#0
+	jsr	settype
+
+	ldy	#7
+	jsr	setleti
+
+	ldx	#7
+	jsr	makea0
+
+* Show screen
+	lda:rne	^4b
+	mva	#$21	^40
+	mwa	#dl	^42
+	mva	#$41	^1b
+	mva	#2	dlic
+	ift	NUMEN
+	mwa	#dli	Dli_vector
+	mwa	#-860	Vbl_clock
+	els
+	mwa	#dli	$fffa
+	mva	#$80	^4e
+	eif
+
+	jsr	makeb
+
+	ift	NUMEN
+	jsr	Idle
+	lda:rne	^4b
+	sta	^40
+	jmp	NextBlock
+	els
+	jmp	*
+	eif
+
+*** Do FX
+
+dli
+:!NUMEN	pha
+	dec	dlic
+	bne	dli1
+	mva	#30	dlic
+dlib	bpl	dli2
+dli1	sta	^4a
+	mva	#13	^45
+	mva	#3	^45
+	pla:rti
+dli2
+	mva	#{bmi}	dlib
+	sta	^4a
+	mva	#13	^45
+	mva	#3	^45
+	txa:pha
+	tya:pha
+	lda:pha	^31
+:NUMEN	mva	Banks_forEffect	^31
+
+* Blur to screen (DPRO)
+	ldx	#$80
+	jsr	dpro
+
+	inc:lda	fazi
+	and	#3
+	cmp	#2
+	adc	#1
+	sta	nexd
+	mvy	#0	lpr2+1
+	sty	rpr2+1
+
+	ldx	tabi
+	lda	stepy,x
+	sta	st
+	sta	lstep+1
+	sta	sstep+1
+	sta	rstep+1
+
+* Interpolate lines (HPRO)
+pozyl	lda	pozml,x
+:stay	lda	#0
+	pha
+	ldy	type
+pozyh	lda	pozmh,x
+	add	texht,y
+	tay
+pozym	lda	pozmm,x
+:stay	lda	#0
+	ora	#t0
+	tax
+	clc
+	pla
+* :60	hpat
+hap1	org	*+hpal*60
+
+* Prepare for interpolating columns
+	ldx	tabi
+pozxl	lda	pozml,x
+:stay	lda	#0
+	sta	fr
+pozxm	lda	pozmm,x
+:stay	lda	#0
+	ora	#c0
+	sta	lchr+1
+pozxh	lda	pozmh,x
+
+* Draw left half of picture (LPRO)
+lpr1	sta	tx
+lchr	lda	c0
+	inc	lchr+1
+llw0	ldx	#0	.
+llw1	ldy	#0	.
+	stx	t0
+	lsr	@
+	scc:sty	t0
+	stx	t1
+	lsr	@
+	scc:sty	t1
+	stx	t2
+	lsr	@
+	scc:sty	t2
+	stx	t3
+	lsr	@
+	scc:sty	t3
+	stx	t4
+	lsr	@
+	scc:sty	t4
+	stx	t5
+	lsr	@
+	scc:sty	t5
+	stx	t6
+	lsr	@
+	scc:sty	t6
+	stx	t7
+	lsr	@
+	scc:sty	t7
+*:60	mva	t0	lap2+1
+lap1	org	*+5*60
+	ldx	tx
+lpr2	ldy	nexd	.
+*:60	mva	tex,x	dpro,y
+lap2	org	*+6*60
+	cpy	#216
+	bcs	jrpro
+	sty	lpr2+1
+lstep	lda	#0
+	adc:sta	fr
+	txa:adc	#1
+llim	cmp	#0
+	bcs	jlpr1
+	tax
+	jmp	lpr2
+jlpr1	sbc	#0
+	jmp	lpr1
+jrpro	clc
+	mva	lchr+1	rchr+1
+sstep	lda	#0
+	adc:sta	fr
+	txa:adc	#1
+slim	cmp	#0
+	bcs	spr1
+	stx	tx
+	jmp	rap1
+spr1	sbc	#0
+
+* Draw right half of picture (RPRO)
+rpr1	sta	tx
+rchr	lda	c0
+	inc	rchr+1
+rlw0	ldx	#0	.
+rlw1	ldy	#0	.
+	stx	t0
+	lsr	@
+	scc:sty	t0
+	stx	t1
+	lsr	@
+	scc:sty	t1
+	stx	t2
+	lsr	@
+	scc:sty	t2
+	stx	t3
+	lsr	@
+	scc:sty	t3
+	stx	t4
+	lsr	@
+	scc:sty	t4
+	stx	t5
+	lsr	@
+	scc:sty	t5
+	stx	t6
+	lsr	@
+	scc:sty	t6
+	stx	t7
+	lsr	@
+	scc:sty	t7
+*:60	mva	t0	rap2+1
+rap1	org	*+5*60
+	ldx	tx
+rpr2	ldy	nexd	.
+*:60	mva	tex,x	dpro,y
+rap2	org	*+6*60
+	cpy	#216
+	bcs	rprx
+	sty	rpr2+1
+rstep	lda	#0
+	adc:sta	fr
+	txa:adc	#1
+rlim	cmp	#0
+	bcs	jrpr1
+	tax
+	jmp	rpr2
+jrpr1	sbc	#0
+	jmp	rpr1
+rprx	equ	*
+
+	mva	#{bpl}	dlib
+
+	inc	tabi
+	ldx	type
+	lda	tabi
+	cmp	fazy,x
+	bne	return
+
+	inx
+	cpx	#3
+	bcc	typebc
+	lda	#8
+	add:sta	leti
+	cmp	#lets*8
+	scc:lda	#7
+	tay
+	jsr	setleti
+	mvx	#0	tabi
+	jsr	settype
+	jsr	makeb
+	jmp	return
+
+typebc	jsr	settype
+	cpx	#2
+	bcs	typec
+	jsr	makec
+	jmp	return
+
+typec	jsr	makea
+;	jmp	return
+
+return	pla:sta	^31
+	pla:tay
+	pla:tax
+	pla:rti
+
+setleti	sty	leti
+	tya
+:3	lsr	@
+	tax
+	lda	wx,x
+	eor	>pozml
+	sta	pozxl+2
+	sta	pozxh+2
+	eor	>pozmm^pozml
+	sta	pozxm+2
+	lda	wy,x
+	eor	>pozml
+	sta	pozyl+2
+	sta	pozyh+2
+	eor	>pozmm^pozml
+	sta	pozym+2
+	ldx	#7
+	mva:rpl	letters,y-	c0,x-
+	rts
+
+settype	stx	type
+	lda	texht,x
+	sta	wrap0
+	eor	#1
+	sta	wrap1
+	lda	texlt,x
+	sta	llw0+1
+	sta	rlw0+1
+	eor	#$80
+	sta	llw1+1
+	sta	rlw1+1
+	lda	texst,x
+	sta	jlpr1+1
+	sta	spr1+1
+	sta	jrpr1+1
+	sta	llim+1
+	sta	slim+1
+	sta	rlim+1
+	rts
+
+makea	lda	leti
+	add	#8
+	cmp	#lets*8
+	scc:lda	#7
+	tax
+makea0	ldy	#$e
+makea1	lda	letters+8,x
+	lsr	@
+	eor	letters+8,x
+	sta	mask
+	lda	#dark
+	scc:eor	#dark^light
+	sta	texa+$080,y
+	sta	texa+$081,y
+	sta	texa+$180,y
+	sta	texa+$181,y
+	lsr	mask
+	scc:eor	#dark^light
+	sta	texa+$280,y
+	sta	texa+$281,y
+	sta	texa+$380,y
+	sta	texa+$381,y
+	lsr	mask
+	scc:eor	#dark^light
+	sta	texa+$480,y
+	sta	texa+$481,y
+	sta	texa+$580,y
+	sta	texa+$581,y
+	lsr	mask
+	scc:eor	#dark^light
+	sta	texa+$680,y
+	sta	texa+$681,y
+	sta	texa+$780,y
+	sta	texa+$781,y
+	lsr	mask
+	scc:eor	#dark^light
+	sta	texa+$880,y
+	sta	texa+$881,y
+	sta	texa+$980,y
+	sta	texa+$981,y
+	lsr	mask
+	scc:eor	#dark^light
+	sta	texa+$a80,y
+	sta	texa+$a81,y
+	sta	texa+$b80,y
+	sta	texa+$b81,y
+	lsr	mask
+	scc:eor	#dark^light
+	sta	texa+$c80,y
+	sta	texa+$c81,y
+	sta	texa+$d80,y
+	sta	texa+$d81,y
+	lsr	mask
+	scc:eor	#dark^light
+	sta	texa+$e80,y
+	sta	texa+$e81,y
+	sta	texa+$f80,y
+	sta	texa+$f81,y
+	dex
+:2	dey
+	jpl	makea1
+	rts
+
+makeb	ldx	leti
+	ldy	#7
+makcp1	lda	letters+16,x
+	lsr	@
+	eor	letters+16,x
+	sta	mask
+	lda	#dark
+	scc:eor	#dark^light
+	sta	cp+$100,y
+	lsr	mask
+	scc:eor	#dark^light
+	sta	cp+$108,y
+	lsr	mask
+	scc:eor	#dark^light
+	sta	cp+$110,y
+	lsr	mask
+	scc:eor	#dark^light
+	sta	cp+$118,y
+	lsr	mask
+	scc:eor	#dark^light
+	sta	cp+$120,y
+	lsr	mask
+	scc:eor	#dark^light
+	sta	cp+$128,y
+	lsr	mask
+	scc:eor	#dark^light
+	sta	cp+$130,y
+	lsr	mask
+	scc:eor	#dark^light
+	sta	cp+$138,y
+	dex
+	dey
+	bpl	makcp1
+
+	ldx	#$36
+	ldy	#$f
+makbp1	lda	cp+$100,x
+	ora	cp+$101,x
+	ora	cp+$108,x
+	ora	cp+$109,x
+	cmp	#dark
+	seq:lda	#light
+	sta	bp+$100,y
+	dex:dex
+	txa
+	and	#$f7
+	tax
+	dey
+	bpl	makbp1
+
+	ldx	leti
+	ldy	#$1f
+makb1	stx	ct
+	lda	letters+8,x
+* :8 { ldx >bp ; lsr @ ; scc ; inx ; :4 stx bap2+2 }
+bap1	org	*+8*[6+4*3]
+	ldx	#3
+* :32 mva bp,x texb,y
+bap2	org	*+32*6
+	dey
+	dex
+	jpl	bap2
+	ldx:dex	ct
+	tya
+	jpl	makb1
+	rts
+
+makec	ldx	leti
+	ldy	#$3f
+makc1	stx	ct
+	lda	letters+8,x
+* :8 { ldx >cp ; lsr @ ; scc ; inx ; :8 stx cap2+2 }
+cap1	org	*+8*[6+8*3]
+	ldx	#7
+* :64 mva cp,x texc,y
+cap2	org	*+64*6
+	dey
+	dex
+	jpl	cap2
+	ldx:dex	ct
+	tya
+	jpl	makc1
+	rts
+
+	end

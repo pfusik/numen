@@ -1,0 +1,1099 @@
+* Turbo Vectys Display
+* by Fox/Taquart
+* XE: 14,15,23/06;05-10,27,29/07;14/09
+* PC: 20,27/09;03/10/97;12/12
+* XE: 13-15,22/12/97;10,16/01/98
+* PC: 29-31/05;02/06/98
+* 09/01/99
+* 05/03;07/04;17/04;09/05/02
+
+	icl	'../nex.asx'
+
+calc_put	equ	$d800
+calc_frame	equ	$d80c
+calc_init	equ	$d80f
+calc_ile	equ	$20
+calc_vmov	equ	$ce
+
+Banks_CALC1_INDEX	equ	0
+Banks_CALC2_INDEX	equ	1
+Banks_PRO_INDEX		equ	2
+Banks_TAB_INDEX		equ	3
+
+disp	equ	$e500
+
+* Memory
+dpro	equ	$2000	$c00
+sat1	equ	$4200
+sat2	equ	$427c
+scmm	equ	$803a
+l2al	equ	$c001
+l2ah	equ	$c101
+l2bl	equ	$c201
+l2bh	equ	$c301
+l2cl	equ	$c401
+l2ch	equ	$c501
+l3al	equ	$c601
+l3ah	equ	$c701
+l3bl	equ	$c801
+l3bh	equ	$c901
+l3cl	equ	$ca01
+l3ch	equ	$cb01
+lin2	equ	$cc00
+lin3	equ	$cd00
+
+* Variables
+index	equ	$1f
+dl	equ	$84	- must be $00x4
+	org	$90
+f0	equ	*
+v0	equ	*+1
+	org	*+12
+f1	equ	*
+v1	equ	*+1
+	org	*+12
+vc	org	*+2
+ln	org	*+1
+var0	org	*+1
+dlt0	org	*+2
+var1	org	*+1
+dlt1	org	*+2
+wd	org	*+2
+dptr	org	*+1
+
+* c0de
+	org	disp
+edl
+:29	dta	$70
+edl1	dta	$70
+	dta	$81,a(dl)
+
+dlpt	dta	1,a(dl),$68,a(scmm)
+	dta	$48,a(scmm)
+	ert	>scmm!=$80
+ndl	equ	*-1
+	dta	$41,a(ndl)
+
+	ift	!NUMEN
+Vbl_clock equ	$fe
+
+Idle	lda:rne	Vbl_clock+1
+	rts
+
+nmi	pha
+	bit	^4f
+	bmi	dli
+	inw	Vbl_clock
+	eif
+
+vbl	mva	dptr	^42
+	mva	>edl	^43
+:NUMEN	rts
+:!NUMEN	pla:rti
+
+dli	sta	^4a
+	txa:pha
+	tya:pha
+	lda:pha	^31
+	ldx	#3
+dli1	bne	dli2
+	mva	Banks_forEffect+Banks_TAB_INDEX	^31
+	cmp	0
+	dex
+	bne	*-1
+jpro	jmp	dpro
+rpro	sta	^4a
+	mva	#dl+9	^42
+	lda	#0
+	sta	^03
+	sta	^02
+	sta	^01
+	sta	^00
+dli2	jsr	next
+	pla:sta	^31
+	pla:tay
+	pla:tax
+	pla:rti
+
+main
+* Make disp pro
+	ldy	#0
+	sty	v0
+	sty	v1
+	ldx	>dpro
+mdp1	stx	v0+1
+	inx
+	stx	v1+1
+mdp2	mva	pseg,y	(v0),y
+	mva	nseg,y	(v1),y+
+	bne	mdp2
+	inx
+	cpx	>dpro+$c00
+	bcc	mdp1
+
+	mva	#0	index
+
+	jsr	nsol
+	mwa	#-494	Vbl_clock
+	jsr	Idle
+	jsr	nsol
+	mwa	#-750	Vbl_clock
+	jsr	Idle
+	jsr	nsol
+	mwa	#-794	Vbl_clock
+	jsr	Idle
+
+	ift	NUMEN
+	lda:rne	^4b
+	mwa	#rts	Vbl_vector
+
+	jmp	NextBlock
+	els
+	jmp	*
+	eif
+
+nsol
+	jsr	calc_init
+	mva	Banks_forEffect+Banks_CALC1_INDEX	^31
+	mwa	#$4000	calc_put+1
+	mwa	#236	calc_vmov
+calc1
+	jsr	calc_frame
+	dec:dec	calc_vmov
+	bne	calc1
+	lda	#$ff
+	jsr	calc_put
+
+	mva	Banks_forEffect+Banks_CALC2_INDEX	^31
+	mwa	#$4000	calc_put+1
+calc2
+	jsr	calc_frame
+	dec	calc_ile
+	bne	calc2
+	lda	#$ff
+	jsr	calc_put
+	mva	Banks_forEffect+Banks_CALC1_INDEX	^31
+	mwa	#$6000	calc_put+1
+	mwa	#-2	calc_vmov
+calc3
+	jsr	calc_frame
+	dec:dec	calc_vmov
+	lda	calc_vmov
+	cmp	#256-236
+	bne	calc3
+	lda	#$ff
+	jsr	calc_put
+
+	jsr	init
+
+	lda:rne	^4b
+	sta	^12
+	sta	^1a
+	mva	#$21	^40
+	mva	<ndl+1	^42
+	mva	#{bne}	dli1
+	mva	>ndl	^43
+	ldx	#3
+	lda	#$ff
+	sta	^08,x
+	sta	^0d,x-
+	bpl	*-7
+	mva	#1	^1b
+:NUMEN	mwa	#vbl	Vbl_vector
+:NUMEN	mwa	#dli	Dli_vector
+:!NUMEN	mwa	#nmi	$fffa
+:!NUMEN	mva	#$c0	^4e
+	jmp	next1
+
+***
+
+shut	sta	^40
+	rts
+
+emp	mva	<ndl	dptr
+	mva	#{bne}	dli1
+	rts
+
+next1	ldx:inc	index
+	lda	pages,x
+	beq	shut
+	sta	get+2
+	mva	#0	get+1
+	ldy	banks,x
+	mva	Banks_forEffect,y	getsb+1
+
+next	jsr	getsb
+	cmp	#$ff
+	bcs	next1
+	sbc	#7	-
+	bcc	emp
+	beq	ad29
+	sbc	#1	+
+	tax
+:4	asl	@
+	and	#$7f
+	sta	edl1
+	txa
+:3	lsr	@
+	eor	#$ff
+ad29	add	<edl1+1
+	sta	dptr
+	mva	#{beq}	dli1
+
+	jsr	get
+	sta	^15
+	sta	^18
+	jsr	get
+	sta	^14
+	sta	^17
+	jsr	get
+	sta	^13
+	sta	^16
+	lda	#0
+	sta	ln
+	sta	vc
+	ldy	<jpro+1
+	mva	>jpro+1	vc+1
+	mva	#f0-3	var0
+	mva	#f1-3	var1
+
+segl	jsr	get
+	cmp	ln
+	seq:scs
+	jmp	segx
+	lsr	ln
+	sta	ln
+	ldx	var0
+	ror	@
+	and	#$80
+	jcs	segn
+* segp
+	spl
+	lda	<pcpx-phal
+	adc	<phal-pseg	-
+	sta	(vc),y
+	lda	vc+1
+	and	#$fe
+	adc	#2	-
+	bpl	*+4
+	lda	>dpro
+	iny
+	sta	(vc),y
+	sta	vc+1
+	jsr	get
+	eor	#0
+	beq	spx0
+	inx
+	inx
+	inx
+	stx	var0
+	sta	2,x
+	mva	#$80	0,x
+	jsr	get
+	sta	dlt0
+	jsr	get
+	sta	dlt0+1
+spx0	txa
+	ldy	<plf0-ps
+	sta	(vc),y
+	ldy	<psf0-ps
+	sta	(vc),y
+	ldy	<prf0-ps
+	sta	(vc),y
+	ldy	<pwf0-ps
+	sta	(vc),y
+	adc	#1	-
+	ldy	<plv0-ps
+	sta	(vc),y
+	ldy	<prv0-ps
+	sta	(vc),y
+	ldy	<pgv0-ps
+	sta	(vc),y
+	adc	#1	-
+	ldy	<plw0-ps
+	sta	(vc),y
+	ldy	<psw0-ps
+	sta	(vc),y
+	ldy	<prw0-ps
+	sta	(vc),y
+	ldy	<pww0-ps
+	sta	(vc),y
+	lda	dlt0
+	ldy	<pdl0-ps
+	sta	(vc),y
+	ldy	<ppl0-ps
+	sta	(vc),y
+	lda	dlt0+1
+	ldy	<pdh0-ps
+	sta	(vc),y
+	ldy	<pph0-ps
+	sta	(vc),y
+	ldx	var1
+	jsr	get
+	eor	#0
+	beq	spx1
+	inx
+	inx
+	inx
+	stx	var1
+	sta	2,x
+	mva	#$80	0,x
+	jsr	get
+	sta	dlt1
+	jsr	get
+	sta	dlt1+1
+spx1	txa
+	ldy	<plf1-ps
+	sta	(vc),y
+	ldy	<psf1-ps
+	sta	(vc),y
+	ldy	<prf1-ps
+	sta	(vc),y
+	ldy	<pwf1-ps
+	sta	(vc),y
+	adc	#1	-
+	ldy	<plv1-ps
+	sta	(vc),y
+	ldy	<prv1-ps
+	sta	(vc),y
+	ldy	<pgv1-ps
+	sta	(vc),y
+	adc	#1	-
+	ldy	<plw1-ps
+	sta	(vc),y
+	ldy	<psw1-ps
+	sta	(vc),y
+	ldy	<prw1-ps
+	sta	(vc),y
+	ldy	<pww1-ps
+	sta	(vc),y
+	lda	#$7f
+	cmp	dlt0+1
+	lda	#$ff
+	adc	dlt1
+	ldy	<pdl1-ps
+	sta	(vc),y
+	ldy	<ppl1-ps
+	sta	(vc),y
+	lda	#$ff
+	adc	dlt1+1
+	ldy	<pdh1-ps
+	sta	(vc),y
+	ldy	<pph1-ps
+	sta	(vc),y
+	lda	ln
+	sub	#1
+	lsr	@
+	ldy	<pcpx-ps
+	sta	(vc),y
+	mwa	get+1	wd
+	and	#0
+	tax
+	ldy	#1
+	cmp	(wd),y
+	bcs	*+4
+	ldx	#3
+	tya	#1
+	rol	@
+	ldy	<pgru-ps
+	sta	(vc),y
+	eor	#1
+	ldy	<pgrn-ps
+	sta	(vc),y
+	lda	var0,x
+	ldy	<plfu-ps
+	sta	(vc),y
+	ldy	<psfu-ps
+	sta	(vc),y
+	adc	#2	-
+	ldy	<plwu-ps
+	sta	(vc),y
+	ldy	<pswu-ps
+	sta	(vc),y
+	lda	dlt0,x
+	ldy	<pdlu-ps
+	sta	(vc),y
+	lda	dlt0+1,x
+	ldy	<pdhu-ps
+	sta	(vc),y
+	txa
+	eor	#3
+	tax
+	lda	var0,x
+	adc	#2	-
+	ldy	<plwn-ps
+	sta	(vc),y
+	ldy	<pjmp-ps
+	jmp	segl
+
+segn	bpl	*+5
+	lda	<nhal-nseg
+	dta	b({bit a:})
+	lda	<ncpx-nseg
+	sta	(vc),y
+	lda	vc+1
+	and	#$fe
+	adc	#2	+
+	bpl	*+4
+	lda	>dpro+$100
+	iny
+	sta	(vc),y
+	sta	vc+1
+	jsr	get
+	eor	#0
+	beq	snx0
+	inx
+	inx
+	inx
+	stx	var0
+	sta	2,x
+	mva	#$80	0,x
+	jsr	get
+	sta	dlt0
+	jsr	get
+	sta	dlt0+1
+snx0	txa
+	ldy	<nlf0-ns
+	sta	(vc),y
+	ldy	<nsf0-ns
+	sta	(vc),y
+	ldy	<nrf0-ns
+	sta	(vc),y
+	ldy	<nwf0-ns
+	sta	(vc),y
+	adc	#1	-
+	ldy	<nlv0-ns
+	sta	(vc),y
+	ldy	<nrv0-ns
+	sta	(vc),y
+	ldy	<ngv0-ns
+	sta	(vc),y
+	adc	#1	-
+	ldy	<nlw0-ns
+	sta	(vc),y
+	ldy	<nsw0-ns
+	sta	(vc),y
+	ldy	<nrw0-ns
+	sta	(vc),y
+	ldy	<nww0-ns
+	sta	(vc),y
+	lda	dlt0
+	ldy	<ndl0-ns
+	sta	(vc),y
+	ldy	<npl0-ns
+	sta	(vc),y
+	lda	dlt0+1
+	ldy	<ndh0-ns
+	sta	(vc),y
+	ldy	<nph0-ns
+	sta	(vc),y
+	ldx	var1
+	jsr	get
+	eor	#0
+	beq	snx1
+	inx
+	inx
+	inx
+	stx	var1
+	sta	2,x
+	mva	#$80	0,x
+	jsr	get
+	sta	dlt1
+	jsr	get
+	sta	dlt1+1
+snx1	txa
+	ldy	<nlf1-ns
+	sta	(vc),y
+	ldy	<nsf1-ns
+	sta	(vc),y
+	ldy	<nrf1-ns
+	sta	(vc),y
+	ldy	<nwf1-ns
+	sta	(vc),y
+	adc	#1	-
+	ldy	<nlv1-ns
+	sta	(vc),y
+	ldy	<nrv1-ns
+	sta	(vc),y
+	ldy	<ngv1-ns
+	sta	(vc),y
+	adc	#1	-
+	ldy	<nlw1-ns
+	sta	(vc),y
+	ldy	<nsw1-ns
+	sta	(vc),y
+	ldy	<nrw1-ns
+	sta	(vc),y
+	ldy	<nww1-ns
+	sta	(vc),y
+	lda	#$7f
+	cmp	dlt0+1
+	lda	#$ff
+	adc	dlt1
+	ldy	<ndl1-ns
+	sta	(vc),y
+	ldy	<npl1-ns
+	sta	(vc),y
+	lda	#$ff
+	adc	dlt1+1
+	ldy	<ndh1-ns
+	sta	(vc),y
+	ldy	<nph1-ns
+	sta	(vc),y
+	lda	ln
+	sub	#1
+	lsr	@
+	ldy	<ncpx-ns
+	sta	(vc),y
+	mwa	get+1	wd
+	and	#0
+	tax
+	ldy	#1
+	cmp	(wd),y
+	bcs	*+4
+	ldx	#3
+	tya	#1
+	rol	@
+	ldy	<ngru-ns
+	sta	(vc),y
+	eor	#1
+	ldy	<ngrn-ns
+	sta	(vc),y
+	lda	var0,x
+	ldy	<nlfu-ns
+	sta	(vc),y
+	ldy	<nsfu-ns
+	sta	(vc),y
+	adc	#2	-
+	ldy	<nlwu-ns
+	sta	(vc),y
+	ldy	<nswu-ns
+	sta	(vc),y
+	lda	dlt0,x
+	ldy	<ndlu-ns
+	sta	(vc),y
+	lda	dlt0+1,x
+	ldy	<ndhu-ns
+	sta	(vc),y
+	txa
+	eor	#3
+	tax
+	lda	var0,x
+	adc	#2	-
+	ldy	<nlwn-ns
+	sta	(vc),y
+	ldy	<njmp-ns
+	jmp	segl
+
+segx	tax
+	mva	<rpro	(vc),y+
+	mva	>rpro	(vc),y
+	txa
+	ldy	#0
+	bpl	d2l0	!
+d2l1	sta	(vc),y
+	jsr	getsb
+	cmp	ln
+	beq	*+4
+	bcs	*+5
+	jmp	d2lx
+	ldy	ln
+d2l0	sta	ln
+	jsr	get
+	sta	dlt0
+	jsr	get
+	eor	#0
+	beq	d2b1
+	cmp	#$ff
+	beq	d2c1
+	tax
+	asl	@
+	mva	l2al,y	d2aj+1
+	mva	l2ah,y	d2aj+2
+	ldy	ln
+	mva	l2al-1,y	vc
+	mva	l2ah-1,y	vc+1
+	jsr	get
+	pha
+	mva	Banks_forEffect+Banks_PRO_INDEX	^31
+	ldy	#3
+	mva	#{rts}	(vc),y
+	pla
+	ldy	#$80
+d2aj	jsr	get	.
+	ldy	#3
+	lda	#{tya}
+	jmp	d2l1
+d2b1	mva	l2bl,y	d2bj+1
+	mva	l2bh,y	d2bj+2
+	ldy	ln
+	mva	l2bl-1,y	vc
+	mva	l2bh-1,y	vc+1
+	clc
+	jsr	get
+	tax
+	mva	Banks_forEffect+Banks_PRO_INDEX	^31
+	ldy	#3
+	mva	#{rts}	(vc),y
+	lda	#$80
+d2bj	jsr	get	.
+	lda	#{adc z:}
+	jmp	d2l1
+d2c1	mva	l2cl,y	d2cj+1
+	mva	l2ch,y	d2cj+2
+	ldy	ln
+	mva	l2cl-1,y	vc
+	mva	l2ch-1,y	vc+1
+	jsr	get
+	tax
+	mva	Banks_forEffect+Banks_PRO_INDEX	^31
+	ldy	#3
+	mva	#{rts}	(vc),y
+	lda	#$80
+d2cj	jsr	get	.
+	lda	#{adc z:}
+	jmp	d2l1
+
+d2lx	ldy	#0
+	bpl	d3l0	!
+d3l1	sta	(vc),y
+	jsr	getsb
+	cmp	ln
+	seq:scs
+	rts
+	ldy	ln
+d3l0	sta	ln
+	jsr	get
+	sta	dlt0
+	jsr	get
+	eor	#0
+	beq	d3b1
+	cmp	#$ff
+	beq	d3c1
+	tax
+	asl	@
+	mva	l3al,y	d3aj+1
+	mva	l3ah,y	d3aj+2
+	ldy	ln
+	mva	l3al-1,y	vc
+	mva	l3ah-1,y	vc+1
+	jsr	get
+	pha
+	mva	Banks_forEffect+Banks_PRO_INDEX	^31
+	ldy	#3
+	mva	#{rts}	(vc),y
+	pla
+	ldy	#$80
+d3aj	jsr	get	.
+	ldy	#3
+	lda	#{tya}
+	jmp	d3l1
+d3b1	mva	l3bl,y	d3bj+1
+	mva	l3bh,y	d3bj+2
+	ldy	ln
+	mva	l3bl-1,y	vc
+	mva	l3bh-1,y	vc+1
+	clc
+	jsr	get
+	tax
+	mva	Banks_forEffect+Banks_PRO_INDEX	^31
+	ldy	#3
+	mva	#{rts}	(vc),y
+	lda	#$80
+d3bj	jsr	get	.
+	lda	#{adc z:}
+	jmp	d3l1
+d3c1	mva	l3cl,y	d3cj+1
+	mva	l3ch,y	d3cj+2
+	ldy	ln
+	mva	l3cl-1,y	vc
+	mva	l3ch-1,y	vc+1
+	jsr	get
+	tax
+	mva	Banks_forEffect+Banks_PRO_INDEX	^31
+	ldy	#3
+	mva	#{rts}	(vc),y
+	lda	#$80
+d3cj	jsr	get	.
+	lda	#{adc z:}
+	jmp	d3l1
+
+***
+
+init
+* Make fill tables pro
+	mva	Banks_forEffect+Banks_PRO_INDEX	^31
+	mwa	#$4000	vc
+	ldx	>lin2
+	ldy	>l2al
+	jsr	mklp
+	ldx	>lin3
+	ldy	>l3al
+	jsr	mklp
+	mva	Banks_forEffect+Banks_TAB_INDEX	^31
+
+* Make gfx lines
+	mva	<scmm	v0
+	lda	>scmm
+msm1	sta	v0+1
+	sub	>scmm
+	ldy	#7
+msm2	pha
+	and	#3
+	tax
+	mva	gfxp,x	(v0),y-
+	sta	(v0),y
+	pla
+	lsr	@
+	lsr	@
+	dey
+	bpl	msm2
+	sec
+	adc	v0+1	+1
+	cmp	>scmm+$4000
+	bcc	msm1
+
+* Make gfx adrs
+	lda	#0
+	ldx	#3
+	ldy	>sat1
+	sty	v0
+msa1	stx	f0
+	add	saat+4,x
+	sta	f1
+	lda	sant,x
+	asl	@
+	sta	v1
+msa2	lda	f1
+	sty	v0+1
+	ldx	#7
+	ldy	#0
+msa3	add	saat,x
+	pha
+	mva	sant,x	v1+1
+	pla
+msa4	sta	(v0),y+
+	sta	(v0),y+
+	dec	v1+1
+	bne	msa4
+	dex
+	bpl	msa3
+	ldy	v0+1
+	iny
+	dec	v1
+	bne	msa2
+	ldx	f0
+	lda	f1
+	dex
+	bpl	msa1
+
+* Set variables
+	ldx	#11
+lddl	mva	dlpt,x	dl,x
+	mva	<sat1	f0,x
+	mva	<sat2	f1,x-
+	bpl	lddl
+	rts
+
+ps	equ	*-1
+pseg	ldy	lin3+$80,x
+plv1	lda	(0),y
+	ldy	lin2+$80,x
+plv0	adc	(0),y	-
+	sta	dl+8
+plf0	lda	0
+pdl0	adc	#0
+psf0	sta	0
+	sty	^01
+	sty	^4a
+	inc	^45
+plw0	lda	0
+	sta	^03
+	ldy	lin3+$80,x
+	sty	^00
+plw1	ldy	0
+	sty	^02
+pdh0	adc	#0
+psw0	sta	0
+plf1	lda	0
+pdl1	adc	#0
+psf1	sta	0
+	tya
+pdh1	adc	#0
+psw1	sta	0
+	inx
+
+phal	clc
+	ldy	lin3,x
+prv1	lda	(0),y
+	ldy	lin2,x
+prv0	adc	(0),y
+	sta	dl+5
+prf0	lda	0
+ppl0	adc	#0
+pwf0	sta	0
+prw0	lda	0
+	sty	^01
+	sty	^4a
+	ldy	#dl+3
+	sty	^42
+	sty	^45
+	sta	^03
+	ldy	lin3,x
+	sty	^00
+prw1	ldy	0
+	sty	^02
+pph0	adc	#0
+pww0	sta	0
+prf1	lda	0
+ppl1	adc	#0
+pwf1	sta	0
+	tya
+pph1	adc	#0
+pww1	sta	0
+pcpx	cpx	#0
+	bcc	pseg
+
+	clc
+	ldy	lin3+$80,x
+pgv1	lda	(0),y
+	ldy	lin2+$80,x
+pgv0	adc	(0),y
+	sta	dl+8
+plfu	lda	0
+pdlu	adc	#0
+psfu	sta	0
+	sty	^01
+	sty	^4a
+	inc	^45
+plwu	lda	0
+pgru	sta	^00
+	ldy	lin3+$80,x
+	sty	^00
+plwn	ldy	0
+pgrn	sty	^00
+pdhu	adc	#0
+pswu	sta	0
+	inx
+	eor	$4d4d
+	eor	$4d4d
+pjmp	jmp	$4c4c
+
+
+ns	equ	*-1
+nseg	ldy	lin3,x
+nlv1	lda	(0),y
+	ldy	lin2,x
+nlv0	adc	(0),y
+	sta	dl+5
+nlf0	lda	0
+ndl0	adc	#0
+nsf0	sta	0
+nlw0	lda	0
+	sty	^01
+	sty	^4a
+	ldy	#dl+3
+	sty	^42
+	sty	^45
+	sta	^03
+	ldy	lin3,x
+	sty	^00
+nlw1	ldy	0
+	sty	^02
+ndh0	adc	#0
+nsw0	sta	0
+nlf1	lda	0
+ndl1	adc	#0
+nsf1	sta	0
+	tya
+ndh1	adc	#0
+nsw1	sta	0
+
+nhal	clc
+	ldy	lin3+$80,x
+nrv1	lda	(0),y
+	ldy	lin2+$80,x
+nrv0	adc	(0),y
+	sta	dl+8
+nrf0	lda	0
+npl0	adc	#0
+nwf0	sta	0
+nrw0	lda	0
+	sty	^01
+	sty	^4a
+	inc	^45
+	sta	^03
+	ldy	lin3+$80,x
+	sty	^00
+nrw1	ldy	0
+	sty	^02
+nph0	adc	#0
+nww0	sta	0
+nrf1	lda	0
+npl1	adc	#0
+nwf1	sta	0
+	tya
+nph1	adc	#0
+nww1	sta	0
+	inx
+ncpx	cpx	#0
+	bcc	nseg
+
+	clc
+	ldy	lin3,x
+ngv1	lda	(0),y
+	ldy	lin2,x
+ngv0	adc	(0),y
+	sta	dl+5
+nlfu	lda	0
+ndlu	adc	#0
+nsfu	sta	0
+	sty	^01
+	sty	^4a
+	ldy	#dl+3
+	sty	^42
+	sty	^45
+nlwu	lda	0
+ngru	sta	^00
+	ldy	lin3,x
+	sty	^00
+nlwn	ldy	0
+ngrn	sty	^00
+ndhu	adc	#0
+nswu	sta	0
+	eor	$4d4d
+	eor	$4d4d
+njmp	jmp	$4c4c
+
+
+mklp	stx	dapt+2
+	stx	dapt+10
+	stx	dbpt+2
+	stx	dcpt+2
+	sty	mlal+2
+	iny
+	sty	mlah+2
+	iny
+	sty	mlbl+2
+	iny
+	sty	mlbh+2
+	iny
+	sty	mlcl+2
+	iny
+	sty	mlch+2
+	ldx	#0
+mla1	txa
+	lsr	@
+	bcc	*+5
+	eor	#$80
+	clc
+	sta	dapt+1
+	sta	dapt+9
+	lda	vc
+mlal	sta	l2al,x
+	lda	vc+1
+mlah	sta	l2al,x
+	ldy	#10
+	mva	dapt,y	(vc),y-
+	bpl	*-6
+	lda	#11
+	adc	vc	-
+	sta	vc
+	bcc	*+4
+	inc	vc+1
+	inx
+	cpx	#239
+	bcc	mla1
+	ldx	#0
+mlb1	txa
+	lsr	@
+	bcc	*+5
+	eor	#$80
+	clc
+	sta	dbpt+1
+	lda	vc
+mlbl	sta	l2al,x
+	lda	vc+1
+mlbh	sta	l2al,x
+	ldy	#8
+	mva	dbpt,y	(vc),y-
+	bpl	*-6
+	lda	#9
+	adc	vc	-
+	sta	vc
+	bcc	*+4
+	inc	vc+1
+	inx
+	cpx	#239
+	bcc	mlb1
+	ldx	#0
+mlc1	txa
+	lsr	@
+	bcc	*+5
+	eor	#$80
+	clc
+	sta	dcpt+1
+	lda	vc
+mlcl	sta	l2al,x
+	lda	vc+1
+mlch	sta	l2al,x
+	ldy	#8
+	mva	dcpt,y	(vc),y-
+	bpl	*-6
+	lda	#9
+	adc	vc	-
+	sta	vc
+	bcc	*+4
+	inc	vc+1
+	inx
+	cpx	#239
+	bcc	mlc1
+	rts
+
+dapt	sta	lin2
+	tya
+	adc	dlt0
+	tay
+	txa
+	adc	lin2
+
+dbpt	stx	lin2
+	adc	dlt0
+	bcc	*+4
+	inx
+	clc
+
+dcpt	stx	lin2
+	adc	dlt0
+	bcs	*+4
+	dex
+	sec
+
+getsb	mva	#0	^31
+get	lda	$adad
+;	inw	get+1
+;; must be heavily optimized!!
+	inc	get+1
+	seq:rts
+	inc	get+2
+	rts
+
+saat	dta	b($03),b($0c),b($30),h(scmm-$3f00)
+	dta	b($ff),b($fc),b($f0),b($15)
+sant	dta	b($0f,$10,$10,$0f,$0f,$10,$10,$0f)
+;sant	dta	b($1e,$20,$20,$1e,$1e,$20,$20,$1e)
+gfxp	dta	b(0,$ff,$aa,$55)
+
+pages	dta	h($4000,$4000,$6000,0)		; 6scian
+	dta	h($4000,$4000,$4000,$6000,0)	; 4scian
+	dta	h($4000,$4000,$4000,$6000,0)	; namiot
+
+banks	dta	Banks_CALC1_INDEX,Banks_CALC2_INDEX,Banks_CALC1_INDEX,0
+	dta	Banks_CALC1_INDEX,Banks_CALC2_INDEX,Banks_CALC2_INDEX,Banks_CALC1_INDEX,0
+	dta	Banks_CALC1_INDEX,Banks_CALC2_INDEX,Banks_CALC2_INDEX,Banks_CALC1_INDEX,0
+
+	ift	!NUMEN
+Banks_forEffect	dta	$e2,$e6,$ea,$ee
+	eif
+
+	end

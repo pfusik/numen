@@ -1,0 +1,118 @@
+start x=$80 y=$c0 z=$80 a=$00 h=24
+
+# patrz na sciane
+after 0.64 a -$28 z=$88
+after 0.16
+wait 0.32
+after 0.48 a +$28
+# podejdz do drzwi
+after 0.96 x +$300
+# otworz i przejdz
+after 0.48 x +$100 code Duke_openDoor1
+after 0.48 x +$100
+# idz do schodkow
+after 0.64 x +$1c0 z=$80 a=$30
+# obejrzyj sie
+after 0.8 a=$77
+wait 0.3
+after 0.48 x +$80 a=$40
+# idz po schodkach
+after 0.5 y +$100 z -8 a +7
+after 0.5 y +$80 z -8 a +7
+after 0.5 y +$80 z -8 a +7
+after 0.5 y +$c0 z -8 a +10
+after 0.5 y +$40 a=$70
+# idz po schodkach
+after 0.5 x -$c0 z -8 a=$80
+after 0.5 x -$80 z -8
+after 0.5 x -$80 z -8
+# obejrzyj sie na schody
+after 0.5 x -$80 a=$40
+after 0.5 a=$00 h +8
+wait 0.2
+after 0.5 a=$c0 h -4
+after 0.5 x -$80 a=$80 h -4
+# obejrzyj drzwi pierwszej windy
+after 0.5 x -$100 a=$50
+after 0.5 a=$30
+wait 0.2
+# podejdz do guzika i wcisnij
+after 0.8 x -$100 a=$60
+after 0.3 go $40 a=$48
+wait 0.2
+after 0.5 x -$40 y -$80 a=$40 code Duke_pressButton1
+# czekaj na winde
+after 0.2
+wait 0.8
+after 0.5 code Duke_openDoor2
+after 0.5 a +$10
+after 0.5 x -$100 a -8
+after 0.5
+after 1.0 x=$140 y +$80 a=$40
+after 0.2
+# wejdz do windy
+after 1.0 y +$100 a -$18
+after 0.5 y +$100 a=$fc
+# podejdz do guzika i wcisnij
+after 0.5 go $c0 a -8
+after 0.2 code Duke_pressButton2
+after 0.5 go -$c0 a -$20
+after 0.5 x=$140 y +$40 a=$d0
+after 0.5
+after 0.7 h +8 a -$20
+after 1.0
+after 0.5 h -8 a=$c0
+after 0.2 z +4
+wait 0.8
+# jedziemy i rozgladamy sie po windzie
+after 0.5 a=$00 h -6 code Duke_hermeticDoor2
+after 0.5 a=$40
+after 0.5 a=$80 h +3
+after 0.5 a=$c0 h +3
+after 0.5 y -$40
+wait 1.2
+# jestesmy
+after 0.5 y=$580
+wait 0.2
+# after 0.02 x +$700 y +$500
+after 0.02 code Duke_teleport
+# wychodzimy
+after 2.0 code Duke_openDoor3
+after 0.5 y -$90 a -8
+after 0.5 y -$130 a -$20 code Duke_setWhite
+after 0.5 x -$100 a=$80
+# pierwsze drzwi na lewo
+after 0.5 x -$c0 a -$10
+wait 0.2
+# pierwsze drzwi na prawo
+after 0.5 x -$40 a +$20
+wait 0.2
+# drugie drzwi na lewo
+after 1.6 x -$3c0 a -$30
+after 1.0 code Duke_openDoor4
+# wchodz
+after 0.3 go $60
+after 0.3 x -$80 a=$40
+after 0.5 y +$180
+wait 0.3
+# rozejrzyj sie
+after 0.5 a -$20 h +4
+wait 0.2
+after 0.5 a -$3c h +4
+wait 0.2
+after 1.0 a -$70 h -4
+# podejdz do biurka
+after 0.5 y +$80 a -$20 h -4
+after 0.5 y +$100 a=$40
+wait 0.2
+# patrz na lampe
+after 0.5 h +16
+after 0.3
+wait 0.5
+after 0.5 h -8
+# podejdz do okna
+after 0.48 x -$40 a=$70 h -4
+after 0.48 x -$c0 h -4
+after 0.48 y +$e0 z -4 a=$80
+after 0.48 x -$70
+wait 0.2

@@ -1,0 +1,156 @@
+	icl	'../pilot.asx'
+	icl	'map.asx'
+	icl	'tiles.asx'
+	icl	'track.asx'
+
+ERU	equ	1
+
+Duke_DOOR1_SECTOR	equ	1
+Duke_DOOR2_SECTOR	equ	3
+
+	ift	NUMEN
+Math_word	equ	$97
+	eif
+
+main
+	mva	World_ceilingZ+Duke_DOOR1_SECTOR	Duke_door1Top
+	mva	World_floorZ+Duke_DOOR1_SECTOR	World_ceilingZ+Duke_DOOR1_SECTOR
+	mva	World_floorZ+Duke_DOOR2_SECTOR	Duke_door2Bottom
+	add	World_ceilingZ+Duke_DOOR2_SECTOR
+	ror	@
+	sta	World_ceilingZ+Duke_DOOR2_SECTOR
+	sta	World_floorZ+Duke_DOOR2_SECTOR
+	jmp	Pilot_main
+
+Duke_openDoor1
+	mva	#{nop}	Duke_animateUpdate1
+	rts
+
+Duke_openDoor2
+	mva	#{nop}	Duke_animateUpdate2
+	rts
+
+Duke_animateUpdate1
+	rts
+
+	lda	World_ceilingZ+Duke_DOOR1_SECTOR
+	sub	Time_ticks
+	bcc	Duke_animateUpdate_upOpened
+	cmp	Duke_door1Top
+	scs
+Duke_animateUpdate_upOpened
+	lda	Duke_door1Top
+	sta	World_ceilingZ+Duke_DOOR1_SECTOR
+
+Duke_animateUpdate2
+	rts
+
+	lda	Time_ticks
+	lsr	@
+	sta	Math_word
+	add	World_floorZ+Duke_DOOR2_SECTOR
+	bcs	Duke_animateUpdate_splitOpened
+	cmp	Duke_door2Bottom
+	bcs	Duke_animateUpdate_splitOpened
+	sta	World_floorZ+Duke_DOOR2_SECTOR
+	lda	World_ceilingZ+Duke_DOOR2_SECTOR
+	sub	Math_word
+	sta	World_ceilingZ+Duke_DOOR2_SECTOR
+	rts
+Duke_animateUpdate_splitOpened
+	lda	World_floorZ+Duke_DOOR2_SECTOR
+	sub	Duke_door2Bottom
+	add:sta	World_ceilingZ+Duke_DOOR2_SECTOR
+	mva	Duke_door2Bottom	World_floorZ+Duke_DOOR2_SECTOR
+	rts
+
+Duke_door1Top	org	*+1
+Duke_door2Bottom org	*+1
+
+	ift	ERU
+	org	$e000
+Eru_start
+	ldy	#19*2
+Eru_init_1
+	lda	^2a
+	ora	#$f0
+	sta	Eru_poss,y
+	dey:dey
+	bpl	Eru_init_1
+	lda:rne	^4b
+	sta	^1b
+	mva	#$22	^40
+	mwa	#Eru_dl	^42
+	mva	#$90	^1a
+	mva	#$94	^16
+	mva	#$98	^17
+	mva	#$9c	^18
+	mwa	#Eru_vbl	Vbl_vector
+	jmp	NextBlock
+
+Eru_vbl
+	dec	Eru_ct
+	bne	Eru_ret
+	mva	#5	Eru_ct
+	ldy	#19*2
+Eru_1
+	lda	Eru_poss,y
+	cmp	#Eru_PHASES-1
+	beq	Eru_2
+	add	#1
+	sta	Eru_poss,y
+	bmi	Eru_11
+	asl	@
+	jmp	Eru_12
+Eru_11	lda	#0
+Eru_12	tax
+	mwa	Eru_anims,x	Eru_scr,y
+Eru_2	dey:dey
+	bpl	Eru_1
+	dec	Eru_tajm
+	bne	Eru_ret
+	mwa	#rts	Vbl_vector
+	mva	#0	^40
+Eru_ret
+	rts
+
+Eru_ct	dta	1
+Eru_tajm dta 16+21
+Eru_PHASES	equ	21
+Eru_anims
+	dta b(%11111111,%11111111)
+	dta b(%00101010,%10101000)
+	dta b(%00000101,%01010000)
+	dta b(%00000001,%01000000)
+	dta b(%00000000,%00000000)
+	dta b(%00000001,%01000000)
+	dta b(%00000101,%01010000)
+	dta b(%00101010,%10101000)
+	dta b(%11111111,%11111111)
+	dta b(%00101010,%10101000)
+	dta b(%00000101,%01010000)
+	dta b(%00000001,%01000000)
+	dta b(%00000000,%00000000)
+	dta b(%00000001,%01000000)
+	dta b(%00000101,%01010000)
+	dta b(%00101010,%10101000)
+	dta b(%11111111,%11111111)
+	dta b(%00101010,%10101000)
+	dta b(%00000101,%01010000)
+	dta b(%00000001,%01000000)
+	dta b(%00000000,%00000000)
+
+Eru_scr
+:40	dta	$ff
+Eru_poss
+:40	dta	0
+Eru_dl
+:3	dta	$70
+:96	dta	$4d,a(Eru_scr)
+	dta	$41,a(Eru_dl)
+	eif
+
+	org	Pilot_update+1
+	dta	a(Duke_animateUpdate1)
+
+	end

@@ -1,0 +1,26 @@
+; common definitions for Numen demo kernel ;)
+; private means should not be accessed by effects code
+
+Banks_FOR_EFFECT_INDEX	equ	1
+Banks_LOAD_FIRST_INDEX	equ	4	; private
+Banks_LOAD_LAST_INDEX	equ	15	; private
+Banks_PLAYINF_INDEX	equ	15	; private
+Banks_MAIN_INDEX	equ	16
+Banks_NUMBER		equ	17	; private
+
+Vbl_clock		equ	$00
+Inflate_inputPointer	equ	$02	; private
+Inflate_inputBankIndex	equ	$04	; private
+
+Inflate_toLoad	equ	$7c00	; private
+Inflate		equ	$d800
+NextBlock	equ	$ff00
+rts		equ	$ff79
+Runtime1_end	equ	$ff7a	; private
+Idle		equ	$ff7a
+Dli_vector	equ	$ff8a
+Vbl_vector	equ	$ffa8
+Banks_table	equ	$ffe0
+Banks_forEffect	equ	Banks_table+Banks_FOR_EFFECT_INDEX
+
+	end

@@ -1,0 +1,387 @@
+; plasma2 by fox
+
+	icl	'../nex.asx'
+
+a1_step	equ	-2
+a2_step	equ	4
+r1_step	equ	10
+r2_step	equ	5
+
+screen	equ	$1000	$8c0
+pagetab	equ	$1900
+emptex	equ	$1a00
+mod128	equ	$1c00
+
+lim1	equ	$7ff7
+pro2	equ	$7200
+lim2	equ	$7526
+lim3	equ	$7053
+texhi	equ	$8000
+texlo	equ	$8100
+texe	equ	$ee00
+
+si	equ	$80
+di	equ	$82
+ai	equ	$84
+ri	equ	$86
+li	equ	$88
+di2	equ	$8a
+li2	equ	$8c
+vct	equ	$8e
+
+hp	equ	$20	$64
+lp	equ	$84	$64
+bk	equ	$e8
+time	equ	$e9
+
+md	equ	$80
+
+	org	emptex
+:32	dta	$0d
+:32	dta	$fd
+:32	dta	$0d
+:32	dta	$fd
+:32	dta	$0d
+:32	dta	$fd
+:32	dta	$0d
+:32	dta	$fd
+
+:32	dta	$0d
+:32	dta	$02
+:32	dta	$0d
+:32	dta	$02
+:32	dta	$0d
+:32	dta	$02
+:32	dta	$0d
+:32	dta	$02
+
+	org	$1d00
+PlasmaSin
+	dta	sin(64,64,256)
+
+dl	dta	$f0,$6f,a(screen),$0f
+:27	dta	$2f,$0f
+	dta	$41,a(dl)
+
+main
+	mwa	#screen	si
+	mwa	#atab	ai
+	mwa	#rtab	ri
+	mva	Banks_forEffect	^31
+	lda	<lim1
+	ldx	>lim1
+	jsr	mcod_scr
+
+	mva	Banks_forEffect+1	^31
+	lda	<lim2
+	ldx	>lim2
+	ldy	>pro2
+	jsr	mcod_next
+	lda	<lim3
+	ldx	>lim3
+	jsr	mcod_scr
+
+	mva	Banks_table+Banks_MAIN_INDEX	^31
+	mva	^2a	pls1+1
+	mva	^2a	pls2+1
+	mwa	#ctab	si
+	mva	#0	di
+	sta	li
+	mva	#$80	di2
+	sta	li2
+	mva	>texhi	pagetab
+	ldx	#51
+utex1
+	txa
+	asl	@
+	adc	>texhi-$200
+	cmp	#$d0
+	scc:adc	#7	+
+	sta	di+1
+	sta	di2+1
+	sta	pagetab,x
+	sta	pagetab+51,x
+	sta	pagetab+2*51,x
+	sta	pagetab+3*51,x
+	sta	pagetab+4*51,x
+	adc	#1	-
+	sta	li+1
+	sta	li2+1
+	ldy	#0
+utex2
+pls1	lda	PlasmaSin
+	clc
+pls2	adc	PlasmaSin
+	ror	@
+	and	#$f0
+	cmp	(si),y
+	scs:lda	(si),y
+
+	eor	#13
+	sta	(di),y
+	sta	(di2),y
+:4	lsr	@
+	eor	#13
+	sta	(li),y
+	sta	(li2),y
+
+	lda	#a1_step
+	add:sta	pls1+1
+	lda	#a2_step
+	add:sta	pls2+1
+
+	iny
+	bpl	utex2
+	lda	#$80
+	add:sta	si
+	scc:inc	si+1
+
+	lda	#r1_step
+	add:sta	pls1+1
+	lda	#r2_step
+	add:sta	pls2+1
+
+	dex
+	bne	utex1
+
+	ldx	#0
+imod	txa:sta	mod128,x
+	sta	mod128+128,x+
+	bpl	imod
+
+	ldx	#48*2
+izp	mva	#0	hp,x
+	sta	lp,x
+	mva	>emptex	hp+1,x
+	mva	>emptex+$100	lp+1,x
+	dex:dex
+	bpl	izp
+;	jsr	setptrs
+
+	mva	Banks_forEffect	^31
+	ldx	#0
+	jsr	$4000
+	lda	Banks_forEffect+1
+	mva	Banks_forEffect+1	^31
+	jsr	pro2
+	jsr	$4000
+
+	lda:rne	^4b
+	mva	#$22	^40
+	mwa	#dl	^42
+	mva	#$30	^1a
+	mva	#$40	^1b
+	mva	Banks_forEffect	bk
+	mva	#0	time
+
+	ift NUMEN
+	mwa	#dli	Dli_vector
+
+	mwa	#-510	Vbl_clock
+	jsr	Idle
+
+	mva	#0	^40
+ 
+	jmp	NextBlock
+
+	els
+	mwa	#dli	$fffa
+	mva	#$80	^4e
+
+	jmp	*
+	eif
+
+dli
+:!NUMEN	pha
+	txa:pha
+	tya:pha
+	lda:pha	^31
+	ldx	#0
+angle	equ	*-1
+	sta	^4a
+	mva	#13	^45
+	mva	#3	^45
+	mva	bk	^31
+	jsr	$4000
+	lda	Banks_forEffect+1
+	cmp	bk
+	beq	dli2
+	sta	^31
+
+	jsr	pro2
+
+	lda	Banks_forEffect+1
+dlix
+	sta	bk
+	pla:sta	^31
+	pla:tay
+	pla:tax
+	pla
+	rti
+
+dli2
+	jsr	setptrs
+ 	lda	Banks_forEffect
+	jmp	dlix
+
+setptrs
+	inc	pfa1+1
+pfa1	mva	#$70	pla1+1
+	inc	pfa2+1
+pfa2	mva	#$47	pla2+1
+:2	inc	pfr1+1
+pfr1	mva	#$a5	plr1+1
+	dec	pfr2+1
+pfr2	mva	#$32	plr2+1
+	lda:inc	time
+	cmp	#48
+	bcc	setmaxr
+	eor	#$ff
+	cmp	#48
+	bcs	setfulr
+	asl	@
+	tax
+	mva	#0	hp+2,x
+	sta	lp+2,x
+	mva	>emptex	hp+3,x
+	adc	#1	-
+	sta	lp+3,x
+	lda	time
+	add	#48
+	asl	@
+	sta	angle
+	lda	time
+	cmp	#$f1
+	bcc	setv
+	eor	#$f2
+	ldy	#31
+sciem1	sta	emptex+$120,y
+	sta	emptex+$160,y
+	sta	emptex+$1a0,y
+	sta	emptex+$1e0,y
+	dey
+	bpl	sciem1
+	eor	#$0d
+:4	asl	@
+	eor	#$0d
+	ldy	#31
+sciem2	sta	emptex+$20,y
+	sta	emptex+$60,y
+	sta	emptex+$a0,y
+	sta	emptex+$e0,y
+	dey
+	bpl	sciem2
+	jmp	setv
+setfulr	lda	#48
+setmaxr	asl	@
+	tax
+;	ldx	#2*49
+setv
+pla1	lda	PlasmaSin
+	clc
+pla2	adc	PlasmaSin
+	lsr	@
+;	and	#$7f
+	sta	hp,x
+;	eor	#$80
+	sta	lp,x
+	dec	pla1+1
+plr1	lda	PlasmaSin
+;	clc
+plr2	adc	PlasmaSin
+	tay
+	lda	pagetab,y
+	sta	hp+1,x
+	adc	#1	-
+	sta	lp+1,x
+	inc	plr1+1
+	dex:dex
+	bpl	setv
+	rts
+
+mcod_scr
+	mvy	#27	vct
+	ldy	>$4000
+mcod_next
+	sta	li
+	stx	li+1
+	lda	#0
+	ldx	#34
+mcod_byte
+	sta	di
+	sty	di+1
+	mva	#{ldy mod128,x}	(di),0
+	mva	(ai),y+	(di),y+
+	mva	>mod128	(di),y+
+	mva	#{lda (),y}	(di),y
+	lda	(ri),0
+	asl	@
+	adc	#hp
+	ldy	#4
+	sta	(di),y+
+	dex
+	bne	mcod_nvsc
+	lda	vct
+	beq	mcod_nvsc
+	mva	#{sta ^45}	(di),y+
+	mva	<^45	(di),y+
+	mva	>^45	(di),y+
+	mva	#{ldy #}	(di),y+
+	mva	#3	(di),y+
+	mva	#{sty ^45}	(di),y+
+	mva	<^45	(di),y+
+	mva	>^45	(di),y
+	lda	#8
+	add:sta	di
+	scc:inc	di+1
+	ldx	#34
+	dec	vct
+	ldy	#5
+mcod_nvsc
+	mva	#{ldy mod128,x}	(di),y
+	ldy	#1
+	lda	(ai),y
+	ldy	#6
+	sta	(di),y+
+	mva	>mod128	(di),y+
+	mva	#{eor (),y}	(di),y
+	ldy	#1
+	lda	(ri),y
+	asl	@
+	adc	#lp
+	ldy	#9
+	sta	(di),y+
+	mva	#{sta screen}	(di),y+
+	mva	si	(di),y+
+	mva	si+1	(di),y+
+	inw	si
+	lda	#2
+	add:sta	ai
+	scc:inc	ai+1
+	lda	#2
+	add:sta	ri
+	scc:inc	ri+1
+	lda	#13
+	add	di
+	ldy	di+1
+	scc:iny
+	cpy	li+1
+	jcc	mcod_byte
+	cmp	li
+	jcc	mcod_byte
+	mva	#{rts}	(li),0
+	rts
+
+	ift	!NUMEN
+Banks_table
+Banks_forEffect	dta	$ea,$ee,$fe
+Banks_MAIN_INDEX	equ	2
+	eif
+
+ctab	ins	'plasma2.map'
+
+	org	$8000
+atab	ins	'tunnelz.ang'
+rtab	ins	'tunnelz.ray'
+
+	end

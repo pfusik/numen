@@ -1,0 +1,310 @@
+PACK	equ	1
+MUSIC	equ	1
+STEREO	equ	1
+FRAMES	equ	3
+
+	ift	PACK
+	opt	f+	; fill space between ORGs with $FFs
+	eif
+
+screen	equ	$2000
+	ert	[screen&$1fff]!=0
+
+si	equ	$80
+tmp	equ	$82
+xpos	equ	$83
+vsc	equ	$84
+scp	equ	$85
+fct	equ	$86
+zp	equ	$90	; 12 bytes for msx player
+
+	ift	MUSIC
+LEFT	equ	0
+CENTER	equ	1
+RIGHT	equ	2
+
+	ift	STEREO
+CHAN1	equ	LEFT	CENTER
+CHAN2	equ	LEFT	CENTER
+CHAN3	equ	RIGHT	CENTER
+CHAN4	equ	RIGHT	CENTER
+	els
+CHAN1	equ	LEFT
+CHAN2	equ	LEFT
+CHAN3	equ	LEFT
+CHAN4	equ	LEFT
+	eif
+
+msx	equ	$aa00
+lenpat	equ	$40
+speed	equ	$04
+	eif
+
+	org	$8000
+font
+	ins	'eed22c.fnt',$200,$100
+	ins	'eed22c.fnt',$000,$200
+	ins	'eed22c.fnt',$300,$100
+
+	ert	<*!=0
+dl
+:26	dta	$4f,a(screen),$f,$f,$f,$f,$f,$f,$f,0
+	dta	$4f,a(screen),$f,$f,$f,$f
+dlBottom
+	dta	$f,$f,$f,0,$4f,a(screen),$f,$f,$f
+jvb	dta	$41
+
+charWidths
+	ins	'eed22c.siz',$40,$20
+	ins	'eed22c.siz',$00,$40
+	ins	'eed22c.siz',$60,$20
+
+nmi
+	pha
+	txa:pha
+	tya:pha
+:MUSIC	jsr	playMusic
+	ldx	vsc
+	lda	^1f
+	and	#2	; SELECT
+	beq	noScroll
+	ift	FRAMES>1
+	dec	fct
+	bne	noScroll
+	eif
+	inx
+	cpx	#9
+	scc:ldx	#0
+	stx	vsc
+noScroll
+	cpx	#8
+	scc:ldx	#10
+	stx	^42
+	mva	>dl	^43
+	ift	FRAMES>1
+	lda	fct
+	bne	noUpdate
+	mva	#FRAMES	fct
+	eif
+	lda	#$f
+	ldx	vsc
+	bne	dlUpdate_noFirst
+	sta	dl+8
+	sta	dl+9
+	mva	dl+11+2	scp
+	bne	dlUpdate_noNextLine	!
+dlUpdate_noFirst
+	sta	dl-1,x
+	cpx	#8
+	bcs	dlUpdate_bottom
+dlUpdate_noNextLine
+	mva	#$4f	dl,x
+	txa
+	lsr	@
+:3	ror	@
+	sta	dl+1,x
+	mva	scp	dl+2,x
+dlUpdate_bottom
+	cpx	#0
+	beq	dlUpdate_onlyJvb
+	cpx	#4
+	beq	dlUpdate_sameBottom
+	bcc	dlUpdate_noLms
+:2	inx
+	cpx	#5+2
+	bne	dlUpdate_noLms
+	mva	#0	dlBottom+3
+	beq	dlUpdate_onlyJvb	!
+dlUpdate_noLms
+	mva	#$f	dlBottom-1,x
+dlUpdate_onlyJvb
+	mva	#$41	dlBottom,x
+dlUpdate_sameBottom
+	cpx	#1
+	bcs	noNextLine
+dlUpdate_pages
+	mva	dl+11+2+11,x	dl+11+2,x
+	txa
+	adc	#11	-
+	tax
+	bcc	dlUpdate_pages
+	mva	dl+26*11+2	dl+25*11+2
+	mva	dl+27*11+2	dl+26*11+2
+	mva	si+1	dl+27*11+2
+	jsr	drawLine_next
+noNextLine
+noUpdate
+	pla:tay
+	pla:tax
+	pla:rti
+
+start
+	sei
+	inc	^4e
+	mva	#3	^2f
+:STEREO	sta	$d21f
+	ldx	#8
+	lda	#0
+	ift	STEREO
+silen	sta	^20,x
+	sta	$d210,x
+	dex:bpl	silen
+	sta	^29
+	sta	$d219
+	els
+	sta:rpl	^20,x-
+	sta	^29
+	eif
+	lda:rne	^4b
+	ldx	#29
+	sta:rpl	^00,x-
+	mva	#$0a	^17
+	mva	#$fe	^31
+	mva	#$21	^40
+	mwa	#jvb	^42
+	mwa	#nmi	$fffa
+	mva	#$40	^4e
+	mva	#0	si
+	sta	vsc
+:FRAMES>0 mva	#1	fct
+	mva	>screen	scp
+	jsr	drawLine_first
+	jmp	*
+
+drawLine_end
+	rts
+drawLine_space
+	txa
+	and	#$7f
+	beq	drawLine_beginText
+	add:sta	xpos
+	jmp	drawLine_nextChar
+drawline_beginText
+	mwa	#text	drawLine_textPtr
+	bne	drawLine_thisChar	!
+drawLine_next
+	lda	si+1
+	add	#1
+	and	#$1f
+	eor	>screen
+drawLine_first
+	sta	si+1
+	lda:tay	#0
+	sta	xpos
+	sta:rne	(si),y+
+drawLine_nextChar
+	inw	drawLine_textPtr
+drawline_thisChar
+drawLine_textPtr equ *+1
+	ldx	text-1
+	bmi	drawLine_space
+	beq	drawLine_end
+	lda	xpos
+	and	#7
+	tay
+	lda	#drawChar_store-drawChar_branchOffset-1
+	dey
+	bmi	drawChar_setBranch
+	mva	drawChar_masks,y	drawChar_mask
+	tya
+drawChar_setBranch
+	sta	drawChar_branchOffset
+	lda	xpos
+:3	lsr	@
+	tay
+	lda	charWidths,x
+	add:sta	xpos
+	txa
+:2	asl	@
+	php
+	asl	@
+	tax
+	lda	#>font/2
+	rol	@
+	plp
+	scc:adc	#1	+
+	sta	drawChar_fontPage
+drawChar_line
+drawChar_fontPage equ *+2
+	lda	font,x+
+drawChar_branchOffset equ *+1
+	bcc	drawChar_store	!
+:7	rol	@
+	sta	tmp
+drawChar_mask equ *+1
+	and	#$ff
+	iny
+	sta	(si),y-
+	eor	tmp
+	rol	@
+	eor	(si),y
+drawChar_store
+	sta	(si),y
+	tya
+	adc	#$20
+	tay
+	bcc	drawChar_line
+	jmp	drawLine_nextChar
+
+drawChar_masks
+	dta	$80,$c0,$e0,$f0,$f8,$fc,$fe
+
+	ift	MUSIC
+playMusic
+	ldx	freq
+	ldy	freq+1
+	mva	aud	^28
+:STEREO	sta	$d218
+	and	#$10
+v10	equ	*-1
+	beq	w1
+	ldy	numdzw+1
+	ldx	bsfrql,y
+	lda	bsfrqh,y
+	tay
+w1
+:CHAN1<=CENTER	stx	^20
+:CHAN2<=CENTER	sty	^22
+:CHAN1>=CENTER	stx	$d210
+:CHAN2>=CENTER	sty	$d212
+	lda	freq+2
+:CHAN3<=CENTER	sta	^24
+:CHAN3>=CENTER	sta	$d214
+	lda	freq+3
+:CHAN4<=CENTER	sta	^26
+:CHAN4>=CENTER	sta	$d216
+	lda	volume
+:CHAN1<=CENTER	sta	^21
+:CHAN1>=CENTER	sta	$d211
+	lda	volume+1
+:CHAN2<=CENTER	sta	^23
+:CHAN2>=CENTER	sta	$d213
+	lda	volume+2
+:CHAN3<=CENTER	sta	^25
+:CHAN3>=CENTER	sta	$d215
+	lda	volume+3
+:CHAN4<=CENTER	sta	^27
+:CHAN4>=CENTER	sta	$d217
+	icl	'../mptplfox.asx'
+	eif
+
+text
+	dta	0
+ ift 0
+	dta	c'Hello, world!',0
+	dta	c'Prooba skrola',0
+	dta	c'elyyytaaa!!!',0
+ els
+	ins	'outro.not'
+ eif
+	dta	$80
+
+	ift	MUSIC
+; ift PACK&&XASM_VERSION<2.5
+; :msx-*	dta	0
+	org	msx
+	ins	'siekacz.mpt',6
+	eif
+
+	run	start
+	end

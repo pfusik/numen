@@ -1,0 +1,50 @@
+start x=$340 y=$5c0 z=$80 a=$c0 h=24
+
+wait 0.1
+after 0.64 x +$100
+after 0.64 y -$80 a=$b0
+after 0.32 go $40 code Duke_openDoor1
+after 0.64 go $40
+after 0.64 go $c0 h -4
+after 0.64 go $80 a=$a8 h +4
+wait 0.1
+after 0.64 go $120 a=$98
+after 1.6 a +8 code Scroll_next # code Eru
+wait 0.1
+after 0.6 a +$40
+wait 0.1
+after 1.0 y -$40 a +$10 code Scroll_next # code Fox
+wait 0.2
+after 1.4 x +$40 a=$f0
+wait 0.1
+after 0.2 x -$40 a=$08
+after 0.64 a=$30 h +4
+after 0.32 a=$38
+after 1.28 go $380 a -8 h -4
+after 1.0 a=$00
+after 1.4 x +$100 code Duke_openDoor2
+after 0.2
+after 1.0 x +$100 a -$10
+wait 0.4
+after 1.0 go $c0 a +$10
+after 1.0 a +8 code Scroll_next # gfx Dracon
+wait 0.2
+after 0.3 y +$40 a=$00
+after 1.0 a=$d0 h +6
+after 1.0 y +$20 a=$90
+after 0.64 go $100 a=$70
+after 1.0 go $240 a=$58
+after 1.0 y -$40 a=$40 h -6
+wait 0.1
+after 1.2 code Duke_openDoor3
+after 1.0 y +$240
+after 1.4 y +$80 a +8 code Scroll_next # msx X-Ray
+wait 0.4
+after 0.4 a=$80
+after 0.4 a=$c0
+after 1.0 y -$260 a=$b0
+after 1.0 a=$88
+after 0.8 go $100 h +8
+after 0.5 go -$80 h -8
+after 1.0 code Duke_openDoor4
+after 1.5 go $260 a=$80

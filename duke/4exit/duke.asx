@@ -1,0 +1,52 @@
+	icl	'../pilot.asx'
+	icl	'map.asx'
+	icl	'tiles.asx'
+	icl	'track.asx'
+
+Duke_CABINET_SECTOR	equ	6
+Duke_CABINET_TOP_Z	equ	$70
+Duke_CABINET_BOTTOM_Z	equ	$a0
+Duke_T_SECTOR1		equ	10
+Duke_T_SECTOR2		equ	12
+Duke_T_TOP_Z		equ	$78
+Duke_T_BOTTOM_Z		equ	$8c
+
+main
+	mva	#Duke_CABINET_TOP_Z	World_floorZ+Duke_CABINET_SECTOR
+	mva	#Duke_T_TOP_Z	World_floorZ+Duke_T_SECTOR1
+	sta	World_floorZ+Duke_T_SECTOR2
+	jmp	Pilot_main
+
+Duke_lowerCabinet
+	mva	#{nop}	Duke_animateUpdate1
+	rts
+
+Duke_lowerT
+	mva	#{nop}	Duke_animateUpdate2
+	rts
+
+Duke_animateUpdate1
+	rts
+
+	lda	Time_ticks
+	add	World_floorZ+Duke_CABINET_SECTOR
+	cmp	#Duke_CABINET_BOTTOM_Z
+	scc:lda	#Duke_CABINET_BOTTOM_Z
+	sta	World_floorZ+Duke_CABINET_SECTOR
+
+Duke_animateUpdate2
+	rts
+
+	lda	Time_ticks
+	lsr	@
+	add	World_floorZ+Duke_T_SECTOR1
+	cmp	#Duke_T_BOTTOM_Z
+	scc:lda	#Duke_T_BOTTOM_Z
+	sta	World_floorZ+Duke_T_SECTOR1
+	sta	World_floorZ+Duke_T_SECTOR2
+	rts
+
+	org	Pilot_update+1
+	dta	a(Duke_animateUpdate1)
+
+	end

@@ -1,0 +1,131 @@
+	icl	'../nex.asx'
+
+Pic_BAK	equ	0
+
+Pic_dl1	equ	$1900
+Pic_dl2	equ	$1c00
+Pic_gr9	equ	$5000
+Pic_grA	equ	$6000
+Pic_grB	equ	$7000
+
+Pic_p1	equ	$80
+Pic_p2	equ	$82
+Pic_pB	equ	$84
+
+	org	$1f00
+
+main
+;	sei:inc	^4e
+;	inc	^40
+	mwa	#Pic_dl1	Pic_p1
+	mwa	#Pic_dl2	Pic_p2
+	mwa	#Pic_grB	Pic_pB
+	lda	#$f0
+	ldy	#2
+Pic_emp	sta	(Pic_p1),y
+	sta	(Pic_p2),y
+	lda	#$70
+	dey
+	bpl	Pic_emp
+	lda	<Pic_dl1+3
+
+	ldx	#96
+
+Pic_mdl	sta	Pic_p1
+	sta	Pic_p2
+	mva	#$4f	(Pic_p1),0
+	sta	(Pic_p2),y
+	ldy	#3
+	sta	(Pic_p1),y
+	sta	(Pic_p2),y
+	ldy	#1
+	mva	Pic_pB	(Pic_p1),y
+	sta	(Pic_p2),y
+	ldy	#4
+	sta	(Pic_p1),y
+	sta	(Pic_p2),y
+	txa
+	lsr	@
+	ldy	#2
+	mva	Pic_pB+1	(Pic_p1),y
+	sta	(Pic_p2),y
+	ldy	#5
+	eor	>Pic_grB^Pic_gr9
+	scc:eor	>Pic_gr9^Pic_grA
+	sta	(Pic_p1),y
+	eor	>Pic_gr9^Pic_grA
+	sta	(Pic_p2),y
+	lda	#40
+	add:sta	Pic_pB
+	scc:inc	Pic_pB+1
+	lda	#6
+	add	Pic_p1
+	bcc	Pic_skp
+	inc	Pic_p1+1
+	inc	Pic_p2+1
+Pic_skp	dex
+	bne	Pic_mdl
+
+	mva	#$41	(Pic_p1),0
+	sta	(Pic_p2),y+
+	mva	<Pic_dl1	(Pic_p1),y
+	sta	(Pic_p2),y+
+	mva	>Pic_dl2	(Pic_p1),y
+	mva	>Pic_dl1	(Pic_p2),y
+
+	ldx	<-312-2*50
+	ldy	>-312-2*50
+	jsr	Musk_show
+	jmp	NextBlock
+
+	org	$100
+Musk_show
+	lda:rne	^4b
+	stx	Vbl_clock
+	sty	Vbl_clock+1
+	ldx	#8
+	mva:rpl	Pic_cols,x	^12,x-
+	mva	#$22	^40
+	mwa	#Pic_dl1	^42
+	mva	#$40	dli_gtiaMode
+	mwa	#dli	Dli_vector
+	rts
+
+dli	lda:pha	^31
+	txa:pha
+	tya:pha
+	mva	Banks_table+Banks_MAIN_INDEX	^31
+	ldx	#$c0
+	ldy	#96
+	lda	#$40
+dli_gtiaMode	equ	*-1
+dli_1
+	sta	^4a
+	stx	^1b
+	sta	^4a
+	sta	^1b
+	eor	#$40^$80
+	dey
+	bne	dli_1
+	eor	#$40^$80
+	sta	dli_gtiaMode
+	pla:tay
+	pla:tax
+	pla
+	sta	^4a
+	sta	^31
+	pla
+	rti
+
+Pic_cols
+	dta	Pic_BAK,Pic_BAK+2,Pic_BAK+4,Pic_BAK+6,Pic_BAK+8,Pic_BAK+10,Pic_BAK+12,Pic_BAK+14,Pic_BAK
+
+	org	Pic_gr9
+	ins	'musk.gr9',0,3840
+
+	org	Pic_grA
+	ins	'musk.grA',0,3840
+
+	org	Pic_grB
+	ins	'musk.grB',0,3840
+

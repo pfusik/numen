@@ -1,0 +1,116 @@
+; TODO? CTIA/GTIA, uszkodzone GTIA, mono/stereo
+
+	org	$41
+	dta	0	; bez piskow
+
+ip	equ	$a0
+
+	org	$3a00	; for 600 XL!
+numenText	dta	$9b,c'NUMEN',$9b
+numenLen	equ	*-numenText
+xlxeText	dta	$9b,c'Sorry, Atari XL/XE with 64 KB RAM',$9b
+		dta	c'is required to run the note.',$9b
+		dta	c'The demo requires 320 KB.',$9b
+xlxeLen		equ	*-xlxeText
+anticText	dta	$9b,c'Sorry, NTSC version of ANTIC',$9b
+		dta	c'is not supported. Upgrade to PAL.',$9b
+anticLen	equ	*-anticText
+gtiaText	dta	$9b,c'PAL version of ANTIC and NTSC version',$9b
+		dta	c'of GTIA... Quite unusual mixture.',$9b
+		dta	c'Trying to run anyway.',$9b
+gtiaLen		equ	*-gtiaText
+cartText	dta	$9b,c'Remove cartridge!',$9b
+cartLen		equ	*-cartText
+loadText	dta	$9b,c'Please wait, loading...',$9b
+loadLen		equ	*-loadText
+
+init
+	ldx	<numenText
+	ldy	>numenText
+	lda	#numenLen
+	jsr	print
+	lda	^1b
+	cmp	#$f
+	bne	xlxe
+	lda	^4e
+	cmp	#$ff
+	bne	xlxe
+	lda	#121
+	cmp:rne	^4b
+	sei
+	mva	#$fe	^31
+	lda	#$e0
+	jsr	checkRAM
+	mva	#$ff	^31
+	bcc	cli_xlxe
+checkAntic
+	lda	^4b
+	cmp	#121
+	bcc	cli_antic
+	cmp	#132
+	bcc	checkAntic
+	cli
+	lda	^14
+	and	#$0e
+	beq	gtiaPal
+	ldx	<gtiaText
+	ldy	>gtiaText
+	lda	#gtiaLen
+	jsr	print
+gtiaPal
+	lda	#$90
+	jsr	checkRAM
+	bcc	cart
+	lda	#$b0
+	jsr	checkRAM
+	bcc	cart
+	ldx	<loadText
+	ldy	>loadText
+	lda	#loadLen
+	jmp	print
+
+cli_xlxe
+	cli
+xlxe
+	ldx	<xlxeText
+	ldy	>xlxeText
+	lda	#xlxeLen
+	jsr	print
+	jmp	*
+
+cli_antic
+	cli
+	ldx	<anticText
+	ldy	>anticText
+	lda	#anticLen
+	jsr	print
+	jmp	*
+
+cart
+	ldx	<cartText
+	ldy	>cartText
+	lda	#cartLen
+	jsr	print
+	jmp	*
+
+checkRAM
+	sta	ip+1
+	mvy	#$55	ip
+	lda	(ip),y
+	eor	#$ff
+	sta:cmp	(ip),y
+	seq:clc
+	eor	#$ff
+	sta	(ip),y
+	rts
+
+print
+	stx	$344
+	sty	$345
+	sta	$348
+	mvx	#0	$349
+	mva	#11	$342
+	jmp	$e456
+
+	ini	init
+	end

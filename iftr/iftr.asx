@@ -1,0 +1,682 @@
+	icl	'../nex.asx'
+
+BARZ	equ	0
+
+SCR_W	equ	80
+SCR_H	equ	54
+
+MAP_W	equ	160
+MAP_H	equ	120
+
+AMP_X	equ	[MAP_W-SCR_W]/4
+AMP_Y	equ	[MAP_H-SCR_H]/4
+
+mpal1	equ	$0300
+mpal1i	equ	$03f2
+mpal2	equ	$0d00
+mpal2i	equ	$0df2
+pic0	equ	$1630
+pic1	equ	$5230
+pic2	equ	$8e30
+pice	equ	$ca00
+pal1	equ	$ce00
+pal2	equ	$cf00
+screen	equ	$d830
+
+savey	equ	$6d
+saver	equ	$6e
+si	equ	$70
+di	equ	$72
+c1	equ	$74
+c2	equ	$76
+scri	equ	$78
+darkp	equ	$7a
+palp	equ	$7b
+p1l1	equ	$7c
+p1l2	equ	$7d
+p2l1	equ	$7e
+p2l2	equ	$7f
+dark1	equ	$80	16
+dark2	equ	$90	16
+wave	equ	$a0	32
+lozp	equ	$a0	32
+hizp	equ	$c0	32
+
+
+	org	$8000-MAP_W/2*MAP_H
+pak0	ins	'wirhilo.map'
+	ift	NUMEN
+	org	*+2*MAP_W/2*MAP_H
+	els
+pak1	ins	'statek.raw'
+pak2
+;	ins	'maszt.raw'
+	ins	'einsrays.raw'
+	eif
+
+sinx	dta	sin(AMP_X,AMP_X,256)
+siny	dta	sin(AMP_Y,AMP_Y,256)
+sinl	dta	sin(7,7,128,0,255)
+
+hitab	ins	'hi.dat'
+lotab	ins	'lo.dat'
+
+	org	screen+80*SCR_H
+
+dl1	org	*+2+3*SCR_H+3
+dl2	org	*+2+3*SCR_H+3
+
+dli
+:!NUMEN	pha
+	sta	^4a
+	mva	#13	^45
+	mva	#3	^45
+	pla
+	rti
+
+main
+:NUMEN	jsr	Inflate
+:NUMEN	mva	Banks_table+Banks_MAIN_INDEX	^31
+	mwa	#screen	si
+	mwa	#dpro	di
+	mwa	#cpr1	c1
+	mwa	#cpr2	c2
+	mva	#$70	dl1
+	sta	dl2
+	mva	#$b0	dl1+1
+	sta	dl2+1
+	ldx	#2
+prep	txa
+	lsr	@
+	lda	#{stx dpro+1}
+	scc:lda	#{sta dpro+15+1}
+	sta	(c1),0
+	sta	(c2),y+
+	lda	di
+	add	#1
+	sta	(c1),y+
+	lda	di+1
+	adc	#0
+	sta	(c1),y-
+	lda	di
+	adc	#7
+	sta	(c2),y+
+	lda	di+1
+	adc	#0
+	sta	(c2),y+
+	mva	#{sty dpro+2}	(c1),y
+	sta	(c2),y+
+	lda	di
+	adc	#2
+	sta	(c1),y+
+	lda	di+1
+	adc	#0
+	sta	(c1),y-
+	lda	di
+	adc	#8
+	sta	(c2),y+
+	lda	di+1
+	adc	#0
+	sta	(c2),y+
+	txa
+	lsr	@
+	bcc	prep2
+	mva	#{iny}	(c1),y
+	sta	(c2),y+
+prep2	tya
+	add:sta	c1
+	scc:inc	c1+1
+	tya
+	add:sta	c2
+	scc:inc	c2+1
+	txa
+	lsr	@
+	lda	#$6f
+	scc:lda	#$cf
+	sta	dl1,x
+	sta	dl2,x+
+	mva	#{ldy a:,x}	(di),0
+	ldy	#6
+	sta	(di),y
+	ldy	#3
+	mva	#{lda a:,y}	(di),y
+	ldy	#9
+	mva	#{adc a:,y}	(di),y+
+	mva	#0	(di),y
+	ldy	#4
+	sta	(di),y+
+	mva	>pal1	(di),y
+	ldy	#11
+	mva	>pal2	(di),y+
+	mva	#{sta screen,x}	(di),y+
+	mva	si	(di),y+
+	sta	dl1,x
+	add	#40
+	sta	dl2,x+
+	mva	si+1	(di),y
+	sta	dl1,x
+	adc	#0
+	sta	dl2,x+
+	ldy	#79
+	lda	#0
+	sta:rpl	(si),y-
+	lda	#80
+	adc:sta	si
+	scc:inc	si+1
+	lda	#15
+	add:sta	di
+	scc:inc	di+1
+	cpx	#2+3*SCR_H
+	jcc	prep
+	mva	#$41	dl1,x
+	sta	dl2,x+
+	mva	<dl1	dl1,x
+	mva	<dl2	dl2,x+
+	mva	>dl1	dl1,x
+	mva	>dl2	dl2,x
+
+	mwa	#pak0	si
+	mva	<pic0	di
+	ldx	>pic0
+unp1	stx	di+1
+unp2	ldy	#MAP_W/2-1
+	mva:rpl	(si),y	(di),y-
+	lda	#MAP_W/2
+	add:sta	si
+	scc:inc	si+1
+	lda	#$80
+	eor:sta	di
+	bmi	unp1
+	inx
+	cpx	>pice
+	bcc	unp1
+
+	lda	>mpal1
+	ldx	#dark1
+	ldy	>pal1
+	jsr	mcod
+	mva	#{asl @}	asl2
+	lda	>mpal2
+	ldx	#dark2
+	ldy	>pal2
+	jsr	mcod
+
+	ldx	#15
+	lda	#0
+nn
+	sta	dark1,x
+	sta	dark2,x
+	dex
+	bpl	nn
+
+	mwa	#director-1	saver
+	mva	#0	scri
+	mva	#0	p1l1
+	mva	#$63	p1l2
+
+	lda:rne	^4b
+	mva	#$90	^1a
+	mva	#$40	^1b
+	mva	#$22	^40
+	mwa	#dl1	^42
+	ift	NUMEN
+	mwa	#vbl	Vbl_vector
+	mwa	#dli	Dli_vector
+	mwa	#-34*50-36	Vbl_clock
+	jsr	Idle
+	mva	#{rts}	vbl
+	lda:rne	^4b
+	sta	^40
+	mwa	#rts	Vbl_vector
+	jmp	NextBlock
+	els
+	mwa	#nmi	$fffa
+	dec	^4e
+:BARZ	mva ^4b ^1a
+:BARZ	jmp *-6
+	jmp	*
+	eif
+
+	ift	!NUMEN
+nmi	bit	^4f
+	jmi	dli
+	pha
+	txa:pha
+	tya:pha
+	mva	#$80	^4e
+	els
+vbl	mva	#{rts}	vbl
+	mva	Banks_table+Banks_MAIN_INDEX	^31
+	eif
+; tu vbl
+	ldx	<dl1
+	ldy	>dl1
+	lda	#40
+	eor:sta	scri
+	bne	setdl
+	ldx	<dl2
+	ldy	>dl2
+setdl	stx	^42
+	sty	^43
+
+	lda:pha	saver+1
+	lda:pha	saver
+	ldy	savey
+	rts
+frame	sty	savey
+	pla:sta	saver
+	pla:sta	saver+1
+
+	lda	#13
+	add:sta	p1l1
+	and	#$7f
+	tax
+	lda	#6
+	add:sta	p1l2
+	and	#$7f
+	tay
+jpa1	jsr	mpal1
+
+	lda	#17
+	add:sta	p1l1
+	and	#$7f
+	tax
+	lda	#22
+	add:sta	p1l2
+	and	#$7f
+	tay
+jpa2	jsr	mpal2
+
+	lda	#5
+	add:sta	p1x1+1
+	lda	#2
+	add:sta	p1x2+1
+	lda	#2
+	add:sta	p1y1+1
+	lda	#6
+	add:sta	p1y2+1
+p1y1	lda	siny+$1e
+	clc
+p1y2	adc	siny+$70
+	ror	@
+	clc
+api1	adc	>pic1
+	tay
+p1x1	lda	sinx+$00
+	clc
+p1x2	adc	sinx+$33
+	ror	@
+	add	<pic1
+	sub	scri
+	tax
+	eor	#$80
+cpr1	org	*+13*SCR_H/2
+; stx dpro+1
+; sty dpro+2
+; sta dpro+15+1
+; sty dpro+15+2
+; iny
+
+	lda	#4
+	add:sta	p2x1+1
+	lda	#3
+	add:sta	p2x2+1
+	lda	#5
+	add:sta	p2y1+1
+	lda	#7
+	add:sta	p2y2+1
+p2y1	lda	siny+$30
+	clc
+p2y2	adc	siny+$d0
+	ror	@
+	clc
+api2	adc	>pic2
+	tay
+p2x1	lda	sinx+$51
+	clc
+p2x2	adc	sinx+$b9
+	ror	@
+	add	<pic2
+	sub	scri
+	tax
+	eor	#$80
+cpr2	org	*+13*SCR_H/2
+; stx dpro+7
+; sty dpro+8
+; sta dpro+15+7
+; sty dpro+15+8
+; iny
+
+	lda:tax	scri
+	add	#40
+	sta	cpx+1
+dpro	org	*+15*SCR_H
+; ldy pic1,x
+; lda pal1,y
+; ldy pic2,x
+; adc pal2,y
+; sta screen,x
+	inx
+; stx ^1a
+cpx	cpx	#40
+	jcc	dpro
+
+; koniec vbl
+	ift	NUMEN
+	mva	#{lda #}	vbl
+	rts
+	els
+	dec	^4e
+	pla:tay
+	pla:tax
+	pla:rti
+	eif
+
+mcod
+	sta	di+1
+	stx	darkp
+	sty	palp
+
+	mvy	#0	di
+	ldx	#$f
+meh1	mva	#{ldx dark1}	(di),y+
+	txa:add	darkp
+	sta	(di),y+
+	cpx	#$f
+	lda	#{eor lo2hi,x}
+	scc:lda	#{lda lo2hi,x}
+	sta	(di),y+
+	mva	<lo2hi	(di),y+
+	mva	>lo2hi	(di),y+
+	mva	#{sta hizp}	(di),y+
+	txa:add	#hizp
+	sta	(di),y+
+	txa:beq	meh15
+	cpx	#$f
+	bcs	meh15
+	mva	#{lda lo2hi,x}	(di),y+
+	mva	<lo2hi	(di),y+
+	mva	>lo2hi	(di),y+
+meh15	dex
+	bpl	meh1
+	mva	#{ldx #$f}	(di),y+
+	mva	#$f	(di),y+
+	mva	#{lda dark1,x}	(di),y+
+	mva	darkp	(di),y+
+	ldx	#$f
+meh2	mva	#{eor hizp}	(di),y+
+	txa:add	#hizp
+	sta	(di),y+
+	mva	#{sta pal1,x}	(di),y+
+	mva	lo2hi,x	(di),y+
+	mva	palp	(di),y+
+	dex
+	bpl	meh2
+	mva	#{dex}	(di),y+
+	mva	#{bpl}	(di),y+
+	mva	#-2-16*5-1-2	(di),y+
+	mva	#{rts}	(di),y+
+	sty	di
+
+	ldx	#31
+msi1	mva	#{lda sinl,x}	(di),0+
+	txa
+	asl:asl	@
+	sta	(di),y+
+	mva	>sinl	(di),y+
+	mva	#{clc}	(di),y+
+	mva	#{adc sinl,y}	(di),y+
+	txa
+	asl:asl	@
+asl2	nop
+	and	#$7f
+	sta	(di),y+
+	mva	>sinl	(di),y+
+	mva	#{ror @}	(di),y+
+	mva	#{sta wave}	(di),y+
+	txa:add	#wave
+	sta	(di),y
+	lda	#10
+	add:sta	di
+	scc:inc	di+1
+	dex
+	bpl	msi1
+
+	ldx	#31
+mdk1
+	mva	#{ldx wave}	(di),0+
+	txa:add	#wave
+	sta	(di),y+
+	mva	#{ldy dark1,x}	(di),y+
+	mva	darkp	(di),y+
+	mva	#{lda lo2hi,y}	(di),y+
+	mva	<lo2hi	(di),y+
+	mva	>lo2hi	(di),y+
+	mva	#{sty lozp}	(di),y+
+	txa:add	#lozp
+	sta	(di),y+
+	mva	#{sta hizp}	(di),y+
+	txa:add	#hizp
+	sta	(di),y
+	lda	#11
+	add:sta	di
+	scc:inc	di+1
+	dex
+	bpl	mdk1
+
+	ldx	#0
+mld1	mva	#{lda hizp}	(di),0+
+	lda	hitab,x
+	add	#hizp
+	sta	(di),y+
+	mva	#{eor lozp}	(di),y+
+	lda	lotab,x
+	add	#lozp
+	sta	(di),y+
+	mva	#{sta pal1}	(di),y+
+	txa:sta	(di),y+
+	mva	palp	(di),y
+	lda	#7
+	add:sta	di
+	scc:inc	di+1
+	inx
+	cpx	#lotab-hitab
+	bcc	mld1
+	mva	#{rts}	(di),0
+	rts
+
+; tu fragment kodu, ktory rezyseruje, co ma sie pojawiac,
+; co ma w co przechodzic itp.
+; uwaga!!! ten kod jest po kawalku wywolywany na vbl
+; jsr frame powoduje wstrzymanie do nastepnej ramki i tylko
+; rejestr Y jest przechowywany!
+; wazne: gdy wywolujemy frame, nie mozemy nic przechowywac
+; na stosie, w szczegolnosci nie mozemy wywolywac frame
+; z procedury!!! bo tylko adres powrotu jest
+; zapamietywany/odtwarzany w vbl
+; co ma sie pokazywac:
+; mpal1i, pic0 = interference 1
+; mpal2i, pic0 = interference 2
+; mpal1/2, pic1 = statek
+; mpal1/2, pic2 = maszt
+; przenikanie:
+; rozjasnij z n do n+1 (n=0..14)
+;  ldx #dark1 lub dark2
+;  ldy #n
+;  jsr jasn
+; sciemnij z n+1 do n (n=0..14)
+;  ldx #dark1 lub dark2
+;  ldy #n
+;  jsr sciem
+director
+; pokaz 1 kolko
+	mva	<mpal1i	jpa1+1
+	mva	>pic0	api1+1
+	mva	<mpal2i	jpa2+1
+	mva	>pic0	api2+1
+	ldy	#0
+roz1	ldx	#dark1
+	jsr	jasn
+	jsr	frame
+	iny
+	cpy	#15
+	bcc	roz1
+petla
+; czekaj 2 sek
+	ldy	#50
+w81	jsr	frame
+	dey
+	bne	w81
+
+; pokaz 2 kolko
+	ldy	#14
+roz2	ldx	#dark1
+	jsr	sciem
+	tya
+	pha
+	eor	#15
+	tay
+	dey
+	ldx	#dark2
+	jsr	jasn
+	pla:tay
+:2	jsr	frame
+	dey
+	cpy	#7
+	bne	roz2
+; czekaj 8 sek
+	ldy	#200
+w82	jsr	frame
+	dey
+	bne	w82
+
+; schowaj 1 kolko
+	ldy	#7
+sci1	ldx	#dark1
+	jsr	sciem
+:2	jsr	frame
+	dey
+	bpl	sci1
+
+; pokaz statek
+	mva	<mpal1	jpa1+1
+	mva	>pic1	api1+1
+	ldy	#0
+rozs	ldx	#dark1
+	jsr	jasn
+:4	jsr	frame
+	iny
+	cpy	#7
+	bcc	rozs
+; czekaj 6 sek
+	ldy	#150
+w83	jsr	frame
+	dey
+	bne	w83
+
+; sam statek
+	ldy	#7
+sams	ldx	#dark1
+	jsr	jasn
+	tya
+	pha
+	eor	#15
+	tay
+	dey:dey
+	ldx	#dark2
+	jsr	sciem
+	pla:tay
+:2	jsr	frame
+	iny
+	cpy	#14
+	bcc	sams
+	ldx	#dark1
+	jsr	jasn
+; czekaj 4 sek
+	ldy	#100
+w84	jsr	frame
+	dey
+	bne	w84
+
+; pokaz maszt
+	mva	<mpal2	jpa2+1
+	mva	>pic2	api2+1
+	ldy	#14
+masz	ldx	#dark1
+	jsr	sciem
+	tya
+	pha
+	eor	#15
+	tay
+	dey
+	ldx	#dark2
+	jsr	jasn
+	pla:tay
+:2	jsr	frame
+	dey
+	cpy	#7
+	bne	masz
+; czekaj 3 sek
+	ldy	#75
+w85	jsr	frame
+	dey
+	bne	w85
+
+; sam maszt
+	ldy	#7
+samm	ldx	#dark1
+	jsr	sciem
+	tya
+	pha
+	eor	#15
+	tay
+	dey
+	ldx	#dark2
+	jsr	jasn
+	pla:tay
+:2	jsr	frame
+	dey
+	bpl	samm
+;	ldx	#dark1
+;	jsr	jasn
+; czekaj 4 sek
+	ldy	#100
+w86	jsr	frame
+	dey
+	bne	w86
+
+; maszt -> kolko 1
+	mva	<mpal1i	jpa1+1
+	mva	>pic0	api1+1
+	ldy	#0
+maku	ldx	#dark1
+	jsr	jasn
+	tya
+	pha
+	eor	#15
+	tay
+	dey
+	ldx	#dark2
+	jsr	sciem
+	pla:tay
+:4	jsr	frame
+	iny
+	cpy	#15
+	bcc	maku
+	dey
+hajd	ldx	#dark1
+	jsr	sciem
+	jsr	frame
+	dey
+	bpl	hajd
+	jsr	frame
+	jmp	*-3
+
+; od poczatku
+;	jmp	petla
+
+	icl	'sciema.asx'
+
+lo2hi	dta	$00,$10,$20,$30,$40,$50,$60,$70,$80,$90,$a0,$b0,$c0,$d0,$e0,$f0
+
+	end

@@ -1,0 +1,157 @@
+	icl	'../nex.asx'
+
+si	equ	$80
+di	equ	$82
+page	equ	$84
+
+	ift	NUMEN
+tex	equ	$600
+	org	$300
+	els
+tex	equ	$e00
+	org	$800
+	eif
+
+sin	dta	sin(28,28,$80,$28,$127)
+
+dl	dta	$80,0
+dll	dta	$4f,a(0),$4f,a(0)
+dle	dta	$41,a(dl)
+
+main
+ ift	NUMEN
+	mwa	#paken-1	si
+	lda	#$fd
+	ldx	#15*2
+	jsr	unp
+	lda	#$2f
+	ldx	#21*2
+	jsr	unp
+	jsr	Inflate
+	lda	#$7f
+	jsr	unpi
+	jsr	Inflate
+	lda	#$cf
+	jsr	unpi
+ els
+	lda:rne	^4b
+	ldx	#29
+	sta:rpl	^00,x-
+	sta	^40
+	mwa	#paken-1	si
+	lda	#$fd
+	ldx	#19*2
+	jsr	unp
+	lda	#$cf
+	ldx	#97*2
+	jsr	unp
+ eif
+
+	ldx	#0
+	lda	>tex
+ipag1
+	sta	page,x+
+	cmp	#$ce
+:NUMEN	sne:lda	#$de
+:!NUMEN sne:lda #$d6
+	add	#2
+	bcc	ipag1
+
+	lda:rne	^4b
+	sta	^1a
+	mva	#$22	^40
+	mwa	#dle	^42
+;	mva	#$c0	^1b
+	ift	NUMEN
+	mwa	#dli	Dli_vector
+	mwa	#-256	Vbl_clock
+	jsr	Idle
+	lda:rne	^4b
+	sta	^40
+	mwa	#rts	Vbl_vector
+	jmp	NextBlock
+	els
+	mwa	#dli	$fffa
+	mva	#$80	^4e
+	jmp	*
+	eif
+
+ ift NUMEN
+unpi
+	mvx	Banks_table+Banks_MAIN_INDEX	^31
+	mwx	#$8000+40*390-1	si
+	ldx	#40*2
+ eif
+unp
+	sta	di+1
+unp1
+	lda	si
+	sub	#195
+	sta	si
+	scs:dec	si+1
+	mvy	#61	di
+	ldy	#195
+	mva:rne	(si),y-	(di),y
+	sty	di
+	tya
+	ldy	#61
+unp2
+	dey
+	sta	(di),y
+	bne	unp2
+	dec	di+1
+	dex
+	bne	unp1
+	rts
+
+dli
+:!NUMEN pha
+	lda:pha	^31
+:NUMEN	mva	Banks_table+Banks_MAIN_INDEX	^31
+	txa:pha
+	sta	^4a
+	tya:pha
+	ldx	dll+1
+	inx
+	stx	dll+1
+	stx	dll+4
+	ldy	sin,x
+	ldx	#59
+dli1
+	mva	<dll	^42
+	mva	page,y	dll+2
+	sta	^4a
+	eor	#1
+	sta	dll+5
+	mva	#$c0	^1b
+	sta	^4a
+	mva	#$40	^1b
+	cmp	(0,x)
+	mva	<dll	^42
+	sta	^4a
+	mva	#$c0	^1b
+	iny
+	sta	^4a
+	mva	#$40	^1b
+	dex
+	bne	dli1
+
+	pla:tay
+	pla:tax
+	pla
+	sta	^4a
+	sta	^31
+	pla
+	rti
+
+	org	tex
+pak
+ ift	NUMEN
+	ins	'logo256.gfx',0,21*390
+	ins	'logo256.gfx',[21+40+40]*390,15*390
+ els
+	ins	'logo256.gfx'
+ eif
+paken
+
+	end

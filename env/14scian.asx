@@ -1,0 +1,42 @@
+c	equ	$20
+r	equ	21
+n	equ	21
+
+	dta	12
+	dta	c,c-r,c-r,c,c-n,c-n
+	dta	c+r,c,c-r,c+n,c,c-n
+	dta	c,c+r,c-r,c,c+n,c-n
+	dta	c-r,c,c-r,c-n,c,c-n
+
+	dta	c,c-r,c+r,c,c-n,c+n
+	dta	c+r,c,c+r,c+n,c,c+n
+	dta	c,c+r,c+r,c,c+n,c+n
+	dta	c-r,c,c+r,c-n,c,c+n
+
+	dta	c+r,c-r,c,c+n,c-n,c
+	dta	c+r,c+r,c,c+n,c+n,c
+	dta	c-r,c+r,c,c-n,c+n,c
+	dta	c-r,c-r,c,c-n,c-n,c
+
+; x
+	dta	4,11,8,12,0
+	dta	2,9,6,10,0
+; y
+	dta	3,10,7,11,0
+	dta	1,12,5,9,0
+; z
+	dta	1,2,3,4,0
+	dta	5,8,7,6,0
+; triangles
+	dta	1,4,12,0
+	dta	1,9,2,0
+	dta	2,10,3,0
+	dta	3,11,4,0
+	dta	5,12,8,0
+	dta	5,6,9,0
+	dta	6,7,10,0
+	dta	7,8,11,0
+
+ 	dta	0
+
+	end

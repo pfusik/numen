@@ -1,0 +1,404 @@
+; MPT 10.5 by Fox (255 track positions!)
+LONG_TRACKS	equ	1
+
+* Player MPT 2.4
+* by Fox/Infinity
+* 07,19,25,30/07/96
+* original version by Jaskier/Taquart
+
+freq	equ	zp	4
+slup	equ	zp+4	4
+ad	equ	zp+8	2
+aud	equ	zp+10	1
+tp	equ	zp+11	1
+
+	mvx	#0	aud
+	inc	licz
+	lda	#$ff
+pozptr	equ	*-1
+	cmp	#lenpat
+	dec	zegar
+	bcc	r1
+	jne	r5
+	stx	pozptr	#0
+p2	mva	#$ff	ptrwsk,x
+	sta	licspc,x
+	mva	msx+$1c0,x	ad
+	ift	LONG_TRACKS
+	lda	#0
+pozsng	equ	*-1
+p0	asl	@
+	tay
+	lda	msx+$1c4,x
+	adc	#0
+	sta	ad+1
+	els
+	mva	msx+$1c4,x	ad+1
+	ldy	#0
+pozsng	equ	*-1
+	eif
+p3	lda	(ad),y+
+	cmp	#$fe
+	bcc	p6
+	beq	p4
+	lda	(ad),y
+	ift	LONG_TRACKS
+	cmp	#$fe
+	bcs	p4
+	sta	pozsng
+	bcc	p0	!
+	els
+	bmi	p4
+	asl	@
+	tay
+	sta	pozsng
+	bcc	p3	!
+	eif
+p6	asl	@
+	sta	numptr,x
+	mva	(ad),y	poddzw,x
+p7	inx
+	cpx	#4
+	bcc	p2
+	ift	LONG_TRACKS
+	inc	pozsng
+	els
+	iny
+	sty	pozsng
+	eif
+	bcs	r5	!
+p4	ldx	#3
+	lda	#0
+fin	sta	volume,x-
+	bpl	fin
+	dec	pozptr
+	inc	zegar
+ret	rts
+
+r1	bpl	r5
+	ldx	#3
+r2	dec	licspc,x
+	bpl	r4
+	ldy	numptr,x
+	lda	msx+$41,y
+	beq	r4
+	sta	ad+1
+	mva	msx+$40,y	ad
+	ldy	ptrwsk,x
+	jmp	newdzw
+r3	mva	ilespc,x	licspc,x
+r4	dex
+	bpl	r2
+	lda	#speed-1
+tempo	equ	*-1
+	sta	zegar
+	inc	pozptr
+
+r5	ldx	#3
+	bne	r6	!
+
+d0	sta	volume,x
+	jmp	r9
+
+r8	ldy	#$23
+	lda	(ad),y
+	ora	aud
+	sta	aud
+	lda	(ad),y
+	and	filtry,x
+	beq	r9
+	ldy	#$28
+	lda	(ad),y
+	add	numdzw,x
+	jsr	czest
+	sec
+	adc	p1pom,x
+	sta	freq+2,x
+r9	dex
+	bmi	ret
+r6	lda	adrinh,x
+	beq	d0
+	sta	ad+1
+	mva	adrinl,x	ad
+	ldy	slup,x
+	cpy	#$20
+	bcs	d3
+	lda	(ad),y
+	adc	adcvol,x	-
+	bit	v10
+	beq	d1
+	and	#$f0
+d1	sta	volume,x
+	iny
+	lda	(ad),y+
+	sty	slup,x
+	sta	tp
+	and	#7
+	beq	d4
+	tay
+	mva	akce-1,y	akbr+1
+	lda	tp
+	lsr	@
+	lsr	@
+	lsr	@
+	lsr	@
+	lsr	@
+	ora	#$28
+	tay
+	lda	(ad),y
+	clc
+akbr	bcc	*
+ak	equ	*
+
+a0	adc	freq,x
+a1	sta	freq,x
+	jmp	r9
+a2	jsr	aczest
+	sta	freq,x
+	jmp	r9
+a4	sta	freq,x
+	lda	ndziel,x
+	bpl	a7	!
+a5	sta	freq,x
+	lda	#$80
+	bne	a7	!
+a6	sta	freq,x
+	lda	#1
+a7	ora	aud
+	sta	aud
+	jmp	r9
+a8	and	$d20a
+	sta	freq,x
+	jmp	r9
+
+d3	iny
+	iny
+	bne	*+4
+	ldy	#$20
+	sty	slup,x
+	lda	volume,x
+	and	#$0f
+	beq	d4
+	ldy	#$22
+	lda	(ad),y
+	beq	d4
+	dec	p3lic,x
+	bne	d4
+	sta	p3lic,x
+	dec	volume,x
+d4	lda	slup,x
+	and	#6
+	lsr	@
+	adc	#$24	-
+	tay
+	lda	(ad),y
+	jsr	aczest
+	sta	freq,x
+	mvy	branch,x	typbr+1
+	ldy	p2lic,x
+typbr	beq	*
+so	equ	*
+	dec	p2lic,x
+	jmp	r8
+
+s0	lda	#2
+	and	#0
+licz	equ	*-1
+	beq	t2
+	asl	@
+	and	licz
+	bne	t0
+	lda	p1lsb,x
+t1	sta	p1pom,x
+	adc	freq,x	-
+	sta	freq,x
+	jmp	r8
+t0	lda	freq,x
+s1	sub	p1lsb,x
+	sta	freq,x
+	tya	#0
+	sub	p1lsb,x
+t2	sta	p1pom,x
+	jmp	r8
+s2	lda	p1lic,x
+t9	sta	p1pom,x
+	add	freq,x
+t3	sta	freq,x
+	lda	p1lic,x
+	add	p1lsb,x
+	sta	p1lic,x
+	jmp	r8
+s3	lda	numdzw,x
+	sub	p1lic,x
+t4	jsr	nczest
+	jmp	t3
+s4	tya	#0
+	sub	p1lic,x
+	jmp	t9
+s5	lda	numdzw,x
+	add	p1lic,x
+	jmp	t4
+s6	jsr	t5
+	jmp	t1
+s7	jsr	t5
+	adc	numdzw,x	-
+	jsr	nczest
+	sta	freq,x
+	jmp	r8
+t5	ldy	p1lic,x
+	lda	p1lsb,x
+	bmi	*+4
+	iny
+	iny
+	dey
+	tya
+	sta	p1lic,x
+	cmp	p1lsb,x
+	bne	t7
+	eor	#$ff
+	sta	p1lsb,x
+	lda	p1lic,x
+t7	clc
+	rts
+aczest	adc	adcdzw,x	-
+nczest	sta	numdzw,x
+czest	and	#$3f
+	ora	frqwsk,x
+	tay
+	lda	msx+$c0,y
+	rts
+
+nins	sty	tp
+	and	#$1f
+	asl	@
+	tay
+	mva	msx,y	adrinl,x
+	mva	msx+1,y	adrinh,x
+	ldy	tp
+newdzw	lda	#0
+newavo	sta	adcvol,x
+new	iny
+	lda	(ad),y
+	bpl	q4
+	cmp	#$fe
+	bne	q0
+	tya
+	sta	ptrwsk,x
+	jmp	r3
+q0	cmp	#$c0
+	bcc	q3
+	cmp	#$e0
+	bcc	q1
+	mva	#lenpat	pozptr
+	bcs	new	!
+q1	cmp	#$d0
+	bcc	q2
+	and	#$0f
+	sta	tempo
+	bpl	new	!
+q2	adc	#$31	-
+	bvc	newavo	!
+q3	and	#$3f
+	sta	ilespc,x
+	bpl	new	!
+q4	cmp	#$40
+	bcs	nins
+
+	adc	poddzw,x	-
+	sta	adcdzw,x
+	tya
+	sta	ptrwsk,x
+	lda	adrinh,x
+	beq	qret
+	sta	ad+1
+	mva	adrinl,x	ad
+	ldy	#$20
+	lda	(ad),y
+	and	#$0f
+	sta	p1lsb,x
+	lda	(ad),y
+	lsr	@
+	lsr	@
+	lsr	@
+	lsr	@
+	and	#7
+	tay
+	mva	typy,y	branch,x
+	ldy	#$21
+	lda	(ad),y
+	asl	@
+	asl	@
+	sta	tp
+	and	#$3f
+	sta	p2lic,x
+	eor	tp
+	sta	frqwsk,x
+	iny
+	mva	(ad),y	p3lic,x
+	lda	#0
+	sta	slup,x
+	sta	p1lic,x
+	sta	p1pom,x
+	lda	adcdzw,x
+*	(nczest)
+	sta	numdzw,x
+	and	#$3f
+	ora	frqwsk,x
+	tay
+	mva	msx+$c0,y	freq,x
+qret	jmp	r3
+
+akce	equ	*
+	dta	b(a1-ak,a0-ak,a2-ak)
+	dta	b(a4-ak,a5-ak,a6-ak,a8-ak)
+typy	equ	*
+	dta	b(s0-so,s1-so,s2-so,s3-so)
+	dta	b(s4-so,s5-so,s6-so,s7-so)
+ndziel	dta	b($40,0,$20,0)
+filtry	dta	b(4,2,0,0)
+
+bsfrql	equ	*-1
+	dta	b($f2,$33,$96)
+	dta	b($e2,$38,$8c,0)
+	dta	b($6a,$e8,$6a,$ef)
+	dta	b($80,8,$ae,$46)
+	dta	b($e6,$95,$41,$f6)
+	dta	b($b0,$6e,$30,$f6)
+	dta	b($bb,$84,$52,$22)
+	dta	b($f4,$c8,$a0,$7a)
+	dta	b($55,$34,$14,$f5)
+	dta	b($d8,$bd,$a4,$8d)
+	dta	b($77,$60,$4e,$38)
+	dta	b($27,$15,6,$f7)
+	dta	b($e8,$db,$cf,$c3)
+	dta	b($b8,$ac,$a2,$9a)
+	dta	b($90,$88,$7f,$78)
+	dta	b($70,$6a,$64,$5e)
+
+bsfrqh	equ	*-1
+	dta	b($d,$d,$c,$b,$b,$a,$a,9)
+	dta	b(8,8,7,7,7,6,6,5,5,5,4,4,4,4)
+	dta	b(3,3,3,3,3,2,2,2,2,2,2,2)
+	dta	b(1,1,1,1,1,1,1,1,1,1,1,1)
+	dta	b(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+
+branch	dta d'    '
+volume	dta d'    '
+adcvol	dta d'    '
+frqwsk	dta d'    '
+adcdzw	dta d'    '
+poddzw	dta d'    '
+adrinl	dta d'    '
+adrinh	dta d'    '
+numdzw	dta d'    '
+numptr	dta d'    '
+ptrwsk	dta d'    '
+ilespc	dta d'    '
+licspc	dta d'    '
+p1lsb	dta d'    '
+p1lic	dta d'    '
+p1pom	dta d'    '
+p2lic	dta d'    '
+p3lic	dta d'    '
+zegar	dta b(1)
+	end

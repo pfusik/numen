@@ -1,0 +1,1602 @@
+* Turbo Vectys Precalc
+* by Fox/Taquart
+* XE: 14,15,23/06;05-10,27/07
+* 15,17,21,22,25,26/12/97
+* 05,09,10,14/01
+* PC: 17,27-31/05;01-03/06/98
+* 09/01/99
+* 05/03/02
+
+LOOPSOL	equ	0
+
+calc	equ	$d800
+
+* Const
+r	equ	12
+pec	equ	$49
+ped	equ	$30
+wlim	equ	$ff40
+llim	equ	$c
+bott	equ	237
+
+* Banks
+bcal	equ	$ee
+
+* Memory
+pcalc	equ	$4000
+sin	equ	$c000	$800
+perl	equ	$c800
+perh	equ	$c900
+lspt	equ	$ca00
+	org	$cb00
+sket	org	*+$40
+walt	org	*+$40
+wlt	org	*+12
+wpt	org	*+8
+vta	org	*+8
+vtb	org	*+8
+vtc	org	*+8
+cotb	org	*+6
+lptb	org	*+6
+ksp	org	*+22
+cx0	org	*+1
+cx1	org	*+1
+cy0	org	*+1
+cy1	org	*+1
+cl0	org	*+1
+cl1	org	*+1
+ch0	org	*+1
+ch1	org	*+1
+dx	org	*+24
+dy	org	*+24
+
+* Variables
+	org	$20
+zp_begin
+vc	org	*+2
+	org	$20
+ile	org	*+1
+lp1	org	*+12
+lp2	org	*+24
+kv	org	*+22
+t1	org	*+2
+t2	org	*+2
+dk	org	*+1
+wk	org	*+1
+wi	org	*+1
+px	org	*+8
+py	org	*+8
+ph	org	*+8
+ka	equ	px
+kb	equ	ka+1
+kc	equ	ka+2
+kva	equ	ka+3
+kvb	equ	ka+4
+kvc	equ	ka+5
+dr	org	*+24
+dl	org	*+24
+dh	org	*+24
+vll	org	*+2
+vlr	org	*+2
+vsl	org	*+2
+vsr	org	*+2
+vpl	org	*+2
+vpr	org	*+2
+vmov	org	*+2
+ax	equ	*	27 bts
+ay	equ	ax+3
+az	equ	ax+6
+bx	equ	ax+9
+by	equ	ax+12
+bz	equ	ax+15
+cx	equ	ax+18
+cy	equ	ax+21
+cz	equ	ax+24
+ilep	org	*+1
+ilel	org	*+1
+ilew	org	*+1
+szki	org	*+1
+szwl	org	*+3
+cowl	org	*+3
+top	org	*+2
+fir	org	*+1
+vpt	org	*+1
+mpt	org	*+1
+lwl	org	*+1
+swl	org	*+1
+pwl	org	*+1
+ln0	org	*+1
+ln1	org	*+1
+fl	org	*+1
+ma	org	*+2
+mk	org	*+1
+ml	org	*+1
+nk	org	*+1
+nl	org	*+1
+	org	ax+27
+zp_end
+
+* c0de
+	org	calc
+calc_put
+put	sta	pcalc
+	inw	put+1
+	rts
+
+calc_frame
+	jmp	frame
+
+calc_init
+	lda	#0
+	ldx	#zp_end-zp_begin
+	sta	zp_begin-1,x-
+	bne	*-3
+;	sta	put+1
+;	mva	>pcalc	put+2
+
+* Make perspective tabs
+	lda	#0
+	sta	perl
+	sta	perh
+	ldx	#1
+	clc
+mper	adc	#pec	-
+	sta	perl,x
+	lda	perh-1,x
+	adc	#0
+	sta	perh,x
+	lda	perl,x+
+	bne	mper
+
+* Make sinus
+	ldx	#0
+	ldy	#0
+	lda	>sin
+	sty	vc
+	sta	vc+1
+	jsr	psinco
+	inx
+	bpl	*-4
+	jsr	psinco
+	dex
+	bne	*-4
+	jsr	psinco
+	inx
+	bpl	*-4
+	jsr	psinco
+	dex
+	bne	*-4
+
+* Init sketches
+	lda	#$ff
+	ldx	#15
+	sta	sket+$30,x-
+	bpl	*-4
+	lda	>sket
+	sta	vll+1
+	sta	vlr+1
+	sta	vsl+1
+	sta	vsr+1
+	sta	vpl+1
+	sta	vpr+1
+
+* Get info about solid
+	jsr	get
+	tax
+ ift LOOPSOL
+	bne	gis1
+	mwa	#sols	get+1
+	jsr	get
+ eif
+gis1	sta	ilep
+	sub	#1
+	sta	ilp1+1
+	sta	ilp2+1
+	sta	ilp3+1
+	sta	ilp4+1
+	sta	ilp5+1
+	jsr	get
+	sta	ilel
+	sbc	#1	+
+	sta	ill1+1
+	jsr	get
+	sta	ilew
+	sbc	#1	+
+	sta	ilw1+1
+	sta	ilw2+1
+
+	ldx	#0
+lang	jsr	get
+	sta	ka,x+
+	cpx	#6
+	bcc	lang
+
+	ldx	#0
+	lda	kb
+	add	kc
+	tay
+	lda	kvb
+	add	kvc
+	jsr	pang
+	lda	kc
+	sub	kb
+	tay
+	lda	kvc
+	sub	kvb
+	jsr	pang
+	lda	#0
+	sub	kb
+	tay
+	lda	#0
+	sub	kvb
+	jsr	pang
+	lda	ka
+	add	kb
+	add	kc
+	tay
+	lda	kva
+	add	kvb
+	add	kvc
+	jsr	pang
+	lda	ka
+	add	kb
+	sub	kc
+	tay
+	lda	kva
+	add	kvb
+	sub	kvc
+	jsr	pang
+	lda	ka
+	sub	kb
+	add	kc
+	tay
+	lda	kva
+	sub	kvb
+	add	kvc
+	jsr	pang
+	lda	ka
+	sub	kb
+	sub	kc
+	tay
+	lda	kva
+	sub	kvb
+	sub	kvc
+	jsr	pang
+	lda	#0
+	sub	ka
+	sub	kc
+	tay
+	lda	#0
+	sub	kva
+	sub	kvc
+	jsr	pang
+	lda	ka
+	sub	kc
+	tay
+	lda	kva
+	sub	kvc
+	jsr	pang
+	lda	ka
+	add	kb
+	tay
+	lda	kva
+	add	kvb
+	jsr	pang
+	lda	ka
+	sub	kb
+	tay
+	lda	kva
+	sub	kvb
+	jsr	pang
+
+	ldx	#0
+lcop	jsr	get
+	sta	cotb,x
+	jsr	get
+	sta	lptb,x+
+	cpx	ilew
+	bcc	lcop
+
+	ldx	#0
+lvt1	jsr	get
+	sta	vta,x
+	jsr	get
+	sta	vtb,x
+	jsr	get
+	sta	vtc,x+
+	cpx	ilep
+	bcc	lvt1
+
+	ldx	#0
+llp1	jsr	get
+	sta	lp1,x
+	sta	lp2+r,x
+	jsr	get
+	sta	lp2,x+
+	cpx	ilel
+	bcc	llp1
+
+	mvy	#0	mpt
+	bpl	lwa3	!
+lwa1	tya
+	lsr	@
+	lsr	@
+	lsr	@
+	sta	wlt,x
+lwa2	lda	lp1,x
+	tax
+	lda	bits,x
+	ora	mpt
+	sta	mpt
+lwa3	jsr	get
+	sta	walt,y+
+	tax
+	cmp	#r
+	bcc	lwa1
+	bpl	lwa2
+	tya
+	lsr	@
+	lsr	@
+	lsr	@
+	tax
+	mva	mpt	wpt,x
+	tya
+	ora	#7
+	mvy	#0	mpt
+	tay
+	iny
+ilw2	cpx	#0	.
+	bcc	lwa3
+
+* Init lspt
+	ldx	#0
+mls1	ldy	lp1,x
+	lda	bits,y
+	ldy	lp2,x
+	ora	bits,y
+	tay
+	txa
+	sta	lspt,y
+	inx
+	cpx	ilel
+	bcc	mls1
+	ldx	#0
+	lda	#1
+mls2	sta	mlsp+1
+mlsp	stx	lspt
+	asl	@
+	inx
+	bcc	mls2
+
+	rts
+
+frame
+** Compute unit vectors (5/7/97)
+	ldy	#0
+	sty	ax
+	sty	ay
+	sty	az
+	sty	bx
+	sty	by
+	sty	bz
+	sty	cx
+	sty	cy
+	sty	cz
+	lda	(kv+4),y
+	asl	@
+	tax
+	iny	#1
+	lda	(kv+4),y
+	rol	@
+	cpx	#$80
+	rol	@
+	sta	az+2
+	eor	#$ff
+	add	#1
+	sta	az+1
+	dey	#0
+	lda	(kv),y
+	add	(kv+2),y
+	tax
+	iny	#1
+	lda	(kv),y
+	adc	(kv+2),y
+	cpx	#$80
+	rol	@
+	sta	ay+2
+	eor	#$ff
+	add	#1
+	sta	ay+1
+	iny	#2
+	lda	(kv),y
+	add	(kv+2),y
+	tax
+	iny	#3
+	lda	(kv),y
+	adc	(kv+2),y
+	cpx	#$80
+	rol	@
+	sta	ax+2
+	eor	#$ff
+	add	#1
+	sta	ax+1
+	ldy	#0
+	lda	(kv+18),y
+	add	(kv+20),y
+	tax
+	iny	#1
+	lda	(kv+18),y
+	adc	(kv+20),y
+	cpx	#$80
+	rol	@
+	sta	bz+2
+	eor	#$ff
+	add	#1
+	sta	bz+1
+	iny	#2
+	lda	(kv+18),y
+	add	(kv+20),y
+	tax
+	iny	#3
+	lda	(kv+18),y
+	adc	(kv+20),y
+	cpx	#$80
+	rol	@
+	sta	cz+2
+	eor	#$ff
+	add	#1
+	sta	cz+1
+	dey	#2
+	lda	(kv+16),y
+	asl	@
+	tax
+	iny	#3
+	lda	(kv+16),y
+	rol	@
+	sta	t1+1
+	txa
+	add	(kv+8),0
+	php
+	sub	(kv+12),y
+	sta	t1
+	iny	#1
+	lda	t1+1
+	sbc	(kv+12),y
+	plp
+	adc	(kv+8),y
+	sta	t1+1
+	iny	#2
+	lda	(kv+14),y
+	asl	@
+	tax
+	iny	#3
+	lda	(kv+14),y
+	rol	@
+	sta	t2+1
+	txa
+	add	(kv+10),0
+	php
+	sub	(kv+6),y
+	sta	t2
+	iny	#1
+	lda	t2+1
+	sbc	(kv+6),y
+	plp
+	adc	(kv+10),y
+	sta	t2+1
+	lda	t1
+	add	t2
+	lda	t1+1
+	adc	t2+1
+	sta	by+2
+	eor	#$ff
+	add	#1
+	sta	by+1
+	lda	t1
+	sub	t2
+	lda	t1+1
+	sbc	t2+1
+	sta	cx+2
+	eor	#$ff
+	add	#1
+	sta	cx+1
+	dey	#0
+	lda	(kv+14),y
+	asl	@
+	tax
+	iny	#1
+	lda	(kv+14),y
+	rol	@
+	sta	t1+1
+	iny	#2
+	txa
+	add	(kv+10),y
+	php
+	sub	(kv+6),y
+	sta	t1
+	iny	#3
+	lda	t1+1
+	sbc	(kv+6),y
+	plp
+	adc	(kv+10),y
+	sta	t1+1
+	lda	(kv+16),0
+	asl	@
+	tax
+	iny	#1
+	lda	(kv+16),y
+	rol	@
+	sta	t2+1
+	iny	#2
+	txa
+	add	(kv+12),y
+	php
+	sub	(kv+8),y
+	sta	t2
+	iny	#3
+	lda	t2+1
+	sbc	(kv+8),y
+	plp
+	adc	(kv+12),y
+	sta	t2+1
+	lda	t1
+	add	t2
+	lda	t1+1
+	adc	t2+1
+	sta	bx+2
+	eor	#$ff
+	add	#1
+	sta	bx+1
+	lda	t1
+	sub	t2
+	lda	t1+1
+	sbc	t2+1
+	sta	cy+2
+	eor	#$ff
+	add	#1
+	sta	cy+1
+
+	ldx	#20
+addk	lda	kv,x
+	add	ksp,x
+	sta	kv,x
+	lda	kv+1,x
+	adc	ksp+1,x
+	and	#7
+	ora	>sin
+	sta	kv+1,x
+	dex
+	dex
+	bpl	addk
+
+** Compute points' coordinates
+ilp1	ldy	#0	.
+cpo1	ldx	vta,y
+	lda	az,x
+	ldx	vtb,y
+	add	bz,x
+	ldx	vtc,y
+	add	cz,x
+	eor	#$80
+	lsr	@
+	lsr	@
+	add	#ped
+	sta	dk
+
+	lda	cx,x
+	ldx	vtb,y
+	add	bx,x
+	ldx	vta,y
+	add	ax,x
+	cmp	#$80
+	ror	@
+	php
+	bpl	*+7
+	eor	#$ff
+	add	#1
+	tax
+	lda	perl,x
+	asl	@
+	sta	wk
+	lda	perh,x
+	rol	@
+	rol	wk
+	rol	@
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wk
+	rol	@
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wk
+	rol	@
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wk
+	rol	@
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wk
+	rol	@
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wk
+	rol	@
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wk
+	rol	@
+	cmp	dk
+	lda	wk
+	rol	@
+	ora	#$80
+	plp
+	bpl	*+7
+	eor	#$ff
+	add	#1
+	sta	px,y
+
+	ldx	vta,y
+	lda	ay,x
+	ldx	vtb,y
+	add	by,x
+	ldx	vtc,y
+	add	cy,x
+	sta	wi
+	add	vmov
+	tax
+	lda	#0
+	bit	wi
+	bpl	*+4
+	lda	#$ff
+	adc	vmov+1
+	sta	wi
+	bpl	cpo2
+	txa
+	eor	#$ff
+	add	#1
+	tax
+	lda	#0
+	sbc	wi
+cpo2	pha
+	lda	perl,x
+	sta	wk
+	pla
+	beq	*+4
+	lda	#pec
+	add	perh,x
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wk
+	rol	@	
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wk
+	rol	@	
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wk
+	rol	@	
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wk
+	rol	@	
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wk
+	rol	@	
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wk
+	rol	@	
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wk
+	rol	@	
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wk
+	rol	@	
+	cmp	dk
+	lda	wk
+	rol	@
+	rol	wi
+	tax
+	lda	wi
+	and	#1
+	sta	wi
+	txa
+	bcc	cpo3
+	eor	#$ff
+	add	#1
+	tax
+	lda	#0
+	sbc	wi
+	sta	wi
+	txa
+	clc
+cpo3	adc	#$78	-
+	sta	py,y
+	lda	wi
+	adc	#$80
+	sta	ph,y-
+	jpl	cpo1
+
+** Compute lines' increases
+ill1	ldx	#0	.
+cli1	ldy	lp2,x
+	lda	px,y
+	ldy	lp1,x
+	sub	px,y
+	ror	dr,x
+	bmi	*+7
+	eor	#$ff
+	add	#1
+	sta	dx,x
+	sta	dx+r,x
+	ldy	lp2,x
+	lda	py,y
+	ldy	lp1,x
+	sub	py,y
+	pha
+	ldy	lp2,x
+	lda	ph,y
+	ldy	lp1,x
+	sbc	ph,y
+	pla
+	ror	dr,x
+	bmi	*+7
+	eor	#$ff
+	add	#1
+	sta	dy,x
+	sta	dy+r,x
+	tay
+	jeq	nodv
+	sta	dk
+	lda	dx,x
+	asl	@
+	asl	@
+	sta	wi
+	lda	#0
+	rol	@
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wi
+	rol	@
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wi
+	rol	@
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wi
+	rol	@
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wi
+	rol	@
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wi
+	rol	@
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wi
+	rol	@
+	cmp	dk
+	bcc	*+4
+	sbc	dk
+	rol	wi
+	rol	@
+	bcs	*+6
+	cmp	dk
+	bcc	*+5
+	sbc	dk
+	sec
+	rol	wk
+	asl	@
+	bcs	*+6
+	cmp	dk
+	bcc	*+5
+	sbc	dk
+	sec
+	rol	wk
+	asl	@
+	bcs	*+6
+	cmp	dk
+	bcc	*+5
+	sbc	dk
+	sec
+	rol	wk
+	asl	@
+	bcs	*+6
+	cmp	dk
+	bcc	*+5
+	sbc	dk
+	sec
+	rol	wk
+	asl	@
+	bcs	*+6
+	cmp	dk
+	bcc	*+5
+	sbc	dk
+	sec
+	rol	wk
+	asl	@
+	bcs	*+6
+	cmp	dk
+	bcc	*+5
+	sbc	dk
+	sec
+	rol	wk
+	asl	@
+	bcs	*+6
+	cmp	dk
+	bcc	*+5
+	sbc	dk
+	sec
+	rol	wk
+	asl	@
+	bcs	*+4
+	cmp	dk
+	lda	wk
+	rol	@
+	sta	dl,x
+	sta	dl+r,x
+	lda	wi
+	sta	dh,x
+	sta	dh+r,x
+nodv	lda	dr,x
+	eor	#$ff
+	sta	dr+r,x
+	cmp	#$40
+	bmi	cli2
+	lda	#0
+	sbc	dl,x	+
+	sta	dl,x
+	sta	dl+r,x
+	lda	#0
+	sbc	dh,x
+	sta	dh,x
+	sta	dh+r,x
+cli2	dex
+	jpl	cli1
+
+* Cut points under screen
+ilp4	ldx	#0	.
+cutp1	lda	py,x
+	cmp	#bott
+	lda	ph,x
+	sbc	#$80
+	bcc	cutp2
+	mva	#bott	py,x
+cutp2	dex
+	bpl	cutp1
+
+** Check which walls are visible,
+* draw sketches of walls and calc colors
+	mva	#$ff	mpt
+	ldx	#47
+	sta	sket,x-
+	bpl	*-4
+	inx	#0
+	stx	vpt
+	stx	szki
+
+ilw1	ldx	#0	.
+dwl1	stx	t1
+	ldy	widx,x
+	ldx	walt,y
+	lda	walt+1,y
+	sty	t2
+	tay
+	mva	dx,y	mk
+	mva	dy,y	nk
+	mva	#$80	ml
+	sta	nl
+	asl	@
+m1l1	lsr	mk
+	bcc	m1l2
+	add	dy,x
+m1l2	ror	@
+	ror	ml
+	bcc	m1l1
+	sta	mk
+	lda	dr,y
+	asl	@
+	eor	dr,x
+	bpl	m1pl
+	lda	#0
+	sub	ml
+	sta	ml
+	lda	#0
+	sbc	mk
+	sta	mk
+m1pl	lda	#0
+m2l1	lsr	nk
+	bcc	m2l2
+	add	dx,x
+m2l2	ror	@
+	ror	nl
+	bcc	m2l1
+	sta	nk
+	lda	dr,x
+	asl	@
+	eor	dr,y
+	bpl	m2pl
+	lda	ml
+	add	nl
+	tay
+	lda	mk
+	adc	nk
+	jmp	chkw
+m2pl	lda	ml
+	sub	nl
+	tay
+	lda	mk
+	sbc	nk
+chkw	cpy	<wlim
+	sbc	>wlim	
+	bpl	dwno
+	pha
+
+	ldy	t2
+skl1	lda	dy,x
+	beq	skln
+	lda	dr,x
+	asl	@
+	lda	lp1,x
+	bcs	skl2
+	lda	lp2,x
+skl2	stx	t1+1
+	tax
+	lda	szki
+	rol	@
+	rol	@
+	rol	@
+	rol	@
+	sta	skls+1
+	mva	ph,x	wk+1
+	mva	py,x	wk
+ilp2	ldx	#0	.
+skl3	cmp	py,x
+	bne	skl5
+	lda	wk+1
+	cmp	ph,x
+	bne	skl4
+	lda	t1+1
+skls	sta	sket,x	.
+skl4	lda	wk
+skl5	dex
+	bpl	skl3
+skln	iny
+	ldx	walt,y
+	bpl	skl1
+
+	ldx	szki
+	inc	szki
+	mvy	t1	szwl,x
+	lda	wpt,y
+	ora	vpt
+	sta	vpt
+	lda	wpt,y
+	and	mpt
+	sta	mpt
+	mva	lptb,y	lig2+1
+	lda	cotb,y
+	tay
+	and	#$f0
+	ora	#llim
+	sta	ligl+1
+	pla
+	clc
+	bcc	lig2	!
+lig1	iny
+	iny
+ligl	cpy	#0	.
+	bcs	lig3
+lig2	adc	#0	.
+	bcc	lig1
+lig3	sty	cowl,x
+
+dwno	ldx	t1
+	dex
+	jpl	dwl1
+
+** Check if anything on the screen
+ilp5	ldx	#0	.	
+fbp1	lda	bits,x
+	bit	vpt
+	beq	fbp2
+	lda	py,x
+	cmp	#1
+	lda	ph,x
+	sbc	#$80
+	bcs	nups
+fbp2	dex
+	bpl	fbp1
+	jmp	finpc
+nups	equ	*
+
+** Find top point
+ilp3	ldx	#0	.
+	bpl	ftp0	!
+ftp1	lda	py,x
+	cmp	fir
+	lda	ph,x
+	sbc	top+1
+	bcs	ftp2
+	lda	bits,x
+	bit	vpt
+	beq	ftp2
+ftp0	stx	top
+	mva	py,x	fir
+	mva	ph,x	top+1
+ftp2	dex
+	bpl	ftp1
+	inx	#0
+	lda	#8
+	bit	top+1
+	bpl	ptop
+	lda	fir
+	cmp	#bott
+	jcs	finpc
+	tax
+	adc	#8	-
+ptop	stx	fir
+	jsr	put
+
+** Recognize walls L,S,P
+	ldy	szki
+	cpy	#2
+	beq	vis2
+	dey
+	beq	vis1
+* 3 walls visible
+	ldx	mpt
+	lda	lspt,x
+vs31	sty	t1
+	ldx	szwl,y
+	ldy	widx,x
+	ldx	walt,y
+	stx	t2
+vs32	ldx	walt,y+
+	cmp	lp2,x
+	bne	vs32
+	pha
+	lda	dr,x
+	asl	@
+	ldx	walt,y
+	bpl	vs33
+	ldx	t2
+vs33	lda	dr,x
+	rol	@
+	and	#1
+	adc	#1
+	eor	#3
+	tax
+	pla
+	mvy	t1	lwl,x
+	dey
+	bpl	vs31
+	bmi	setk	!
+* 2 walls visible
+vis2	ldy	mpt
+	ldx	lspt,y
+	lda	dr,x
+	ldy	wlt,x
+	cpy	szwl
+	beq	*+3
+	clc
+	rol	@
+	adc	#0
+	and	#1
+	sta	lwl
+	eor	#1
+	sta	swl
+	mva	#3	pwl
+	jmp	setk
+* 1 wall visible
+vis1	lda	#3
+	sta	lwl
+	sty	swl
+	sta	pwl
+
+** Put colors & set vll..vpr
+setk	ldx	lwl
+	lda	cowl,x
+	jsr	put
+	txa
+	asl	@
+	asl	@
+	asl	@
+	asl	@
+	sta	vll
+	ora	#8
+	sta	vlr
+	ldx	swl
+	lda	cowl,x
+	jsr	put
+	txa
+	asl	@
+	asl	@
+	asl	@
+	asl	@
+	sta	vsl
+	ora	#8
+	sta	vsr
+	ldx	pwl
+	lda	cowl,x
+	jsr	put
+	txa
+	asl	@
+	asl	@
+	asl	@
+	asl	@
+	sta	vpl
+	ora	#8
+	sta	vpr
+
+* !!!
+;	lda	put+1
+;	cmp	#$8e
+;	lda	put+2
+;	sbc	#$55
+;	bcc	cont
+;	ldx	#0
+;	lda	0,x
+;	sta	$ff00,x
+;	inx
+;	bne	*-6
+;	dec	^1a
+;	jmp	*
+;cont	equ	*
+
+** Put precalc of lines 0 & 1
+	tsx
+	stx	sp
+	lda	top
+	sta	ln0
+	sta	ln1
+	mva	#$c0	fl
+	bit	top+1
+	jmi	dfl1
+
+cfl1	asl	fl
+	bcc	cfl4
+	ldy	ln1
+	lda	(vlr),y
+	bpl	cfl2
+	lda	(vsl),y
+	bpl	cfl2
+	lda	(vpl),y
+cfl2	tax
+	mva	dh,x	ch1
+	mva	dl,x	cl1
+	lda	lp1,x
+	ldy	dr,x
+	bpl	cfl3
+	lda	lp2,x
+cfl3	sta	ln1
+	eor	lp1,x
+	eor	lp2,x
+	tax
+	mva	px,x	cx1
+	mva	py,x	cy1
+cfl4	asl	fl
+	bcc	cfl7
+	ldy	ln0
+	lda	(vll),y
+	bpl	cfl5
+	lda	(vsl),y
+	bpl	cfl5
+	lda	(vpl),y
+cfl5	tax
+	mva	dh,x	ch0
+	mva	dl,x	cl0
+	lda	lp1,x
+	ldy	dr,x
+	bpl	cfl6
+	lda	lp2,x
+cfl6	sta	ln0
+	eor	lp1,x
+	eor	lp2,x
+	tax
+	mva	px,x	cx0
+	mva	py,x	cy0
+cfl7	lda	#$80
+	sta	fl
+	ldx	ln1
+	ldy	ln0
+	lda	py,x
+	cmp	py,y
+	lda	ph,x
+	sbc	ph,y
+	bcc	cfl8
+	bne	cfl9
+	lda	py,x
+	cmp	py,y
+	beq	*+3
+cfl9	clc
+	ror	fl
+	ldx	ln0
+cfl8	ldy	py,x
+	cpy	#$01
+	lda	ph,x
+	sbc	#$80
+	jcc	cfl1
+	tya
+	jsr	put
+	mva	cl0	ma
+	mva	ch0	ma+1
+	mva	cx0	wk+1
+	mva	#0	wk
+	sub	cy0
+	jsr	cfml
+	lda	cl0
+	jsr	put
+	lda	ch0
+	jsr	put
+	mva	cl1	ma
+	mva	ch1	ma+1
+	mva	cx1	wk+1
+	mva	#0	wk
+	sub	cy1
+	jsr	cfml
+	lda	cl1
+	jsr	put
+	lda	ch1
+	jsr	put
+
+dfl1	lda	#0
+	asl	fl
+	bcc	dfl4
+	ldy	ln1
+	lda	(vlr),y
+	bpl	dfl2
+	lda	(vsl),y
+	bpl	dfl2
+	lda	(vpl),y
+	bmi	dflx
+dfl2	tax
+	lda	dh,x
+	pha
+	lda	dl,x
+	pha
+	lda	lp1,x
+	ldy	dr,x
+	bpl	dfl3
+	lda	lp2,x
+dfl3	sta	ln1
+	eor	lp1,x
+	eor	lp2,x
+	tax
+	lda	px,x
+dfl4	pha
+	lda	#0
+	asl	fl
+	bcc	dfl7
+	ldy	ln0
+	lda	(vll),y
+	bpl	dfl5
+	lda	(vsl),y
+	bpl	dfl5
+	lda	(vpl),y
+dfl5	tax
+	lda	dh,x
+	pha
+	lda	dl,x
+	pha
+	lda	lp1,x
+	ldy	dr,x
+	bpl	dfl6
+	lda	lp2,x
+dfl6	sta	ln0
+	eor	lp1,x
+	eor	lp2,x
+	tax
+	lda	px,x
+dfl7	pha
+	mva	#$80	fl
+	ldx	ln1
+	lda	py,x
+	ldx	ln0
+	cmp	py,x
+	bcc	dfl8
+	beq	*+3
+	clc
+	ror	fl
+	lda	py,x
+dfl8	tay
+	sub	fir
+	pha
+	tsx
+	txa
+	sec
+	eor	#$ff
+	adc	#0
+sp	equ	*-1
+	tax
+dfl9	pla
+	jsr	put
+	dex
+	bne	dfl9
+	cpy	#bott
+	jcc	dfl1
+dflx	equ	*
+
+** Put precalc of lines 2 & 3
+	lda	#vpl
+	jsr	dsln
+	lda	#vpr
+	jsr	dsln
+
+finpc	lda	#0
+	jmp	put
+
+***
+
+cfml	sec
+	ror	@
+	sta	mk
+cfm1	bcc	cfm2
+	lda	wk
+	add	ma
+	sta	wk
+	lda	wk+1
+	adc	ma+1
+	sta	wk+1
+cfm2	asl	ma
+	rol	ma+1
+	lsr	mk
+	bne	cfm1
+	lda	wk+1
+	jmp	put
+
+dsln	sta	dslp+1
+	ldy	top
+	bit	top+1
+	jmi	dslp
+	sta	cslp+1
+
+cslp	lda	(vpl),y	.
+	bpl	csl1
+	lda	(vsr),y
+	bpl	csl1
+	lda	(vlr),y
+csl1	tax
+	ldy	lp1,x
+	lda	dr,x
+	bpl	csl2
+	ldy	lp2,x
+csl2	lda	py,y
+	cmp	#$01
+	lda	ph,y
+	sbc	#$80
+	bcc	cslp
+	mva	dl,x	ma
+	sta	t1
+	mva	dh,x	ma+1
+	sta	t1+1
+	tya
+	eor	lp1,x
+	eor	lp2,x
+	tax
+	mva	px,x	wk+1
+	mva	#0	wk
+	sub	py,x
+	sec
+	ror	@
+	sta	mk
+csm1	bcc	csm2
+	lda	wk
+	add	ma
+	sta	wk
+	lda	wk+1
+	adc	ma+1
+	sta	wk+1
+csm2	asl	ma
+	rol	ma+1
+	lsr	mk
+	bne	csm1
+	lda	py,y
+	jsr	put
+	lda	#$7f
+	cmp	t1+1
+	lda	#$ff
+	adc	t1
+	jsr	put
+	lda	#$ff
+	adc	t1+1
+	jsr	put
+	lda	wk+1
+	jsr	put
+	jmp	dslp
+
+dsl1	tax
+	ldy	lp1,x
+	lda	dr,x
+	bpl	dsl2
+	ldy	lp2,x
+dsl2	lda	py,y
+	sub	fir
+	jsr	put
+	lda	#$7f
+	cmp	dh,x
+	lda	#$ff
+	adc	dl,x
+	jsr	put
+	lda	#$ff
+	adc	dh,x
+	jsr	put
+	tya
+	eor	lp1,x
+	eor	lp2,x
+	tax
+	lda	px,x
+	jsr	put
+	lda	py,y
+	cmp	#bott
+	bcs	dslr
+dslp	lda	(vpl),y	.
+	bpl	dsl1
+	lda	(vsr),y
+	bpl	dsl1
+	lda	(vlr),y
+	bpl	dsl1
+dslr	rts
+
+psinco	lda	vc+1
+	jsr	putsin
+	lda	vc+1
+	add	#2
+putsin	and	#7
+	cmp	#4
+	bcs	psineg
+	mva	qsinl,x	(vc),y
+	lda	qsinh,x
+	bcc	psinst	!
+psineg	lda	#0
+	sbc	qsinl,x	+
+	sta	(vc),y
+	lda	#0
+	sbc	qsinh,x
+psinst	iny
+	sta	(vc),y+
+	bne	*+4
+	inc	vc+1
+	txa
+	eor	#$7f
+	tax
+	inx
+	rts
+
+pang	asl	@
+	rol	t1
+	asl	@
+	rol	t1
+	sta	ksp,x
+	lda	t1
+	and	#3
+	cmp	#2
+	bcc	*+4
+	ora	#$fc
+	sta	ksp+1,x
+	tya
+	asl	@
+	rol	t1
+	asl	@
+	rol	t1
+	asl	@
+	rol	t1
+	sta	kv,x+
+	lda	t1
+	and	#7
+	ora	>sin
+	sta	kv,x+
+	rts
+
+get	lda	sols	.
+	inw	get+1
+	rts
+
+qsinl	dta	l(sin(0,4396,512,0,128))
+qsinh	dta	h(sin(0,4396,512,0,128))
+
+bits	dta	b(1,2,4,8,$10,$20,$40,$80)
+widx	dta	b(0,8,$10,$18,$20,$28,$30,$38)
+
+sols	dta	b(8,12,6)
+	dta	b($20,$10,$30),b(2,4,6)
+	dta	b($24,8,$84,8,$a4,8,$c4,8,$64,8,$14,8)
+	dta	b(1,1,1)
+	dta	b(2,1,1)
+	dta	b(1,2,1)
+	dta	b(2,2,1)
+	dta	b(1,1,2)
+	dta	b(2,1,2)
+	dta	b(1,2,2)
+	dta	b(2,2,2)
+	dta	b(0,1)
+	dta	b(4,5)
+	dta	b(6,7)
+	dta	b(2,3)
+	dta	b(0,2)
+	dta	b(4,6)
+	dta	b(5,7)
+	dta	b(1,3)
+	dta	b(0,4)
+	dta	b(1,5)
+	dta	b(3,7)
+	dta	b(2,6)
+	dta	b(4,11,5+r,8+r,$ff)
+	dta	b(9,6,10+r,7+r,$ff)
+	dta	b(8,1,9+r,r,$ff)
+	dta	b(3,10,2+r,11+r,$ff)
+	dta	b(5,2,6+r,1+r,$ff)
+	dta	b(0,7,3+r,4+r,$ff)
+
+	dta	b(4,6,4)
+	dta	b($20,0,$e0),b(4,6,2)
+	dta	b($22,8,$82,8,$a4,8,$14,8)
+	dta	b(1,1,1)
+	dta	b(2,2,1)
+	dta	b(2,1,2)
+	dta	b(1,2,2)
+	dta	b(0,1)
+	dta	b(1,2)
+	dta	b(2,3)
+	dta	b(0,2)
+	dta	b(0,3)
+	dta	b(1,3)
+	dta	b(0,5,4+r,$ff)
+	dta	b(3,1+r,r,$ff)
+	dta	b(1,2,5+r,$ff)
+	dta	b(4,2+r,3+r,$ff)
+
+	dta	b(6,9,5)
+	dta	b($30,$20,$10),b(6,2,4)
+	dta	b($82,8,$24,8,$a4,8,$c4,10,$64,10)
+	dta	b(1,2,2)
+	dta	b(2,2,2)
+	dta	b(2,2,1)
+	dta	b(1,2,1)
+	dta	b(1,1,0)
+	dta	b(2,1,0)
+	dta	b(0,1)
+	dta	b(3,2)
+	dta	b(4,5)
+	dta	b(0,3)
+	dta	b(1,2)
+	dta	b(4,0)
+	dta	b(5,1)
+	dta	b(4,3)
+	dta	b(5,2)
+	dta	b(3,1,4+r,r,$ff)
+	dta	b(2,8,1+r,7+r,$ff)
+	dta	b(5,0,6+r,2+r,$ff)
+	dta	b(6,4,8+r,$ff)
+	dta	b(7,3+r,5+r,$ff)
+
+:LOOPSOL	dta	b(0)
+	end

@@ -1,0 +1,654 @@
+; Important!! It's very important how many pixels in the picture
+; are transparent (i.e. for plasma). There must be at least so much plasma
+; to calculate while the screen is displayed (because of switching modes),
+; and too much plasma won't fit in a frame (actually first you'll run out
+; of memory).
+
+; What is displayed:
+; "even" screen:      "odd" screen:
+; screen1    (GR.11)  screen1    (GR.11)
+; screen1+40 (GR.9)   screen2    (GR.10)
+; screen1+80 (GR.11)  screen1+80 (GR.11)
+; screen1+120(GR.10)  screen2+40 (GR.9)
+; ...
+
+; The unrolled code:
+; bank 3: display even screen, draw GR.10 on odd
+; bank 2: display odd screen, draw GR.9 on even
+; bank 1: display even screen, draw GR.9 on odd
+; bank 0: display odd screen, draw GR.10 on even
+
+	ift	NUMEN
+	icl	'../numendef.asx'
+	opt	h-
+	dta	b(Banks_FOR_EFFECT_INDEX),a(main-1)
+	opt	h+
+	els
+	run	main
+	eif
+
+Screen_HEIGHT	equ	118
+
+Map_RAYS	equ	42
+Map_ANGLES	equ	84
+
+Screen_screen2	equ	$0240	$1280
+Map_map90	equ	$2000	$1c00
+Map_mapA0	equ	$3c00	$400+(at $8000)$1800
+Map_map09	equ	$9800	$1c00
+Map_map0A	equ	$b400	$1c00
+Map_mapPtrLo	equ	$cd00	Map_ANGLES	; init only
+Map_map90PtrHi	equ	$ce01	; init only
+Map_mapA0PtrHi	equ	Map_map90PtrHi+Map_ANGLES
+Map_map09PtrHi	equ	Map_mapA0PtrHi+Map_ANGLES
+Map_map0APtrHi	equ	Map_map09PtrHi+Map_ANGLES
+Screen_screen1	equ	$d830	[25+51+42]*[40 bytes color + 40 bytes shade]
+Plasma_sin2	equ	$fe00-2*Map_ANGLES
+
+Draw_code	equ	$4a00
+Plasma_CALC_BANK equ	4
+Plasma_calc	equ	$7000
+
+Screen_si1	equ	$80	2
+Screen_si2	equ	$82	2
+Screen_di	equ	$84	2
+Screen_gi	equ	$86	2
+Map_ptr		equ	$80	2
+Plasma_shade	equ	$80
+Plasma_ptr	equ	$80	2
+Draw_angfxPtr	equ	$80	2
+Draw_rayPtr	equ	$82	2
+Draw_codePtr	equ	$84	2
+Draw_screenPtr	equ	$86	2
+Draw_columnCounter equ	$88
+Draw_lineCounter equ	$89
+Draw_bank	equ	$8a
+Draw_screenAdd	equ	$8b
+Draw_modeSwitches equ	$8c
+Draw_tempY	equ	$8d
+Draw_cyclesToSwitch equ	$8e
+Draw_lineCycles	equ	$8f
+Bank_no		equ	$90
+Plasma_curRay	equ	$91
+Plasma_pos1	equ	$92	2
+Plasma_pos2	equ	$94	2
+Plasma_zp	equ	$96	Map_ANGLES
+
+	org	$1f00
+Plasma_pal90
+	org	*+$40
+Plasma_palA0
+	org	*+$40
+Plasma_pal09
+	org	*+$40
+Plasma_pal0A
+	org	*+$40
+
+	org	$14c0
+Screen_dl2
+	dta	$10,$cf
+Screen_dl2ToFill
+:3*2*Screen_HEIGHT-1	dta	$4f
+	dta	$41,a(Screen_dl1)
+
+Screen_blankDL1
+	dta	$a0,$41,a(Screen_blankDL2)
+Screen_blankDL2
+	dta	$a0,$41,a(Screen_blankDL3)
+Screen_blankDL3
+	dta	$a0,$41,a(Screen_dl2)
+
+Screen_colors
+	dta	$00,$02,$04,$06,$08,$0a,$0c,$0e,$00,$c0
+
+Screen_firstPrior
+	dta	$81,$41,$81,$41
+
+Draw_screenBeginLo
+	dta	l(Screen_screen1+120,Screen_screen2+40,Screen_screen1+40,Screen_screen2)
+Draw_screenBeginHi
+	dta	h(Screen_screen1+120,Screen_screen2+40,Screen_screen1+40,Screen_screen2)
+Draw_screenLineAdd
+	dta	120,40,120,40
+Draw_mapPtrHiLo
+	dta	l(Map_mapA0PtrHi,Map_map90PtrHi,Map_map90PtrHi,Map_mapA0PtrHi)
+Draw_modeBranch
+	dta	{bcs},{bcc},{bcs},{bcc}
+Draw_cyclesPerLine
+	dta	29,30,29,30
+
+	ift	!NUMEN
+Banks_forEffect
+	dta	$fe,$e6,$ea,$ee,$e2
+	eif
+
+	org	$1800
+Plasma_sin1
+	dta	sin(14,14,Map_ANGLES,0,2*Map_ANGLES-1)
+
+Screen_dl1
+	dta	$10,$cf,a(Screen_screen1)
+:49	dta	$0f
+	dta	$4f,a(Screen_screen1&$f000+$1010)
+:101	dta	$0f
+	dta	$4f,a(Screen_screen1&$f000+$2010)
+:83	dta	$0f
+	dta	$41,a(Screen_dl2)
+
+main
+:NUMEN	jsr	Inflate
+	jsr	Screen_init
+	jsr	Map_init
+	jsr	Draw_init
+	jsr	Plasma_init
+
+	lda	#$40
+	ldx	#0
+	ldy	>map_map90
+Map_clear1
+	sty	Map_clear2+2
+Map_clear2
+	sta:rne	Map_map90,x+
+	iny
+	cpy	#$40
+	sne:ldy	#$80
+	cpy	#$d0
+	bcc	Map_clear1
+
+	lda:rne	^4b
+	mva	#$22	^40
+;	mwa	#Screen_dl1	^42
+	mwa	#Screen_blankDL1	^42
+	ldx	#9
+	mva:rpl	Screen_colors,x	^12,x-
+	ift	NUMEN
+	mwa	#Screen_dli	Dli_vector
+	els
+	mwa	#Screen_dli	$fffa
+	mva	#$80	^4e
+	eif
+
+	mva	#0	Plasma_curRay
+	mwa	#$6914	Plasma_pos1
+	mwa	#$37a2	Plasma_pos2
+	mva	#3	Bank_no
+
+	ift	NUMEN
+	mwa	#-800	Vbl_clock
+	jsr	Idle
+	lda:rne	^4b
+	sta	^40
+	jmp	NextBlock
+	els
+	jmp	*
+	eif
+
+Screen_init
+	mwa	#Screen_screen1	Screen_si1
+	mwa	#Screen_screen2	Screen_si2
+	mwa	#Screen_dl2ToFill-1	Screen_di
+	mwa	#Screen_g10	Screen_gi
+	ldx	#Screen_HEIGHT
+Screen_init_dl1
+	ldy	#39
+	mva:rpl	(Screen_gi),y	(Screen_si1),y-
+	lda	#40
+	add:sta	Screen_gi
+	scc:inc	Screen_gi+1
+	ldy	#1
+	mva	Screen_si1	(Screen_di),y+
+	add	#80
+	sta	Screen_si1
+	mva	Screen_si1+1	(Screen_di),y
+	bcc	Screen_init_dl2
+	adc	#0
+	sta	Screen_si1+1
+	and	#$f
+	sne:mva	#$10	Screen_si1
+Screen_init_dl2
+	ldy	#4
+	mva	Screen_si2	(Screen_di),y+
+	adc	#40	-
+	sta	Screen_si2
+	mva	Screen_si2+1	(Screen_di),y
+	bcc	Screen_init_dl3
+	adc	#0
+	sta	Screen_si2+1
+	and	#$f
+	sne:mva	#$10	Screen_si2
+Screen_init_dl3
+	lda	#6
+	adc:sta	Screen_di	-
+	scc:inc	Screen_di+1
+	dex
+	bne	Screen_init_dl1
+	rts
+
+Screen_dli
+:!NUMEN	pha
+	tya:pha
+	ldy	Bank_no
+	sta	^4a
+	mva	Screen_firstPrior,y	^1b
+	txa:pha
+	lda:pha	^31
+	mva	Banks_forEffect,y	^31
+	dey
+	spl:ldy	#3
+	sty	Bank_no
+	ldx	Plasma_curRay
+	ldy	#$c1
+	sec
+	sta	^4a
+	jsr	Draw_code
+
+	lda	Bank_no
+	lsr	@
+	jcc	Screen_dli_end
+	dex
+	spl:ldx	#Map_RAYS-1
+	stx	Plasma_curRay
+
+	mva	Banks_forEffect+Plasma_CALC_BANK	^31
+Plasma_twistSin1a
+	lda	Plasma_twistSin
+Plasma_twistSin1b
+	add	Plasma_twistSin+$53
+	tax
+:3	asl	@
+	add:sta	Plasma_pos1
+	php
+	txa
+:5	lsr	@
+	cmp	#$80>>5
+	scc:eor	<$ff<<3
+	plp
+	adc	Plasma_pos1+1
+	cmp	#Map_ANGLES
+	bcc	Plasma_pos1ok
+	bmi	Plasma_pos1mi
+	sbc	#Map_ANGLES	+
+	dta	{bit a:}
+Plasma_pos1mi
+	adc	#Map_ANGLES-1	+
+Plasma_pos1ok
+	sta	Plasma_pos1+1
+	inc	Plasma_twistSin1a+1
+:2	inc	Plasma_twistSin1b+2
+
+Plasma_twistSin2a
+	lda	Plasma_twistSin+$59
+Plasma_twistSin2b
+	add	Plasma_twistSin+$13
+	tax
+:3	asl	@
+	add:sta	Plasma_pos2
+	php
+	txa
+:5	lsr	@
+	eor	#$80>>5
+	scc:eor	<$ff<<3
+	plp
+	adc	Plasma_pos2+1
+	cmp	#Map_ANGLES
+	bcc	Plasma_pos2ok
+	bmi	Plasma_pos2mi
+	sbc	#Map_ANGLES	+
+	dta	{bit a:}
+Plasma_pos2mi
+	adc	#Map_ANGLES-1	+
+Plasma_pos2ok
+	sta	Plasma_pos2+1
+	dec	Plasma_twistSin2a+1
+:2	inc	Plasma_twistSin2b+2
+
+	ldx	Plasma_pos1+1
+	ldy	Plasma_pos2+1
+	clc
+	jsr	Plasma_calc
+
+Screen_dli_end
+ ift 0
+ mva ^4b	$100
+qq equ *-2
+ inc:lda qq
+ and #$7f
+ sta qq
+ eif
+	pla:sta	^31
+	pla:tax
+	pla:tay
+	pla
+	rti
+
+Map_init
+	ldx	#Map_ANGLES-1
+Map_init_lo
+	mva	#$aa	Map_mapPtrLo,x-
+	lsr	@
+	sta	Map_mapPtrLo,x-
+	mva	#0	Map_mapPtrLo,x-
+	bpl	Map_init_lo
+
+	mwa	#Map_map90PtrHi&$ff00	Map_ptr
+	ldy	<Map_map90PtrHi
+	lda	>Map_map90
+	clc
+Map_init_hi
+:3	sta	(Map_ptr),y+
+	ert	[256-<Map_map90PtrHi]%3
+	sne:inc	Map_ptr+1
+	adc	#1	-
+	cmp	#$40
+	sne:asl	@
+	cmp	#$d0
+	bcc	Map_init_hi
+	rts
+
+Plasma_init
+	ldx	#59
+Plasma_init_pal
+	txa
+:2	lsr	@
+	and	#$fe
+	sta	Plasma_shade
+	lsr	@
+	eor	#$40
+	sta	Plasma_pal0A,x
+:4	asl	@
+	eor	#$40
+	sta	Plasma_palA0,x
+	txa
+	lsr	@
+	and	#3
+	add	Plasma_shade
+	eor	#$40
+	sta	Plasma_pal09,x
+:4	asl	@
+	eor	#$40
+	sta	Plasma_pal90,x-
+	bpl	Plasma_init_pal
+
+	mva	Banks_forEffect+Plasma_CALC_BANK	^31
+	mwa	#Plasma_calc	Plasma_ptr
+	ldx	#Map_ANGLES-1
+Plasma_init_calc1
+	mva	#{lda Plasma_sin1,x}	(Plasma_ptr),0+
+	txa
+:<Plasma_sin1!=0	add	<Plasma_sin1
+	sta	(Plasma_ptr),y+
+	mva	>Plasma_sin1	(Plasma_ptr),y+
+	mva	#{adc Plasma_sin2,x}	(Plasma_ptr),y+
+	txa
+:<Plasma_sin2!=0	add	<Plasma_sin2
+	sta	(Plasma_ptr),y+
+	mva	>Plasma_sin2	(Plasma_ptr),y+
+	mva	#{sta Plasma_zp}	(Plasma_ptr),y+
+	txa:add	#Plasma_zp
+	sta	(Plasma_ptr),y
+	lda	#8
+	adc:sta	Plasma_ptr	-
+	scc:inc	Plasma_ptr+1
+	dex
+	bpl	Plasma_init_calc1
+	mva	#{ldx Plasma_curRay}	(Plasma_ptr),0+
+	mva	#Plasma_curRay	(Plasma_ptr),y+
+	ldx	#Map_ANGLES-1
+Plasma_init_calc2
+	mva	#{ldy Plasma_zp}	(Plasma_ptr),y+
+	txa:add	#Plasma_zp
+	sta	(Plasma_ptr),y+
+
+	mva	#{lda Plasma_pal90,y}	(Plasma_ptr),y+
+	mva	<Plasma_pal90	(Plasma_ptr),y+
+	mva	>Plasma_pal90	(Plasma_ptr),y+
+	mva	#{sta Map_map90,x}	(Plasma_ptr),y+
+	mva	Map_mapPtrLo,x	(Plasma_ptr),y+
+	mva	Map_map90PtrHi,x	(Plasma_ptr),y+
+	mva	#{sta Map_map90,x}	(Plasma_ptr),y+
+	lda	Map_mapPtrLo,x
+	adc	#Map_RAYS	-
+	sta	(Plasma_ptr),y+
+	mva	Map_map90PtrHi,x	(Plasma_ptr),y+
+
+	mva	#{lda Plasma_palA0,y}	(Plasma_ptr),y+
+	mva	<Plasma_palA0	(Plasma_ptr),y+
+	mva	>Plasma_palA0	(Plasma_ptr),y+
+	mva	#{sta Map_mapA0,x}	(Plasma_ptr),y+
+	mva	Map_mapPtrLo,x	(Plasma_ptr),y+
+	mva	Map_mapA0PtrHi,x	(Plasma_ptr),y+
+	mva	#{sta Map_mapA0,x}	(Plasma_ptr),y+
+	lda	Map_mapPtrLo,x
+	adc	#Map_RAYS	-
+	sta	(Plasma_ptr),y+
+	mva	Map_mapA0PtrHi,x	(Plasma_ptr),y+
+
+	mva	#{lda Plasma_pal09,y}	(Plasma_ptr),y+
+	mva	<Plasma_pal09	(Plasma_ptr),y+
+	mva	>Plasma_pal09	(Plasma_ptr),y+
+	mva	#{sta Map_map09,x}	(Plasma_ptr),y+
+	mva	Map_mapPtrLo,x	(Plasma_ptr),y+
+	mva	Map_map09PtrHi,x	(Plasma_ptr),y+
+	mva	#{sta Map_map09,x}	(Plasma_ptr),y+
+	lda	Map_mapPtrLo,x
+	adc	#Map_RAYS	-
+	sta	(Plasma_ptr),y+
+	mva	Map_map09PtrHi,x	(Plasma_ptr),y+
+
+	mva	#{lda Plasma_pal0A,y}	(Plasma_ptr),y+
+	mva	<Plasma_pal0A	(Plasma_ptr),y+
+	mva	>Plasma_pal0A	(Plasma_ptr),y+
+	mva	#{sta Map_map0A,x}	(Plasma_ptr),y+
+	mva	Map_mapPtrLo,x	(Plasma_ptr),y+
+	mva	Map_map0APtrHi,x	(Plasma_ptr),y+
+	mva	#{sta Map_map0A,x}	(Plasma_ptr),y+
+	lda	Map_mapPtrLo,x
+	adc	#Map_RAYS	-
+	sta	(Plasma_ptr),y+
+	mva	Map_map0APtrHi,x	(Plasma_ptr),y+
+
+	tya
+	adc:sta	Plasma_ptr	-
+	scc:inc	Plasma_ptr+1
+	ldy	#0
+	dex
+	jpl	Plasma_init_calc2
+	mva	#{rts}	(Plasma_ptr),y
+	rts
+
+Draw_init
+	mwa	#Draw_angfx	Draw_angfxPtr
+	mwa	#Draw_rays	Draw_rayPtr
+	ldy	#3
+Draw_init_bank
+	sty	Draw_bank
+	mva	Banks_forEffect,y	^31
+	mwa	#Draw_code	Draw_codePtr
+	mva	Draw_screenBeginLo,y	Draw_screenPtr
+	mva	Draw_screenBeginHi,y	Draw_screenPtr+1
+	mva	Draw_screenLineAdd,y	Draw_screenAdd
+	mva	Draw_mapPtrHiLo,y	Draw_init_loadMapHiPtrHi1+1
+	sta	Draw_init_loadMapHiPtrHi2+1
+	add	#2*Map_ANGLES
+	sta	Draw_init_loadMapLoPtrHi+1
+	lda	>Map_map09PtrHi
+	adc	#0
+	sta	Draw_init_loadMapLoPtrHi+2
+	mva	Draw_modeBranch,y	Draw_init_modeBranch
+	mva	Draw_cyclesPerLine,y	Draw_lineCycles
+	mva	#2*Screen_HEIGHT-1	Draw_modeSwitches
+	mva	#-6	Draw_cyclesToSwitch
+
+	mva	#Screen_HEIGHT/2	Draw_lineCounter
+Draw_init_line
+	mva	#40	Draw_columnCounter
+Draw_init_byte
+
+	ldy	#1
+	lda	(Draw_angfxPtr),y
+	bpl	Draw_init_lowPlasma
+; low=picture
+	eor	#$80^$40
+	sta	(Draw_codePtr),y-
+	mva	#{lda #}	(Draw_codePtr),y
+	lda	(Draw_angfxPtr),y
+	bpl	Draw_init_lowPictureHighPlasma
+; high=picture and low=picture
+:4	asl	@
+	eor	#$80
+	iny
+	eor	(Draw_angfxPtr),y-
+	sta	(Draw_screenPtr),y
+	jmp	Draw_init_nextByte
+; high=plasma and low=picture
+Draw_init_lowPictureHighPlasma
+	tax
+	ldy	#2
+	jsr	Draw_init_switchMode
+	mva	#{eor Map_map90,x}	(Draw_codePtr),y
+	lda	Map_mapPtrLo,x
+	add	(Draw_rayPtr),0
+	ldy:iny	Draw_tempY
+	sta	(Draw_codePtr),y+
+Draw_init_loadMapHiPtrHi1
+	mva	Map_map90PtrHi,x	(Draw_codePtr),y+
+	inc	Draw_rayPtr
+	bne	Draw_init_storeByte
+	beq	Draw_init_incRayPtrHi	!
+
+; low=plasma
+Draw_init_lowPlasma
+	tax
+	iny
+Draw_init_loadMapLoPtrHi
+	mva	Map_map09PtrHi,x	(Draw_codePtr),y+
+	jsr	Draw_init_switchMode
+	mva	#{lda Map_map09,x}	(Draw_codePtr),0
+	lda	(Draw_angfxPtr),y
+	bpl	Draw_init_lowPlasmaHighPlasma
+; high=picture and low=plasma
+:4	asl	@
+	eor	#$40
+	ldy:iny	Draw_tempY
+	sta	(Draw_codePtr),y-
+	mva	#{eor #}	(Draw_codePtr),y
+	lda	Map_mapPtrLo,x
+	add	(Draw_rayPtr),0+
+	sta	(Draw_codePtr),y
+	ldy	Draw_tempY
+	iny:iny
+	inc	Draw_rayPtr
+	bne	Draw_init_storeByte
+	beq	Draw_init_incRayPtrHi	!
+; high=plasma and low=plasma
+Draw_init_lowPlasmaHighPlasma
+	dec	Draw_cyclesToSwitch
+	iny	#1
+	lda	Map_mapPtrLo,x
+	add	(Draw_rayPtr),y
+	sta	(Draw_codePtr),y-
+	lda:tax	(Draw_angfxPtr),y
+	ldy	Draw_tempY
+	mva	#{eor Map_map90,x}	(Draw_codePtr),y
+	lda	Map_mapPtrLo,x
+	adc	(Draw_rayPtr),0	-
+	ldy:iny	Draw_tempy
+	sta	(Draw_codePtr),y+
+Draw_init_loadMapHiPtrHi2
+	mva	Map_map90PtrHi,x	(Draw_codePtr),y+
+	lda	#2
+	adc:sta	Draw_rayPtr	-
+	scc
+Draw_init_incRayPtrHi
+	inc	Draw_rayPtr+1
+
+Draw_init_storeByte
+	mva	#{sta Screen_screen1}	(Draw_codePtr),y+
+	mva	Draw_screenPtr	(Draw_codePtr),y+
+	mva	Draw_screenPtr+1	(Draw_codePtr),y
+	tya:sec
+	adc:sta	Draw_codePtr
+	bcc	Draw_init_codeSamePage
+	inc	Draw_codePtr+1
+	clc
+Draw_init_codeSamePage
+	lda	#-5
+	adc:sta	Draw_cyclesToSwitch	-
+
+Draw_init_nextByte
+	lda	#2
+	add:sta	Draw_angfxPtr
+	scc:inc	Draw_angfxPtr+1
+	inc	Draw_screenPtr
+	bne	Draw_init_nextByte1
+	inc:lda	Draw_screenPtr+1
+	and	#$f
+	sne:mva	#$10	Draw_screenPtr
+Draw_init_nextByte1
+	dec	Draw_columnCounter
+	jne	Draw_init_byte
+	lda	Draw_screenAdd
+	add:sta	Draw_screenPtr
+	bcc	Draw_init_nextLine
+	lda	#$f
+	inc:bit	Draw_screenPtr+1
+	bne	Draw_init_nextLine
+	adc:sta	Draw_screenPtr	+
+Draw_init_nextLine
+	dec	Draw_lineCounter
+	jne	Draw_init_line
+
+	mva	#{rts}	(Draw_codePtr),0
+	ldy	Draw_bank
+	dey
+	jpl	Draw_init_bank
+
+	rts
+
+Draw_init_switchMode
+	lda	Draw_cyclesToSwitch
+	bpl	Draw_init_noSwitch
+	add	Draw_lineCycles
+	sta	Draw_cyclesToSwitch
+	lda	Draw_modeSwitches
+	beq	Draw_init_noSwitch
+	lsr	@
+	bcs	Draw_init_switchColor
+	lsr	@
+	lda	#{sta ^1b}
+Draw_init_modeBranch
+	bcc	Draw_init_storeSwitch
+	dec	Draw_cyclesToSwitch
+	lda	#{ror ^1b}
+	bne	Draw_init_storeSwitch	!
+Draw_init_switchColor
+	lda	#{sty ^1b}
+Draw_init_storeSwitch
+	sta	(Draw_codePtr),y+
+	mva	<^1b	(Draw_codePtr),y+
+	mva	>^1b	(Draw_codePtr),y+
+	
+	dec	Draw_modeSwitches
+Draw_init_noSwitch
+	sty	Draw_tempY
+	rts
+
+Draw_rays
+	ins	'tiplazma.ray'
+
+	org	$8000
+Draw_angfx
+	ift	!NUMEN
+	ins	'tiplazma.agf'
+	eif
+
+	org	$fe00-2*Map_ANGLES-40*Screen_HEIGHT
+Screen_g10
+	ins	'tiplazma.g10'
+;:40*Screen_HEIGHT	dta	0
+	ert	*!=Plasma_sin2
+	dta	sin(14,14,Map_ANGLES/2,0,2*Map_ANGLES-1)
+Plasma_twistSin
+	dta	sin(0,75,128,0,255)
+
+	end

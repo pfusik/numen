@@ -1,0 +1,276 @@
+	icl	'../pilot.asx'
+	icl	'map.asx'
+	icl	'tiles.asx'
+	icl	'track.asx'
+
+Duke_DOOR1_SECTOR	equ	11
+Duke_BUTTON1_WALL	equ	136
+Duke_BUTTON1_COLOR	equ	15
+Duke_DOOR2_WALL1	equ	125
+Duke_DOOR2_WALL2	equ	131
+Duke_DOOR2_CENTERX	equ	$140
+Duke_DOOR2_Y		equ	$4e0
+Duke_DOOR2_FLOORZ	equ	$68
+Duke_DOOR3_WALL1	equ	159
+Duke_DOOR3_WALL2	equ	153
+Duke_DOOR3_CENTERX	equ	$840
+Duke_DOOR3_Y		equ	$9e0
+Duke_DOOR3_FLOORZ	equ	$a0
+Duke_DOOR23_MAXPOS	equ	$b0
+Duke_BUTTON2_WALL	equ	144
+Duke_DOOR4_WALL		equ	169
+
+	ift	NUMEN
+Screen_drawnPage equ	$8f
+View_x		equ	$90
+View_y		equ	$92
+View_z		equ	$94
+View_sector	equ	$96
+Math_word	equ	$97
+Math_word2	equ	$99
+Math_word3	equ	$9b
+Math_word4	equ	$9d
+
+Math_sin	equ	$4700
+Math_cos	equ	Math_sin+$40
+Math_cos128	equ	Math_sin+$13f
+
+Pilot_pointX	equ	$f0
+Pilot_pointY	equ	$f2
+Pilot_pointZ	equ	$f4
+	eif
+
+	org	$f000
+main
+	mva	World_floorZ+Duke_DOOR1_SECTOR	Duke_door1Bottom
+	add	World_ceilingZ+Duke_DOOR1_SECTOR
+	ror	@
+	sta	World_ceilingZ+Duke_DOOR1_SECTOR
+	sta	World_floorZ+Duke_DOOR1_SECTOR
+	jsr	Duke_setDoor23
+	mva	World_wallSector+Duke_BUTTON2_WALL	Duke_button2Sector
+	mva	#-1	World_wallSector+Duke_BUTTON2_WALL
+	jmp	Pilot_main
+
+Duke_openDoor1
+	mva	#{nop}	Duke_animateUpdate1
+	rts
+
+Duke_pressButton1
+	mva	#Duke_BUTTON1_COLOR	World_wallPicture+Duke_BUTTON1_WALL
+	rts
+
+Duke_openDoor2
+	mva	#{nop}	Duke_animateUpdate2
+	rts
+
+Duke_pressButton2
+	mva	Duke_button2Sector	World_wallSector+Duke_BUTTON2_WALL
+	mva	#{sec}	Duke_closeFlag
+	rts
+
+; zeby nie bylo widac szpary w drzwiach, jak sie obracamy
+Duke_hermeticDoor2
+	mva	World_wallPicture+Duke_DOOR2_WALL2+1	World_wallPicture+Duke_DOOR2_WALL2
+	rts
+
+Duke_teleport
+	ert	<Duke_DOOR3_CENTERX!=<Duke_DOOR2_CENTERX
+	lda	>Duke_DOOR3_CENTERX-Duke_DOOR2_CENTERX
+	add:sta	Pilot_pointX+1
+	sta	View_x+1
+	ert	<Duke_DOOR3_Y!=<Duke_DOOR2_Y
+	lda	>Duke_DOOR3_Y-Duke_DOOR2_Y
+	add:sta	Pilot_pointY+1
+	sta	View_y+1
+	lda	#Duke_DOOR3_FLOORZ-Duke_DOOR2_FLOORZ
+	add:sta	Pilot_pointZ
+	sta	View_z
+
+	jsr	Pilot_drawOne
+
+	lda:rne	^4b
+	mva	#$a8	^19
+	mva	#$0a	^1a
+	mva	#$81	^1b
+
+	mva	Screen_drawnPage	Screen_displayPage
+	eor	>Screen_screen1^Screen_screen2
+	sta	Screen_drawnPage
+
+	rts
+
+Duke_openDoor3
+	mva	#{clc}	Duke_closeFlag
+	rts
+
+Duke_setWhite
+	mva	#$08	^19
+	rts
+
+Duke_openDoor4
+	mva	#{nop}	Duke_animateUpdate3
+	rts
+
+Duke_animateUpdate1
+	rts
+
+	lda	Time_ticks
+	lsr	@
+	sta	Math_word
+	add	World_floorZ+Duke_DOOR1_SECTOR
+	bcs	Duke_animateUpdate_splitOpened
+	cmp	Duke_door1Bottom
+	bcs	Duke_animateUpdate_splitOpened
+	sta	World_floorZ+Duke_DOOR1_SECTOR
+	lda	World_ceilingZ+Duke_DOOR1_SECTOR
+	sub	Math_word
+	sta	World_ceilingZ+Duke_DOOR1_SECTOR
+	jmp	Duke_animateUpdate2
+Duke_animateUpdate_splitOpened
+	lda	World_floorZ+Duke_DOOR1_SECTOR
+	sub	Duke_door1Bottom
+	add:sta	World_ceilingZ+Duke_DOOR1_SECTOR
+	mva	Duke_door1Bottom	World_floorZ+Duke_DOOR1_SECTOR
+
+Duke_animateUpdate2
+	rts
+
+	lda	Duke_door23Pos
+Duke_closeFlag
+	clc
+	bcs	Duke_closeDoor23
+	adc	Time_ticks	-
+	cmp	#Duke_DOOR23_MAXPOS
+	bcc	Duke_storeDoor23
+	lda	#Duke_DOOR23_MAXPOS
+	bcs	Duke_storeDoor23	!
+Duke_closeDoor23
+	sbc	Time_ticks	+
+	bcs	Duke_storeDoor23
+	lda	#0
+Duke_storeDoor23
+	sta	Duke_door23Pos
+
+Duke_setDoor23
+	lda	<Duke_DOOR2_CENTERX
+	sub	Duke_door23Pos
+	sta	World_wallX_lo+Duke_DOOR2_WALL1
+	sta	World_wallX_lo+Duke_DOOR2_WALL1+1
+	ert	<Duke_DOOR2_CENTERX!=<Duke_DOOR3_CENTERX
+	sta	World_wallX_lo+Duke_DOOR3_WALL1
+	sta	World_wallX_lo+Duke_DOOR3_WALL1+1
+	lda	>Duke_DOOR2_CENTERX
+	sbc	#0
+	sta	World_wallX_hi+Duke_DOOR2_WALL1
+	sta	World_wallX_hi+Duke_DOOR2_WALL1+1
+	sbc	>Duke_DOOR2_CENTERX-Duke_DOOR3_CENTERX	+
+	sta	World_wallX_hi+Duke_DOOR3_WALL1
+	sta	World_wallX_hi+Duke_DOOR3_WALL1+1
+	lda	<Duke_DOOR2_CENTERX
+	add	Duke_door23Pos
+	sta	World_wallX_lo+Duke_DOOR2_WALL2
+	sta	World_wallX_lo+Duke_DOOR2_WALL2+1
+	ert	<Duke_DOOR2_CENTERX!=<Duke_DOOR3_CENTERX
+	sta	World_wallX_lo+Duke_DOOR3_WALL2
+	sta	World_wallX_lo+Duke_DOOR3_WALL2+1
+	lda	>Duke_DOOR2_CENTERX
+	adc	#0
+	sta	World_wallX_hi+Duke_DOOR2_WALL2
+	sta	World_wallX_hi+Duke_DOOR2_WALL2+1
+	adc	>Duke_DOOR3_CENTERX-Duke_DOOR2_CENTERX	-
+	sta	World_wallX_hi+Duke_DOOR3_WALL2
+	sta	World_wallX_hi+Duke_DOOR3_WALL2+1
+
+Duke_animateUpdate3
+	rts
+
+	lda	Duke_door4Angle
+	add	Time_ticks
+	cmp	#$40
+	scc:lda	#$3f
+	sta	Duke_door4Angle
+	tax
+	mva	#-1	Math_word+1
+	sta	Math_word2+1
+	sta	Math_word4+1
+	mva	#0	Math_word3+1
+	lda	Math_cos128+$40,x
+:2	lsr	@
+	eor	#$c0
+	sta	Math_word
+	lda	Math_cos128+$80,x
+:2	lsr	@
+	eor	#$c0
+	sta	Math_word2
+	lda	Math_cos128,x
+	lsr	@
+	adc	Math_cos128,x
+	sta	Math_word3
+	lda	Math_cos128+$40,x
+	sec:ror	@
+	adc	Math_cos128+$40,x
+	sta	Math_word4
+	ldx	#Duke_DOOR4_WALL
+	ldy	World_wallReverse,x
+	lda	World_wallX_lo,x
+	add	Math_word
+	sta	World_wallX_lo+1,x
+	sta	World_wallX_lo,y
+	lda	World_wallX_hi,x
+	adc	Math_word+1
+	sta	World_wallX_hi+1,x
+	sta	World_wallX_hi,y
+	lda	World_wallY_lo,x
+	add	Math_word2
+	sta	World_wallY_lo+1,x
+	sta	World_wallY_lo,y
+	lda	World_wallY_hi,x
+	adc	Math_word2+1
+	sta	World_wallY_hi+1,x
+	sta	World_wallY_hi,y
+	ldy	World_wallReverse+1,x
+	lda	World_wallX_lo+1,x
+	add	Math_word3
+	sta	World_wallX_lo+2,x
+	sta	World_wallX_lo,y
+	lda	World_wallX_hi+1,x
+	adc	Math_word3+1
+	sta	World_wallX_hi+2,x
+	sta	World_wallX_hi,y
+	lda	World_wallY_lo+1,x
+	add	Math_word4
+	sta	World_wallY_lo+2,x
+	sta	World_wallY_lo,y
+	lda	World_wallY_hi+1,x
+	adc	Math_word4+1
+	sta	World_wallY_hi+2,x
+	sta	World_wallY_hi,y
+	ldy	World_wallReverse+2,x
+	lda	World_wallX_lo,x
+	add	Math_word3
+	sta	World_wallX_lo+3,x
+	sta	World_wallX_lo,y
+	lda	World_wallX_hi,x
+	adc	Math_word3+1
+	sta	World_wallX_hi+3,x
+	sta	World_wallX_hi,y
+	lda	World_wallY_lo,x
+	add	Math_word4
+	sta	World_wallY_lo+3,x
+	sta	World_wallY_lo,y
+	lda	World_wallY_hi,x
+	adc	Math_word4+1
+	sta	World_wallY_hi+3,x
+	sta	World_wallY_hi,y
+	rts
+
+Duke_door23Pos	dta	0
+Duke_door4Angle	dta	0
+Duke_door1Bottom	org	*+1
+Duke_button2Sector	org	*+1
+
+	org	Pilot_update+1
+	dta	a(Duke_animateUpdate1)
+
+	end

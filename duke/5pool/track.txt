@@ -1,0 +1,27 @@
+start x=$100 y=$1c0 z=$80 a=$00 h=24
+
+wait 0.1
+after 0.96 a +$21
+wait 0.16
+after 0.64 go $c0 a=$10 z -10
+after 0.64 go $1c0 a -$20 z -10
+after 0.5 go $100 a=$c0 z +8
+after 0.6 go $80 a=$a0
+after 0.6 go $100 a=$80 z +20
+after 0.5 go $40 a=$40 h -5
+after 0.24 a=$20 code Duke_openDoor1
+after 0.6 y=$1c0 a=$00 z -8 h +5
+after 0.3 x=$400
+after 0.2 a=$f8
+after 0.4 a=$e8
+after 0.2 a=$e0
+wait 0.16
+after 0.1 a=$f0
+after 0.4 a=$10
+after 0.1 a=$20
+wait 0.2
+after 0.4 x +$40 a=$00
+after 0.5 x +$200
+after 1.0 x +$a0 code Duke_openDoor2
+after 0.96 x=$a00 z=$61 a=$c0 h=48
+after 0.02 code Eru_start

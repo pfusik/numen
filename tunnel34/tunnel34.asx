@@ -1,0 +1,1115 @@
+	icl	'../nex.asx'
+
+DEBUG	equ	0
+	ert	NUMEN&&DEBUG
+
+* Ray-Shaded :) Tunnel by Eru
+* started @ 8.12.98 (2nd time after HDD crash :( )
+* Map 101x87 on 80x60 screen in 2 frames - completed on 7.01.99
+* Double screen adding finished - 24.01.99, 03:19a.m. (hard...educating...)
+* System procedures from FOX :)
+
+* Main constants
+SCR_WIDTH   equ 40      ;32
+SCR_HEIGHT  equ 59      ;60
+RAY_COUNT   equ 28      ;max.32
+RAY_POWER   equ 07      ;jasnosc swiatelka ;06-10 ?
+
+MAX_RAY_VALUE	equ 8	 ; ile trzeba swiatel zeby miec full-light
+IN_LOOP_FRAMES	equ 242 ; ile klatek w srodku pomiedzy zgaszeniem i rozswietleniem
+
+MAP_HEIGHT  equ 87
+MAP_WIDTH   equ 101
+
+* Main variables
+prog equ $0500
+dl1  equ $1000
+dl2  equ $1100
+scr  equ $1400      ;2*50*87=8700=$21fc...lepiej 2x64x87=$2b80 <$4000
+code equ $4000      ;autopised, 6bankow po <$4000
+textmap equ $8000   ;$1000*5 <= $cfff
+
+* Loaded data
+maps equ $8000      ;'tun_tabs.dat'         DATA
+rtab equ $8000      ;ray   tab (0..79) , x=0..100, y=0..86
+atab equ $8000+8787 ;angle tab (0..79) , size=101*87=8787
+raysin	equ $0f00
+Xsinus  equ $fc00                           DATA
+Ysinus  equ $fd00                           DATA
+texture equ $1200   ;16x16x256=256 bytes    DATA
+stopien equ $1300   ;stopien jasnosci       DATA
+
+* Self-made arrays and procedures
+jumplo  equ $d800   ;adresy i banki (#) skoku dla poszczegolnych Y
+jumphi  equ $d880
+adclo   equ $d900   ;ile dodac do adresu z jump w zal. od X
+adchi   equ $d980   
+
+pisz0lo equ $da00   ;2*(48*2) (sta zer,X) 
+mul16   equ $db00   ;min(4,i)*16
+p0hitab equ $dc00   ;(i and #$0f) adc >textmap				; TSD
+
+rays    equ $dd00   ;80 pozycji raya + 2fake :)
+clear_rays  equ $de00   ;80*3+1 <$100
+scr1lo  equ $df00   ;adresy linii na ekranie
+scr1hi  equ $df80
+pisz0hi equ $e000   ;80*11 <$400
+piszdl1  equ $e400  ;proc tworzaca DL (18b*SCR_HEIGHT) <$500
+piszdl2  equ $e900  ;----------------------------------<$500
+
+kasuj   equ $ee00   ;wstawianie RTS<->LDY#.. <$100
+wywolajLo   equ $ef00
+wywolajHi   equ $ef80
+wywolaj equ $f000   ;wywolanie kodu <$400
+white256 	equ $f400
+stack   equ $180
+
+* 0 page  **** RESERVED $1e-$ff for pisz0lo !!!!!!!!!!! ******
+ray_white equ $1e
+ray_reserve	equ $20	; $20 reserve for pisz0lo, has to be before ray_tab
+ray_tab equ $40 ;2*80 => $e0, +$20 reserved for pisz0lo !!!
+
+hlp  equ $e0
+hlp1 equ $e1
+hlp2 equ $e2
+hlp3 equ $e3
+zer  equ $f0
+zer1 equ $f2
+zer2 equ $f4
+zer3 equ $f6
+
+	ift	!NUMEN
+bnk1 equ $82    ;$82
+bnk2 equ $86    ;$86
+bnk3 equ $8a    ;$8a
+bnk4 equ $8e    ;$8e
+bnk5 equ $e2    ;$f2
+bnk6 equ $e6    ;$f6
+	eif
+
+ org prog
+    
+main    equ *
+ ift NUMEN
+	jsr	Inflate
+ els
+    sei
+    inc $d40e
+    lda $d40b
+    bne *-3
+    ldx #29
+    sta $d000,x
+    dex
+    bpl *-4
+    lda #$fe            
+    sta $d301
+    lda #0
+    sta $d400
+ eif
+
+* start!
+    jsr prp_code
+    jsr prp_text
+    jsr prp_tabs
+    jsr prp_piszdl
+    jsr prp_pisz0
+    jsr prp_clear_rays
+;    jsr prepray
+;    jsr tunstuff
+    jsr prp_wywolaj
+
+	jsr	tunnel
+
+	lda:rne	^4b
+    lda #$40
+    sta $d01b
+    lda #$22
+    sta $d400
+    lda #$80        
+    sta $d01a
+    lda <dl1
+    sta $d402
+    lda >dl1
+    sta $d403
+	ift	NUMEN
+	mwa	#Screen_displayListInterrupt	Dli_vector
+	mwa	#tunnel	Vbl_vector
+	mwa	#-20*50	Vbl_clock
+	jsr	Idle
+	mva	#{rts}	tunnel
+	lda:rne	^4b
+	sta	^40
+	mwa	#rts	Vbl_vector
+	jmp	NextBlock
+	els
+	mwa	#Screen_displayListInterrupt	$fffa
+	mva	#$80	^4e
+loop	lda	#125
+	cmp:rne	^4b
+;PTR_BACKCOLOR lda #$80
+;	sta $d01a
+	jsr	tunnel
+;	lda #$4f
+;	sta $d01a
+ ift DEBUG
+    lda #8      *SHIFT
+    bit $d20f
+    bne loop
+    jsr prepray
+ eif
+	jmp	loop
+	
+	eif
+	
+ ift DEBUG
+prepray	equ *
+;	ldy #0
+;prr1	equ *
+	lda 53770   ;rays
+    and #%11
+    sbc #%1
+;    beq prr1
+	sta rpl1
+;    sta rpl1,y
+;prr2	equ *    
+	lda 53770
+    and #%11
+    sbc #%1
+;    beq prr2
+	sta rpl2
+;    sta rpl2,y
+;    lda 53770
+	tya
+    asl @
+    sta rak1
+;    sta rak1,y
+;    lda 53770
+	tya
+    asl @
+    sta rak2
+;	sta rak2,y
+;	dey
+;	bpl prr1
+    lda 53770       ;ray
+    and #%111
+    sbc #%11
+    sta aktray+1
+    lda 53770       ;angle
+    and #%11
+    sbc #%1 
+    sta apl
+    lda 53770      
+    and #%11 
+    sbc #%1 
+    sta apl+1
+    lda 53770       ;X
+    and #%1111
+    sbc #%111
+    sta xpl         
+    lda 53770
+    and #%1111
+    sbc #%111
+    sta xpl+1
+    lda 53770       ;Y
+    and #%1111
+    sbc #%111 
+    sta ypl
+    lda 53770
+    and #%1111
+    sbc #%111
+    sta ypl+1
+;	lda 53770
+;	and #$f0
+;	sta PTR_BACKCOLOR+1
+    rts
+ eif
+
+;32 maxymalnie raye
+; rpl1    dta c'12345678901234567890123456789012'    
+; rpl2    dta c'12345678901234567890123456789012'
+; rak1    dta c'12345678901234567890123456789012'
+; rak2    dta c'12345678901234567890123456789012'
+rpl1	dta b($00)
+rpl2	dta b($01)	;02
+rak1	dta b($00)
+rak2	dta b($d7)	;ce
+aak		dta b($36,$b5)
+apl     dta b($01,$ff)
+aktang  dta b($0e)
+aktray  dta b($0c,$02)
+xak     dta b($00,$3b)
+yak     dta b($00,$df)
+ypl     dta b($fa,$06)
+xpl     dta b($02,$05)
+aktX    dta b(15)
+aktY    dta b(04)
+MIN_RAY_VALUE	dta b(MAX_RAY_VALUE)
+tstuffdelay	dta a(IN_LOOP_FRAMES)
+
+tunstuff1	dec MIN_RAY_VALUE
+	beq *+3
+	rts
+	MWA #tunstuff2 PTR_tunstuff+1
+	rts
+tunstuff2	dec tstuffdelay
+	beq *+3
+	rts
+	dec tstuffdelay+1
+	bmi *+3
+	rts
+	MWA #tunstuff3 PTR_tunstuff+1
+	rts
+tunstuff3	ldy MIN_RAY_VALUE
+	iny
+	sty MIN_RAY_VALUE
+	cpy #MAX_RAY_VALUE
+	beq *+3
+	rts
+ ift numen
+	MWA #0 Vbl_clock
+ els
+ 	jmp *
+ eif
+	rts
+                       
+tunstuff    equ *
+PTR_tunstuff	jsr tunstuff1
+;zapalenie promieni    
+    lda rak1
+    clc
+    adc rpl1
+	and #$7f
+    sta rak1
+    sta rak1_code+1
+    lda rak2
+    clc
+    adc rpl2
+	and #$7f
+    sta rak2
+    sta rak2_code+1
+    ldy #0
+    clc
+tn2 equ *
+rak1_code	lda raysin,y
+;	clc
+rak2_code	adc raysin,y
+    cmp #80
+    bcc *+5
+    sbc #80
+    clc
+	tax
+    inc rays,x
+;	inc rays+1,x
+;   inc rays+1,x
+	lda rays+1,x
+;	clc
+	adc #2
+	sta rays+1,x
+    inc rays+2,x
+tn22    iny
+	cpy #RAY_COUNT
+    bne tn2
+tn22_1	equ *
+	lda rays+80	; add fakes to beginning
+    clc
+    adc rays
+    sta rays
+    lda rays+81
+;    clc
+    adc rays+1
+    sta rays+1
+    
+;ustawienie aktang, aktray, aktX, aktY
+    lda aak
+    clc
+    adc apl
+    sta aak
+    tax
+    lda aak+1
+    clc
+    adc apl+1
+    sta aak+1
+    tay
+    lda raysin,y
+    clc
+    adc raysin,x        
+    and #$0f            ; TSD => TEXTURE SIZE DEPENDENT ! textureX-1 ($0f)
+    sta aktang
+    lda aktray
+    sec
+    sbc aktray+1
+    and #$0f			; TSD => TEXTURE SIZE DEPENDENT ! textureY-1 ($0f)
+    sta aktray
+                        
+;    lda xak            ; 2sine x
+;    clc                ;
+;    adc xpl            ;
+;    sta xak            ;
+;    tax                ;
+    lda xak+1
+    clc
+    adc xpl+1
+    sta xak+1
+    tay
+    lda XSinus,y
+;    clc                 ;
+;    adc XSinus,x        ;
+;    lsr @               ;
+    lsr @
+    sta aktX
+    
+;    lda yak            ; 2sine y
+;    clc                ;
+;    adc ypl            ;
+;    sta yak            ;
+;    tax                ;
+    lda yak+1
+    clc
+    adc ypl+1
+    sta yak+1
+    tay
+    lda YSinus,y
+;    clc                 ;
+;    adc YSinus,x        ;
+;    lsr @               ;
+    lsr @
+    sta aktY
+    rts
+
+tunnel  equ *
+:NUMEN	mva	#{rts}	tunnel
+:DEBUG inc ^1a
+    jsr FRAMECHNG
+;czyszczenie tabeli rayow
+    lda MIN_RAY_VALUE
+    jsr clear_rays
+    jsr tunstuff
+
+;przygotowanie 0page
+    lda #16
+    sec
+    sbc aktang
+    and #$0f
+    asl @
+    tax
+    lda aktray
+    tay			
+    eor #8		; TSD definitely :)
+    jsr pisz0lo
+
+    ldx aktang
+    clc
+    jsr pisz0hi
+
+;przygotowanie kodu
+    lda aktx
+;    tax
+    and #1
+	cmp	#1
+	rol	@
+    sta hlp1    ;bank
+
+    lda aktx
+    lsr @
+    tay
+    lda adclo,y
+    sta zzer1+1     ;dodac do adresu ile
+    lda adchi,y
+    sta zzer2+1
+
+;FRAME_DLADRES   lda >dl1
+;    sta $d403
+;PTR_BACKCOLOR    lda #0
+;	sta $d01a
+
+    lda #29
+    sec
+    sbc akty
+    tay         ;ile w pierwszym
+    ldx hlp1 ;bank
+    lda pc_bnks,x
+    ldx akty    ;od ktorego
+;    ldy #20
+     jsr TEST
+    ldx hlp1
+    lda pc_bnks+1,x
+    ldy #29
+    ldx #0
+;    ldy #20
+     jsr TEST
+; dta 2
+    ldx hlp1
+    lda pc_bnks+2,x
+	ldy:iny	akty
+    ldx #0
+;    ldy #10
+     jsr TEST
+
+; poprawa DL
+    ldy akty
+    lda aktx
+    lsr @
+    clc
+    adc scr1lo,y
+    ldx scr1hi,y
+FRAME_ORA       ora #$40
+FRAME_PISZDL    jsr piszdl1 ;)
+:NUMEN	mva	#{lda #}	tunnel
+:DEBUG dec ^1a
+    rts
+
+FRAMECHNG
+ ift 1
+	ldx	>piszdl2
+	ldy	>dl1
+	lda	#$40
+	eor:sta	FRAME_ORA+1
+	sta	FRAME_XPLUS+1
+	bne	FRAME0
+	ldx	>piszdl1
+	ldy	>dl2
+FRAME0	stx	FRAME_PISZDL+2
+	sty	^43
+	rts
+ els
+   lda #0
+    eor #1
+    sta FRAMECHNG+1
+    bne FRAME1
+FRAME0  lda >piszdl2
+    sta FRAME_PISZDL+2
+    lda #$40
+    sta FRAME_ORA+1
+;    lda #$40
+    sta FRAME_XPLUS+1
+    lda >dl1
+    sta FRAME_DLADRES+1
+    rts
+FRAME1  lda >piszdl1
+    sta FRAME_PISZDL+2
+    lda #$00
+    sta FRAME_ORA+1
+;    lda #$00
+    sta FRAME_XPLUS+1
+    lda >dl2
+    sta FRAME_DLADRES+1
+    rts
+ eif
+
+TEST    equ *
+	sta	^31
+    lda <powrot-1
+    sta $182
+    lda >powrot-1
+    sta $183
+    tya
+    asl @
+    sta hlp3
+    lda <$181
+    sec
+    sbc hlp3
+;    lda <$181-20*2
+    sta wywolaj+25*29+1
+FRAME_XPLUS lda #0  ;odchylenie
+    sta wywolaj+25*29+6
+    tya
+    clc
+    adc hlp3
+    sta hlp3
+    lda #87
+    sec
+    sbc hlp3
+;    lda <kasuj+3*9
+    sta wywolaj+25*29+8
+    sta wyw_kas+1
+    lda >kasuj+3*9
+    sta wywolaj+25*29+9
+    sta wyw_kas+2
+
+    lda wywolajLo,y
+    sta wyw_ad+1
+    lda wywolajHi,y
+    sta wyw_ad+2
+   
+    sty hlp2
+    lda #29
+    sec 
+    sbc hlp2
+    tay
+    lda jumplo,x
+    clc
+zzer1 adc #0
+    sta hlp2
+    lda jumphi,x
+zzer2 adc #0
+    tay         ;
+    lda hlp2
+
+    tsx
+    stx powrot+1
+    clc
+wyw_ad  jmp wywolaj+9*25        ;29-9
+powrot  ldx #$00
+    txs
+    lda #$a0
+wyw_kas jmp kasuj
+   
+prp_wywolaj equ *
+	mwa	#wywolaj	pcp
+	ldx	#28				;i=28..0
+pw0	mva	#{sta stack}	(pcp),0		;sta stack-i*2
+	ldy	#3
+	mva	#{sty stack}	(pcp),y		;sty stack-i*2+1
+	txa:asl	@
+	eor	#$ff
+	adc	<stack+1	-
+	ldy	#1
+	sta	(pcp),y
+	add	#1
+	ldy	#4
+	sta	(pcp),y
+	ldy	#2
+	mva	>stack	(pcp),y
+	ldy	#5
+	sta	(pcp),y+
+	mva	#{adc #}	(pcp),y+	;adc #..
+	mva	<40*11+1	(pcp),y+	;SCR_WIDTH*11
+	mva	#{bcc}	(pcp),y+		;BCC *+4
+	mva	#2	(pcp),y+
+	mva	#{clc}	(pcp),y+		;CLC
+	mva	#{iny}	(pcp),y+		;iny
+	sta	(pcp),y+			;iny
+	mva	#{sta kasuj}	(pcp),y+	;sta kasuj+(28-i)*3+1
+	stx	hlp3
+	lda	<kasuj+85
+	sub	hlp3
+	sbc	hlp3
+	sbc	hlp3
+	sta	(pcp),y
+	ldy	#17
+	adc	#0	+
+	sta	(pcp),y-
+	mva	#{sty kasuj}	(pcp),y-	;sty ---""--- +1
+	mva	>kasuj	(pcp),y
+	ldy	#18
+	sta	(pcp),y+
+	mva	#{adc #}	(pcp),y+	;adc #..
+	mva	<10*11-1	(pcp),y+	;(MAP_WIDTH-SCR_WIDTH)*11
+	mva	#{bcc}	(pcp),y+		;BCC *+4
+	mva	#2	(pcp),y+
+	mva	#{clc}	(pcp),y+		;CLC
+	mva	#{iny}	(pcp),y			;iny
+	lda	#25
+	add:sta	pcp
+	scc:inc	pcp+1
+	dex:jpl	pw0
+	mva	#{ldx #}	(pcp),0+	;ldx #..
+	mva	#$81	(pcp),y+
+	mva	#{txs}	(pcp),y+		;txs
+	mva	#{lda #}	(pcp),y+	;lda #$60
+	mva	#{rts}	(pcp),y+
+	mva	#{ldx #}	(pcp),y+	;ldx #..
+	mva	#0	(pcp),y+
+	mva	#{jmp kasuj}	(pcp),y+	;jmp kasuj
+	mva	<kasuj	(pcp),y+
+	mva	>kasuj	(pcp),y
+	rts
+
+col   	dta b(0)    ;initial Z color
+colsub	dta b(0)	;color subtraction on Z
+colray  dta b(0)    ;color of ray
+loopray		dta b(0)
+looptexX	dta b(0)
+looptexY	dta b(0)
+loopZ		dta b(0)
+prp_text    equ *
+    lda >textmap
+    sta zer2+1
+    sta zer3+1
+
+    ldx #0
+px_ray stx loopray
+    MVA <texture zer1
+    MVA >texture zer1+1
+	ldx #0
+px_texX stx looptexX
+    MVA <textmap zer2
+    MVA <textmap+$10 zer3  ; TSD => TEXTURE SIZE DEPENDENT ! textureY ($10) 
+    ldy #0
+px_texY sty looptexY
+; We need to find nice equation for color value with respect to 3 parameters:
+; - original color texture [0..ff]
+; - 'z' position   [0..3] or [0..7]
+; - number of rays [0..4] or [0..9]
+    lda (zer1),y
+    lsr @
+    lsr @		; 0..3f
+    sta col
+    lsr @		; TSD => TEXTURE SIZE DEPENDENT ! how much divide - 1
+    lsr @
+    sta colsub	; 0..1f
+    lsr @
+    clc
+    adc colsub
+    sta colsub
+    
+;    lsr @
+;    sta colray
+	lda #RAY_POWER
+    sta colray
+
+    lda colsub
+    clc
+    adc #6
+    lsr @
+    sta colsub
+    clc
+    adc col
+    adc #2			;for brighter future ;)	(0)
+    sta col
+    ldx loopray
+px5 beq px6
+    clc
+    adc colray
+    dex
+    bne px5
+px6 equ *
+    sta col		;initial color in the center
+	ldx #0
+	ldy looptexY
+px_Z	stx loopZ
+    lda col
+    cmp #$40
+    bmi *+4
+    lda #$3f
+    lsr @
+    lsr @
+    sta (zer2),y
+    sta (zer3),y
+    tya
+    clc
+    adc #$20	; TSD => TEXTURE SIZE DEPENDENT ! 2*textureY ($20)
+    tay    
+    lda col
+    sec
+    sbc colsub
+    bcs *+4
+    lda #0
+    sta col
+    inx
+    cpx #4 		; TSD => TEXTURE SIZE DEPENDENT ! $80/(2*textureY) (4)
+    bne px_Z
+
+    ldy looptexY
+    iny
+    cpy #16     ; TSD => TEXTURE SIZE DEPENDENT ! textureY (16)
+    bne px_texY	
+
+    lda #$80	; copy lo->hi
+    sta zer3
+    ldy #0
+px7	lda (zer2),y
+:4	asl @			;*16
+	sta (zer3),y
+    iny
+    bpl px7
+    inc zer2+1
+    inc zer3+1
+    lda zer1	
+    clc
+    adc #16     ; TSD => TEXTURE SIZE DEPENDENT ! textureY (16)
+    sta zer1
+    ldx looptexX
+    inx
+    cpx #8      ; TSD => TEXTURE SIZE DEPENDENT ! textureX (16)
+    jne px_texX
+
+    ldx loopray
+    inx
+    cpx #10     ; TSD => TEXTURE SIZE DEPENDENT ! max rays (5)
+    jne px_ray
+    
+    rts
+
+pc_hlp  dta b(0)
+	ift	NUMEN
+pc_bnks	equ	Banks_forEffect
+	els
+pc_bnks dta b(bnk1,bnk2,bnk3,bnk4,bnk5,bnk6)
+	eif
+pc_rtab dta a(rtab,rtab+2929,rtab+5858,rtab+1,rtab+2930,rtab+5859)
+pc_atab dta a(atab,atab+2929,atab+5858,atab+1,atab+2930,atab+5859)
+scrx    equ scr ;-18 ;przesuniete w lewo
+pc_scr  dta a(scrx,scrx+29*128,scrx+58*128,scrx,scrx+29*128,scrx+58*128)
+
+prp_tabs    equ *
+    MVA <code-1 zer
+    MVA >code-1 zer+1
+    ldy #0
+pt_0    lda zer+1
+    sta jumphi,y
+    sta jumphi+29,y
+    sta jumphi+58,y
+    lda zer
+    sta jumplo,y
+    sta jumplo+29,y
+    sta jumplo+58,y
+    clc
+    adc <550
+    sta zer
+    lda zer+1
+    adc >550
+    sta zer+1
+    iny
+    cpy #29
+    bne pt_0
+        
+    ldx #0
+    stx zer
+    stx zer+1
+pt_1    lda zer+1
+    sta adchi,x
+    lda zer
+    sta adclo,x    
+    clc
+    adc #11
+    sta zer
+    bcc *+4
+    inc zer+1
+    inx
+    cpx #50
+    bne pt_1
+
+    ldy #0
+    lda <scr
+    sta zer
+    lda >scr
+    sta zer+1
+pt_2    lda zer+1
+    sta scr1hi,y 
+    lda zer
+    sta scr1lo,y
+    clc
+    adc #$80   
+    sta zer
+    bcc *+4
+    inc zer+1
+    iny
+    cpy #MAP_HEIGHT
+    bne pt_2
+
+    ldy #0
+pt_3    tya
+    asl @				; TSD => * how much pages for 1 ray (16)
+    asl @
+    asl @
+;    asl @
+    sta mul16,y
+    iny 
+    cpy #10 			; TSD => TEXTURE_SIZE_DEPENDENT ! max ray (5)
+    bne pt_3
+pt_4    sta mul16,y
+    iny
+    bne pt_4
+
+pt_5    tya
+    and #$07			; TSD => TEXTURE SIZE DEPENDENT ! textureX-1 ($0f)
+    clc
+    adc >textmap
+    sta p0hitab,y
+    iny
+    bne pt_5    
+
+    lda >wywolaj
+    sta zer+1
+    lda <wywolaj
+    ldy #29
+pt_6    sta wywolajLo,y
+    adc #25
+    sta zer
+    lda zer+1
+    sta wywolajHi,y
+    adc #0
+    sta zer+1
+    lda zer
+    dey
+    bpl pt_6
+
+    ldy #$7f
+pt7 lda #$0f
+	sta white256,y
+    lda #$f0
+    sta white256+$80,y
+	dey
+    bpl pt7
+    lda <white256
+    sta ray_white
+    lda >white256
+    sta ray_white+1
+
+    rts     ;prp_tabs
+
+prp_pisz0   equ *
+    MWA #pisz0lo pp0+1
+    ldy #0
+    ldx <ray_tab-16-16
+pp01	equ *
+   	tya
+    and #8							; TSD in some way :)
+    beq pp01_1
+    lda #$94	;STY zer,X
+    bne pp01_x
+pp01_1	lda #$95	;STA zer,X
+pp01_x    jsr pp0
+    txa
+    jsr pp0
+    inx
+    inx
+    iny
+    cpy #80+16
+    bne pp01
+
+    lda #$60
+    jsr pp0
+
+    lda <pisz0hi
+    sta pp0+1
+    lda >pisz0hi
+    sta pp0+2
+    ldy #0
+    ldx <ray_tab+1
+pp02    lda #$ac    ;ldy rays+i
+    jsr pp0
+    tya
+    jsr pp0    
+    lda >rays
+    jsr pp0
+    lda #$b9        ;lda mul16,y
+    jsr pp0
+    lda <mul16
+    jsr pp0
+    lda >mul16
+    jsr pp0
+    lda #$7d        ;adc p0hitab,x
+    jsr pp0
+    tya
+    jsr pp0
+    lda >p0hitab
+    jsr pp0
+    lda #$85        ;sta ray_tab+i*2+1
+    jsr pp0
+    tya
+    asl @
+    adc #ray_tab
+    ora #1
+    jsr pp0
+    iny
+    cpy #80
+    bne pp02
+    lda #$60
+pp0 sta pisz0lo
+    inc pp0+1
+    bne *+5
+    inc pp0+2
+    rts ;prp_pisz0
+
+prp_clear_rays
+	ldx	#80+2-1	;+2 na fake
+	ldy	#0
+pcr1	mva	#{sta rays}	clear_rays,y+
+	txa:sta	clear_rays,y+
+	mva	#>rays	clear_rays,y+
+	dex
+	bpl	pcr1
+	mva	#{rts}	clear_rays,y
+	rts
+
+prp_piszdl  equ *
+	mwa	#piszdl1	zer1
+	mwa	#piszdl2	zer2
+	ldx	#1
+ppdl1
+	inx
+	mva	#{sta a:}	(zer1),0
+	sta	(zer2),y+
+	txa:sta	(zer1),y
+	sta	(zer2),y+
+	mva	>dl1	(zer1),y
+	mva	>dl2	(zer2),y+
+	inx
+	mva	#{stx a:}	(zer1),y
+	sta	(zer2),y+
+	txa:sta	(zer1),y
+	sta	(zer2),y+
+	mva	>dl1	(zer1),y
+	mva	>dl2	(zer2),y+
+	inx
+	mva	#{eor #$80}	(zer1),y
+	sta	(zer2),y+
+	mva	#$80	(zer1),y
+	sta	(zer2),y+
+	mva	#{bmi}	(zer1),y
+	sta	(zer2),y+
+	mva	#1	(zer1),y
+	sta	(zer2),y+
+	mva	#{inx}	(zer1),y
+	sta	(zer2),y
+	lda	#11
+	add:sta	zer1
+	sta	zer2
+	bcc	ppdl2
+	inc	zer1+1
+	inc	zer2+1
+ppdl2
+	cpx	#1+59*3
+	bcc	ppdl1
+	mva	#{rts}	(zer1),0
+	sta	(zer2),y
+	rts	;prp_piszdl
+       
+prp_code    equ *
+    ldy #5
+pc_0    sty pc_hlp
+    tya
+    asl @
+    tax
+    lda pc_bnks,y
+    sta $d301
+    lda pc_scr,x
+    sta zer1
+    lda pc_scr+1,x
+    sta zer1+1
+    lda pc_rtab,x
+    sta zer2
+    lda pc_rtab+1,x
+    sta zer2+1
+    lda pc_atab,x
+    sta zer3
+    lda pc_atab+1,x
+    sta zer3+1
+pcp	equ	hlp
+	mwa	#code	pcp
+    jsr pc_main
+    ldy pc_hlp
+    dey
+    bpl pc_0
+    rts    
+
+QPA_MAX equ $01
+
+pc_main equ *
+	ldx	#0
+    	mva	#29	hlp3
+pc1	mva	#50	hlp2
+pc2	mva	#{ldy #}	(pcp),0
+	lda:tax	(zer2),y+
+	and	#$0f
+	ora	stopien,x
+	ora	#$80
+	sta	(pcp),y+
+	mva	#{lda (),y}	(pcp),y
+	lda	(zer3),0
+	asl	@
+	adc	#ray_tab
+	cpx	#QPA_MAX
+	spl:lda	#ray_white
+	ldy	#3
+	sta	(pcp),y+
+
+	mva	#{ldy #}	(pcp),y
+	ldy	#1
+	lda:tax	(zer2),y
+	and	#$0f
+	ora	stopien,x
+	ldy	#5
+	sta	(pcp),y+
+	mva	#{ora (),y}	(pcp),y
+	ldy	#1
+	lda	(zer3),y
+	asl	@
+	adc	#ray_tab
+	cpx	#QPA_MAX
+	spl:lda	#ray_white
+	ldy	#7
+	sta	(pcp),y+
+	mva	#{sta scr,x}	(pcp),y+
+	mva	zer1	(pcp),y+
+	mva	zer1+1	(pcp),y
+	inw	zer1
+	lda	#2
+	add:sta	zer2
+	scc:inc	zer2+1
+	lda	#2
+	add:sta	zer3
+	scc:inc	zer3+1
+	lda	#11
+	add:sta	pcp
+	scc:inc	pcp+1
+	dec	hlp2
+	jne	pc2
+	lda	#$80-50
+	add:sta	zer1
+	scc:inc	zer1+1
+	inw	zer2
+	inw	zer3
+	dec	hlp3
+	jne	pc1
+	mva	#{rts}	(pcp),0
+	rts
+
+Screen_displayListInterrupt
+:!NUMEN	pha
+	sta	^4a
+	mva	#13	^45
+	mva	#3	^45
+	pla
+	rti
+
+	org	dl1
+	dta	$90
+:29	dta	$6f,$cf,$cf,$cf,$cf,$cf
+	dta	$6f,$cf,$cf
+	dta	$41,a(dl1)
+
+	org	dl2
+	dta	$90
+:29	dta	$6f,$cf,$cf,$cf,$cf,$cf
+	dta	$6f,$cf,$cf
+	dta	$41,a(dl2)
+
+ org texture
+ ins 'bmap61.dat'
+; ins '~bmaphvn.dat'
+
+    org stopien
+    dta b($00,$00,$00,$00,$00,$00,$00,$00,$00,$00)
+    dta b($00,$00,$00,$00,$00,$00,$00,$00,$00,$00)
+    dta b($00,$00,$20,$20,$20,$20,$20,$20,$20,$20)
+    dta b($20,$20,$20,$20,$20,$20,$20,$20,$20,$20)
+    dta b($20,$20,$40,$40,$40,$40,$40,$40,$40,$40)
+    dta b($40,$40,$40,$40,$40,$40,$40,$40,$40,$40)
+    dta b($40,$40,$60,$60,$60,$60,$60,$60,$60,$60)
+    dta b($60,$60,$60,$60,$60,$60,$60,$60,$60,$60)
+
+ ift !NUMEN   
+ org maps
+ ins 'tun_tabs.dat'
+ eif
+
+	org	kasuj
+:29*3	dta	{sta a:}
+	rts
+
+    org XSinus  
+XAmp    equ MAP_WIDTH-2*SCR_WIDTH & $fe
+;    dta b(sin(37,37,256))
+    dta b(sin(Xamp,XAmp,256))
+
+    org YSinus  
+YAmp    equ MAP_HEIGHT-SCR_HEIGHT & $fe
+    dta b(sin(YAmp,YAmp,256))
+
+	org raysin
+;	dta b(sin(39,39,256))
+	dta b(sin(39,39,128,0,255))
+    end

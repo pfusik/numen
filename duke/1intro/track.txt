@@ -1,0 +1,64 @@
+start x=$e8 y=$5e4 z=$80 a=$99 h=48
+#!
+# czekaj
+wait 0.32
+# patrz w dol + obrot
+after 0.48 a=$b1 h=36
+after 0.48 a=$c8 h=24
+wait 0.48
+#.
+after 0.48 a=$d7 h=18
+after 0.48 a=$ef
+# patrz na choine
+after 0.24
+#!
+after 0.48 h +16
+after 0.48
+wait 0.96
+#.
+after 0.96 h=14
+after 0.48 a=$e6 h=20
+wait 0.48
+after 0.48 a=$d6 h=24
+#!
+# idz do pierwszego skretu
+after 1.92 go 450.0
+#.
+after 0.96 a +$40
+wait 0.16
+after 0.8 y -$40 a=$02
+#!
+# idz prosto
+after 2.4 go 1600
+after 0.48
+wait 0.48
+#!
+# patrz w lewo na drzewo ;)
+after 0.48 a -$10
+after 0.48 a -$24
+wait 1.44
+#.
+after 0.9 a +$34 x +400
+# przez brame
+after 0.06 a=$05
+after 0.96 go 400
+#!
+# przez most
+after 0.04 a=$00
+after 0.92 go 300
+after 2.88 go 1000
+#!
+# skrec
+after 0.96 x +$180 y +$100 a=31
+after 1.92 go 1100.0
+after 0.48 x=$1540 y=$850 z -$04 a=$30
+# wejdz
+after 0.48 a=$40
+#!
+wait 0.48
+after 0.96 go $a0 a +$18 code Duke_openDoor
+after 0.88
+#.
+after 0.64 y +$a0 a -$18
+after 1.28 go $d0 z -16
+wait 0.04 code $c600

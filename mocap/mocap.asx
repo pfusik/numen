@@ -1,0 +1,432 @@
+	icl	'../nex.asx'
+
+Frame_COORDS	equ	1
+
+Screen_BYTES_PER_LINE	equ	32
+Screen_LINES	equ	118
+
+Screen_1	equ	$1000
+Screen_2	equ	$2000
+
+Screen_columnByte equ	$3000
+Screen_line_lo	equ	$3080
+Screen_columnMaskH equ	$3100
+Screen_columnMaskL equ	$3180
+Screen_line_hi2	equ	$3200
+Screen_line_hi1	equ	$3280
+
+Line_x1	equ	$80
+Line_y1	equ	$81
+Line_x2	equ	$82
+Line_y2	equ	$83
+Line_dx	equ	$84
+Line_dy	equ	$85
+Line_e	equ	$86
+Line_t	equ	$87
+Line_ptr equ	$88
+Frame_ptr equ	$8a
+Screen_br equ	$8c
+Joint_x	equ	$90
+
+	org	$3300
+Screen_dl
+	dta	$10,$4d,a(Screen_2)
+Screen_dlScreenPage equ	*-1
+:57+10	dta	$0d
+	dta	$8d
+:59-10	dta	$0d
+Screen_jvb
+	dta	$41,a(Screen_dl)
+
+	ift	!NUMEN
+Screen_nmi
+	pha
+	bit	^4f
+	bmi	Screen_dli
+	txa:pha
+	tya:pha
+	jsr	Screen_vbl
+	pla:tay
+	pla:tax
+	pla:rti
+	eif
+
+Screen_dli
+	lda	Screen_br
+	sta	^4a
+	lsr	@
+	beq	Screen_dli_1
+	adc	#0
+	asl	@
+Screen_dli_1
+	sta	^1a
+	pla:rti
+
+Screen_vbl
+	lda:tax	Screen_br
+	asl	@
+	eor	#$a0
+	sta	^16
+	sta	^18
+	lsr	@
+	and	#6
+	sta	^1a
+; inc $ff
+Screen_vblRet
+	mva	#{rts}	Screen_vblRet
+; mva $ff $600
+; inw *-2
+	lda	Frame_ptr
+	cmp	#5
+	bcc	Screen_setBr
+	sbc	#Frame_NUMBER	+
+	eor	#$ff
+	cmp	#5
+	bcc	Screen_setBr
+	lda	#3	+
+Screen_setBr
+	adc	#1
+	sta	Screen_br
+
+	lda	>Screen_1^Screen_2
+	eor:sta	Screen_dlScreenPage
+	cmp	>Screen_2
+	lda:tax	#0
+	bcc	Screen_clear2
+Screen_clear1
+	sta	Screen_1,x
+	sta	Screen_1+$100,x
+	sta	Screen_1+$200,x
+	sta	Screen_1+$300,x
+	sta	Screen_1+$400,x
+	sta	Screen_1+$500,x
+	sta	Screen_1+$600,x
+	sta	Screen_1+$700,x
+	sta	Screen_1+$800,x
+	sta	Screen_1+$900,x
+	sta	Screen_1+$a00,x
+	sta	Screen_1+$b00,x
+	sta	Screen_1+$c00,x
+	sta	Screen_1+$d00,x
+	sta	Screen_1+$e00,x
+	inx
+	bne	Screen_clear1
+	beq	Screen_clearX	!
+Screen_clear2
+	sta	Screen_2,x
+	sta	Screen_2+$100,x
+	sta	Screen_2+$200,x
+	sta	Screen_2+$300,x
+	sta	Screen_2+$400,x
+	sta	Screen_2+$500,x
+	sta	Screen_2+$600,x
+	sta	Screen_2+$700,x
+	sta	Screen_2+$800,x
+	sta	Screen_2+$900,x
+	sta	Screen_2+$a00,x
+	sta	Screen_2+$b00,x
+	sta	Screen_2+$c00,x
+	sta	Screen_2+$d00,x
+	sta	Screen_2+$e00,x
+	inx
+	bne	Screen_clear2
+Screen_clearX
+	ror	@
+	sta	Line_loadHi1+1
+	sta	Line_loadHi2+1
+
+:NUMEN	mva	Banks_table+Banks_MAIN_INDEX	^31
+ ift Frame_COORDS
+ 	ldx	#0
+ 	ldy	#0
+	mva	>Frame_data	Frame_ptr+1
+ 	clc
+Frame_read
+	lda	(Frame_ptr),y
+	adc:sta	Joint_x,x	-
+	tya
+	add	#Frame_NUMBER
+	tay
+	scc:inc	Frame_ptr+1
+	inx
+	cpx	#Joint_NUMBER*2
+	bcc	Frame_read
+ els
+	ldy	#Joint_NUMBER*2-1
+Frame_read
+	lda	(Frame_ptr),y
+	add:sta	Joint_x,y
+	dey:bpl	Frame_read
+ eif
+
+	lda	<Screen_columnMaskH
+	jsr	Line_setColor
+	jsr	Joint_draw
+ ift Frame_COORDS
+	lda	Frame_ptr
+	cmp	#Frame_NUMBER-1
+	bcs	Frame_ret
+	inc	Frame_ptr
+ els
+	ldy	#Joint_NUMBER*2
+	lda	(Frame_ptr),y
+	cmp	#$80
+	beq	Frame_ret
+	tya
+	add:sta	Frame_ptr
+	scc:inc	Frame_ptr+1
+ eif
+	mva	#{lda #}	Screen_vblRet
+; mva ^4b $600
+; inc *-2
+Frame_ret
+	rts
+
+main
+	ldx	#0
+	ldy	#0
+	lda	#$80
+Screen_column_init1
+	sta	Screen_columnMaskH,x
+	lsr	@
+	sta	Screen_columnMaskL,x
+	tya:sta	Screen_columnByte,x
+	lda	Screen_columnMaskL,x
+	lsr	@
+	bcc	Screen_column_init2
+	ror	@	+
+	iny
+Screen_column_init2
+	inx
+	bpl	Screen_column_init1
+
+	lda	<Screen_1
+	ldx	>Screen_1
+	ldy	#0
+	clc
+Screen_line_init
+	sta	Screen_line_lo,y
+	txa:sta	Screen_line_hi1,y
+	eor	>Screen_1^Screen_2
+	sta	Screen_line_hi2,y
+	lda	#Screen_BYTES_PER_LINE
+	adc	Screen_line_lo,y	-
+	scc:inx
+	iny:cpy	#Screen_LINES
+	bcc	Screen_line_init
+
+ ift Frame_COORDS
+	mva	#0	Frame_ptr
+	ert	<Frame_data!=0
+ els
+	mwa	#Frame_data	Frame_ptr
+	lda	#0
+ eif
+	ldx	#Joint_NUMBER*2-1
+	sta:rpl	Joint_x,x-
+
+	jsr	Screen_vblRet
+
+	lda:rne	^4b
+	sta	^1b
+	mva	#$21	^40
+;	mwa	#Screen_dl	^42
+	mwa	#Screen_jvb	^42
+	mva	#$00	^17
+;	mva	#$04	^1a
+	sta	^1a
+	sta	Screen_br
+	ift	NUMEN
+	mwa	#Screen_dli	Dli_vector
+	mwa	#Screen_vbl	Vbl_vector
+	els
+	mwa	#Screen_nmi	$fffa
+	dec	^4e
+	eif
+
+	ift	NUMEN
+	mwa	#-2*Frame_NUMBER	Vbl_clock
+	jsr	Idle
+	mva	#{rts}	Screen_vbl
+	lda:rne	^4b
+	sta	^40
+	mwa	#rts	Vbl_vector
+	jmp	NextBlock
+	els
+	jmp	*
+	eif
+
+; b
+Line_b
+	mva	Line_dy	Line_t
+	lsr	@
+Line_b1
+	sta	Line_e
+	ldy	Screen_columnByte,x
+Line_lmb1
+	lda	Screen_columnMaskH,x
+	ora:sta	(Line_ptr),y
+	lda	#Screen_BYTES_PER_LINE
+	add:sta	Line_ptr
+	scc:inc	Line_ptr+1
+	lda	Line_e
+	sub	Line_dx
+	bcs	Line_b2
+	adc	Line_dy	-
+	dex
+Line_b2
+	dec	Line_t
+	bne	Line_b1
+	ldy	Screen_columnByte,x
+Line_lmb2
+	lda	Screen_columnMaskH,x
+	ora:sta	(Line_ptr),y
+	rts
+
+; a/|\d
+; /b|c\
+Line
+	lda	Line_y2
+	sub	Line_y1
+	bcc	Line_up
+	sta	Line_dy
+	ldx	Line_x1
+	ldy	Line_y1
+	lda	Line_x2
+	sbc	Line_x1	+
+	jmp	Line_abcd
+Line_up
+	eor	#$ff
+	adc	#1	-
+	sta	Line_dy
+	ldx	Line_x2
+	ldy	Line_y2
+	lda	Line_x1
+	sub	Line_x2
+Line_abcd
+	bcs	Line_cd
+	eor	#$ff
+	adc	#1	-
+	sta	Line_dx
+	cmp	Line_dy
+	mva	Screen_line_lo,y	Line_ptr
+Line_loadHi1
+	mva	Screen_line_hi1,y	Line_ptr+1
+	bcc	Line_b
+; a
+	mva	Line_dx	Line_t
+	lsr	@
+Line_a1
+	sta	Line_e
+	ldy	Screen_columnByte,x
+Line_lma1
+	lda	Screen_columnMaskH,x
+	ora:sta	(Line_ptr),y
+	dex
+	lda	Line_e
+	sub	Line_dy
+	bcs	Line_a3
+	tay
+	lda	#Screen_BYTES_PER_LINE
+	adc:sta	Line_ptr	-
+	bcc	Line_a2
+	inc	Line_ptr+1
+	clc
+Line_a2
+	tya
+	adc	Line_dx	-
+Line_a3
+	dec	Line_t
+	bne	Line_a1
+	ldy	Screen_columnByte,x
+Line_lma2
+	lda	Screen_columnMaskH,x
+	ora:sta	(Line_ptr),y
+	rts
+
+Line_cd
+	sta	Line_dx
+	cmp	Line_dy
+	mva	Screen_line_lo,y	Line_ptr
+Line_loadHi2
+	mva	Screen_line_hi1,y	Line_ptr+1
+	bcs	Line_d
+; c
+	mva	Line_dy	Line_t
+	lsr	@
+Line_c1
+	sta	Line_e
+	ldy	Screen_columnByte,x
+Line_lmc1
+	lda	Screen_columnMaskH,x
+	ora:sta	(Line_ptr),y
+	lda	#Screen_BYTES_PER_LINE
+	add:sta	Line_ptr
+	scc:inc	Line_ptr+1
+	lda	Line_e
+	sub	Line_dx
+	bcs	Line_c2
+	adc	Line_dy	-
+	inx
+Line_c2
+	dec	Line_t
+	bne	Line_c1
+Line_ret
+	ldy	Screen_columnByte,x
+Line_lmc2
+	lda	Screen_columnMaskH,x
+	ora:sta	(Line_ptr),y
+	rts
+
+; d
+Line_d
+	lda	Line_dx
+	beq	Line_ret
+	sta	Line_t
+	lsr	@
+Line_d1
+	sta	Line_e
+	ldy	Screen_columnByte,x
+Line_lmd1
+	lda	Screen_columnMaskH,x
+	ora:sta	(Line_ptr),y
+	inx
+	lda	Line_e
+	sub	Line_dy
+	bcs	Line_d3
+	tay
+	lda	#Screen_BYTES_PER_LINE
+	adc:sta	Line_ptr	-
+	bcc	Line_d2
+	inc	Line_ptr+1
+	clc
+Line_d2
+	tya
+	adc	Line_dx	-
+Line_d3
+	dec	Line_t
+	bne	Line_d1
+	ldy	Screen_columnByte,x
+Line_lmd2
+	lda	Screen_columnMaskH,x
+	ora:sta	(Line_ptr),y
+	rts
+
+Line_primaryColor
+	lda	<Screen_columnMaskL
+Line_setColor
+	sta	Line_lma1+1
+	sta	Line_lma2+1
+	sta	Line_lmb1+1
+	sta	Line_lmb2+1
+	sta	Line_lmc1+1
+	sta	Line_lmc2+1
+	sta	Line_lmd1+1
+	sta	Line_lmd2+1
+	rts
+
+	icl	'dance01.asx'
+;	icl	'drunk10.asx'
+:!Frame_COORDS dta	$80
+
+	end

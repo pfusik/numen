@@ -1,0 +1,105 @@
+start x=$2c7 y=$2c3 z=$a0 a=$ca h=0
+
+# podnies sie
+after 0.3 z=$80 a=$c0 h=22
+# obroc sie
+after 1.28 z=$84 a=$80 h -8
+after 0.96 x -$40 a=$62
+wait 0.64
+after 0.64 a=$20 h +10
+after 0.84 x +$80 a=$0d
+wait 0.64
+# wyjdz
+after 0.4 x +$80
+wait 0.32
+after 0.2 x +$100 z=$7c
+after 0.4 x +$1e0
+# obejrzyj sie
+wait 0.64
+after 0.96 a=$40
+after 1.28 a=$80 h -4
+wait 0.5
+after 1.2 a=$c0 h +4
+after 1.28 a=$00
+# idz
+after 1.14 x +$20 a=$1f
+after 1.0 go $100 a=$28
+after 1.0 go $240 a=$2e
+# obejrzyj brame
+after 0.6 x +$80 a=$50
+after 0.4 x +$40 h -4
+wait 0.6
+# przejdz brame
+after 0.2 a=$40 h=24
+after 0.6 y +$100
+wait 0.3
+after 2.4 y +$1c0 a=$31
+# obejdz fontanne
+after 0.5 x +$80 a=$1e
+after 1.5 go $240 a=$30
+after 0.6 y +$c0 a=$4f
+after 1.0 a=$5e
+after 1.0 go $2c0 a=$51
+# podejdz do drzwi
+after 0.4 a=$40
+after 1.0 y +$100
+wait 1.0
+# obejdz z powrotem
+after 0.6 x -$80 y -$100 a=$5f
+after 1.0 a=$90
+after 0.4 go $100 a=$9f
+after 0.6 go $100 a=$c0
+after 0.6 go $180 a=$e0
+after 0.6 y -$100 a=$00
+after 1.0 x +$160 y -$c0 a=$20
+after 0.6 x +$80 a=$40
+# nachyl sie do fontanny
+wait 0.3
+after 0.6 y +$80 z -20 h -4
+after 0.3 y +$20 z +4
+# lataj
+wait 1.0
+after 1.0 z =$4c h=24
+wait 0.3
+after 1.0 a=$60 h -4
+after 1.0 a=$80
+after 0.6 a=$a0
+after 0.6 a=$c0 z +6 h -4
+after 0.6 x +$100 a=$e0
+after 0.6 y +$140 a=$00
+# laduj przy pajaku
+after 0.2 z +2
+after 0.4 x +$100 z +8 h -4
+after 0.6 z =$7c a=$10
+after 0.4 go $40
+wait 0.4
+# idz do drzwi
+after 0.4 a=$40 h=24
+after 0.3 a=$5e
+after 1.2 go $280
+after 0.6 x -$80 a=$40
+# podejdz prosto
+wait 0.3
+after 0.6 go $180
+wait 0.4
+# idz po schodkach
+after 1.0 y +$100 z -16
+after 0.2 code Duke_openDoor
+after 1.0 y +$80 z -8
+# wejdz do srodka
+after 0.2
+after 1.0 y +$280
+after 0.2
+# stworki rosna
+after 3.2 code Duke_growGuards
+# patrz przez okno
+after 0.7 x +$100 a=$18
+after 0.3
+wait 0.7
+# na stworka
+after 1.0 a=$40 y +$c0
+after 1.2
+# hop!
+after 0.5 a=$60 z -14
+after 0.5 go $180 z=$68 h=$00
+after 0.2

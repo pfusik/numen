@@ -1,0 +1,69 @@
+# 40 sprite	104	152	# choina 13x19
+ 40 sprite	160	232	# choina_v2 20x29
+# 41 sprite	136	160	# drzewo1 17x20
+ 41 sprite	175	224	# drzewo_new4 25x32
+# 42 sprite	136	160	# drzewo2 17x20
+ 42 sprite	200	224	# drzewo_new5 25x28
+# 43 sprite	 60	 76	# lamer 15x19
+# 44 sprite	 76	 52	# pajak 19x13
+# 45 sprite	 72	 80	# straznik 18x20
+ 46 sprite	105	140	# straznik2 15x20
+# 47 sprite	 60	 80	# zwierzak1 15x20
+ 48 sprite	105	140	# straznik2 15x20 odbity
+# 66 sprite	115	160	# drzewko_new4 23x32
+# 67 sprite	125	140	# drzewko_new5 25x28
+# 68 sprite	 96	 66	# pajonk2 32x22
+# 69 sprite	117	144	# straznik2 26x32
+ 70 sky
+100 solid	 0
+101 solid	 1
+102 solid	 2
+103 solid	 3
+104 solid	 4
+105 solid	 5
+106 solid	 6
+107 solid	 7
+108 solid	 8
+109 solid	 9
+110 solid	10
+111 solid	11
+112 solid	12
+113 solid	13
+114 solid	14
+115 solid	15
+116 solid	16	# 0,1
+117 solid	17	# 0,2
+118 solid	18	# 0,3
+119 solid	19	# 0,4
+120 solid	20	# 0,5
+121 solid	21	# 0,6
+122 solid	22	# 0,7
+123 solid	23	# 0,8
+124 solid	24	# 1,2
+125 solid	25	# 1,3
+126 solid	26	# 1,4
+127 solid	27	# 1,5
+128 solid	28	# 1,6
+129 solid	29	# 1,7
+130 solid	30	# 1,8
+131 solid	31	# 2,3
+132 solid	32	# 2,4
+133 solid	33	# 2,5
+134 solid	34	# 2,6
+135 solid	35	# 2,7
+136 solid	36	# 2,8
+137 solid	37	# 3,4
+138 solid	38	# 3,5
+139 solid	39	# 3,6
+140 solid	40	# 3,7
+141 solid	41	# 3,8
+142 solid	42	# 4,5
+143 solid	43	# 4,6
+144 solid	44	# 4,7
+145 solid	45	# 4,8
+146 solid	46	# 5,6
+147 solid	47	# 5,7
+148 solid	48	# 5,8
+149 solid	49	# 6,7
+150 solid	50	# 6,8
+151 solid	51	# 7,8

@@ -1,0 +1,100 @@
+Move_insideSector_sector	equ	$e5
+Move_updateSector_wall          equ	$e6
+Move_updateSector_wallEnd       equ	$e7
+Move_insideSector_isInside      equ	$e8
+Move_insideSector_wall          equ	$e9
+Move_insideSector_wallEnd       equ	$ea
+
+* Move_insideSector
+; Checks if point (Move_x, Move_y) is inside sector Y
+; input: Y - sector
+; return: A - b7 set if inside
+Move_insideSector	| PROFILE
+	sty	Move_insideSector_sector
+	ert	World_MAX_SECTORS>=128
+	sty	Move_insideSector_isInside
+	mvx	World_sectorWall+1,y	Move_insideSector_wallEnd
+	ldx	World_sectorWall,y
+Move_insideSector_loop
+; if ((y1 ^ y2) < 0)
+;   if ((x1 ^ x2) >= 0)
+;     isInside ^= x1;
+;   else
+;     isInside ^= (x1 * y2 - x2 * y1) ^ y2;
+	ldy	World_wallNext,x
+; Math_word4 = y1 - y
+	lda	World_wallY_lo,x
+	sub	Move_y
+	sta	Math_word4
+	lda	World_wallY_hi,x
+	sbc	Move_y+1
+	sta	Math_word4+1
+; Math_word2 = y2 - y
+	lda	World_wallY_lo,y
+	sub	Move_y
+	sta	Math_word2
+	lda	World_wallY_hi,y
+	sbc	Move_y+1
+	sta	Math_word2+1
+	eor	Math_word4+1
+	bpl	Move_insideSector_next
+; Math_word = x1 - x
+	lda	World_wallX_lo,x
+	sub	Move_x
+	sta	Math_word
+	lda	World_wallX_hi,x
+	sbc	Move_x+1
+	sta	Math_word+1
+; Math_word3 = x2 - x
+	lda	World_wallX_lo,y
+	sub	Move_x
+	sta	Math_word3
+	lda	World_wallX_hi,y
+	sbc	Move_x+1
+	sta	Math_word3+1
+	ora	#$7f
+	cmp	Math_word+1
+	bpl	Move_insideSector_eor
+	stx	Move_insideSector_wall
+	jsr	Math_mulCmp
+	ldx	Move_insideSector_wall
+	eor	Math_word2+1
+Move_insideSector_eor
+	eor:sta	Move_insideSector_isInside
+Move_insideSector_next
+	inx
+	cpx	Move_insideSector_wallEnd
+	bcc	Move_insideSector_loop
+	ldy	Move_insideSector_sector
+	lda	Move_insideSector_isInside
+	rts
+
+* Move_updateSector
+; Find sector, where (Move_x,Move_y) is.
+; First check sector Y, then its neighbors, then all sectors.
+; input: Y - starting sector
+; return: Y - found sector
+Move_updateSector
+	jsr	Move_insideSector
+	bmi	Move_updateSector_return
+	ldx	World_sectorWall,y
+	mva	World_sectorWall+1,y	Move_updateSector_wallEnd
+Move_updateSector_loop1
+	ldy	World_wallSector,x
+	bmi	Move_updateSector_next1
+	stx	Move_updateSector_wall
+	jsr	Move_insideSector
+	bmi	Move_updateSector_return
+	ldx	Move_updateSector_wall
+Move_updateSector_next1
+	inx:cpx	Move_updateSector_wallEnd
+	bcc	Move_updateSector_loop1
+	ldy:dey	World_sectors
+Move_updateSector_loop2
+	jsr	Move_insideSector
+	bmi	Move_updateSector_return
+	dey:bpl	Move_updateSector_loop2
+Move_updateSector_return
+	rts
+
+	end
