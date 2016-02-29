@@ -44,7 +44,7 @@ map.asx: ../ConvMap.class map.map gfx.txt
 	$(JAVA) ConvMap map.map gfx.txt $(COLORS) >map.asx
 
 tiles.asx: ../ConvArt.exe tiles000.art gfx.txt
-	..\ConvArt.exe tiles000.art gfx.txt >tiles.asx
+	../ConvArt.exe tiles000.art gfx.txt >tiles.asx
 
 track.asx: ../ConvTrack.class track.txt
 	$(JAVA) ConvTrack <track.txt >track.asx
