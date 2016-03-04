@@ -153,7 +153,7 @@ Code_switchMode
 Code_switchFirst
 	sta	Code_switchMode_cycles
 	mva	Code_switchMode_opcode	(Code_make_p),y+
-	eor	#{sty ^1b}^{ror ^1b}
+	eor	#$e2	; was {sty ^1b}^{ror ^1b}, workaround bug in xasm 3
 	sta	Code_switchMode_opcode
 	mva	<^1b	(Code_make_p),y+
 	mva	>^1b	(Code_make_p),y+
