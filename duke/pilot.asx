@@ -1,7 +1,7 @@
 	ift	NUMEN
 	icl	'../../numendef.asx'
 	opt	h-
-	dta	b(0),a(main-1)
+	dta	b(Banks_DUKE_INDEX),a(main-1)
 	opt	h+
 	els
 	run	main
@@ -390,7 +390,7 @@ Pilot_stay	equ	*+Reloc_diff
 	sta	Vbl_clock
 	mva	#-1	Vbl_clock+1
 	jsr	Idle
-	mva	Banks_table	^31
+	mva	Banks_table+Banks_DUKE_INDEX	^31
 	mva:pha	#0	Pilot_frameClock
 	jmp	Pilot_intp0
 	eif

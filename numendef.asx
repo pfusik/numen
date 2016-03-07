@@ -1,6 +1,7 @@
 ; common definitions for Numen demo kernel ;)
 ; private means should not be accessed by effects code
 
+Banks_DUKE_INDEX	equ	0
 Banks_FOR_EFFECT_INDEX	equ	1
 Banks_LOAD_FIRST_INDEX	equ	4	; private
 Banks_LOAD_LAST_INDEX	equ	15	; private
