@@ -15,7 +15,7 @@ PASKI	equ	0	; przy inicie
 ENDTEXT	equ	NUMEN	; napis koncowy
 ENDBRIGHT equ	12	; jasnosc
 ENDDELAY equ	100	; opoznienie
-ENDTIME	equ	0 250	; czas napisu (0 = do bolu)
+ENDTIME	equ	250	; czas napisu (0 = do bolu)
 
 * Main constants
 SCR_WIDTH   equ 40      ;32
@@ -203,10 +203,22 @@ endset	sta	^17
 	bne	endloop
 	eif	; ENDTIME==0
 	eif	; ENDTEXT
+
+	ift 0
 loop
 	mwa	#$8000	Vbl_clock
 	jsr	Idle
 	jmp	loop
+	els
+	stx	^4e	; #0
+	stx	^40
+	mva	Banks_table+BANKS_PLAYINF_INDEX	^31
+	stx	$7826	; pozsng
+	dex:stx	$7808	; pozptr
+	mva	#1	$7bae	; zegar
+	jmp	$76a8
+	eif
+
 	els	; NUMEN
 	mwa	#Screen_displayListInterrupt	$fffa
 	mva	#$80	^4e
