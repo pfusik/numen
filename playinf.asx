@@ -75,8 +75,7 @@ silen	sta	^20,x
 
 	mwa	#$4006	Inflate_inputPointer
 	mva	#Banks_LOAD_FIRST_INDEX	Inflate_inputBankIndex
-	lda	Banks_table+Banks_MAIN_INDEX
-	jmp	NextBlock+3
+	jmp	NextBlock+3+2+2+3
 
 PlayInf_replay
  ift FRAME_INDICATOR
