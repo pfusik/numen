@@ -18,6 +18,13 @@ Mover		equ	Runtime1_begin-Reloc1_begin+Mover_reloc
 ;_Runtime1_end	equ	Runtime1_begin-Reloc1_begin+Reloc1_end
 		ert	Runtime1_end!=Runtime1_begin-Reloc1_begin+Reloc1_end
 
+	org	$22f
+	dta	0
+	org	^40
+	dta	0
+	org	^31
+	dta	$ff
+
 	org	$3e00
 Banks_sig	org	*+3	; 'tQa'
 Loader_bankTable	org	*+17
@@ -36,9 +43,10 @@ Loader_moveToBank
 	beq	Loader_startMove
 Banks_auto
 	jsr	Banks_detect
-	sty	$22f	; Y=0
 	cpx	#Banks_MAIN_INDEX
-	bne	*
+	beq	Banks_ok
+	lsr:rpl	^1a
+Banks_ok
 	mva	#$fe	Loader_bankTable,x
 	mva	#'t'	Banks_sig
 	mva	#'Q'	Banks_sig+1
