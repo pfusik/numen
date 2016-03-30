@@ -215,6 +215,7 @@ loop
 	mva	Banks_table+BANKS_PLAYINF_INDEX	^31
 	stx	$7826	; pozsng
 	dex:stx	$7808	; pozptr
+	txs
 	mva	#1	$7bae	; zegar
 	jmp	$76a8
 	eif
