@@ -1,14 +1,15 @@
 ﻿Numen
 =====
 
-This is [Atari XL/XE](http://en.wikipedia.org/wiki/Atari_8-bit_family)
+This is a popular
+[Atari XL/XE](http://en.wikipedia.org/wiki/Atari_8-bit_family)
 [demo](https://en.wikipedia.org/wiki/Demo_(computer_programming)).
 
 Build instructions
 ------------------
 
 Install:
-* [xasm](/pfusik/xasm)
+* [xasm](https://github.com/pfusik/xasm)
 * Java SDK
 * gcc, Make - use [Cygwin](http://cygwin.com)
 
@@ -32,7 +33,7 @@ for uninitialized memory usage and some improvements
 such as synchronization of effects with the soundtrack.
 
 In 2016 I prepared an endless loop version for an exhibition,
-it's on the [loop](/pfusik/numen/commits/loop) branch.
+it's on the [loop](https://github.com/pfusik/numen/commits/loop) branch.
 This needed some fixes to compile the demo on modern Windows
 (originally it was built on Windows 98!).
 These were real Git commits.
@@ -40,8 +41,8 @@ These were real Git commits.
 Authors
 -------
 
-* [Piotr 'Fox' Fusik](/pfusik) - programming
-* [Marcin 'Eru' Żukowski](/MarcinZukowski) - programming
+* [Piotr 'Fox' Fusik](https://github.com/pfusik) - programming
+* [Marcin 'Eru' Żukowski](https://github.com/MarcinZukowski) - programming
 * Łukasz 'X-Ray' Sychowicz - soundtrack
 * Michał 'Dracon' Garbaciak - graphics
 
