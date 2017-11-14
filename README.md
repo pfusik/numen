@@ -25,16 +25,16 @@ History
 -------
 
 The demo was developed in 1997-2002 without a version control system,
-so don't expect real commits or authors.
+so don't expect real commits.
 The initial commit here is actually a complete demo as we released it
 at the Lato Ludzików party.
 The second commit here is the final release, containing a fix
-for uninitialized memory usage and some improvements
+for uninitialized memory reference and some improvements
 such as synchronization of effects with the soundtrack.
 
-In 2016 I prepared an endless loop version for an exhibition,
-it's on the [loop](https://github.com/pfusik/numen/commits/loop) branch.
-This needed some fixes to compile the demo on modern Windows
+In 2016 I prepared an endless loop version for an exhibition.
+It's on the [loop](https://github.com/pfusik/numen/commits/loop) branch.
+This required some fixes in order to compile the demo on modern Windows
 (originally it was built on Windows 98!).
 These were real Git commits.
 
