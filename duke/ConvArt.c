@@ -78,24 +78,19 @@ struct tile
 	int type;
 };
 
-long tilestart,tileend, tilecnt;
+int tilestart,tileend, tilecnt;
 short *tilesizx, *tilesizy;
-long *picanm;
+int *picanm;
 struct tile *tiles;
 struct col cols[16384];
-long colcnt;
-
-void safeRead(int fd, void *buf, long cnt)
-{	if (cnt != read(fd,buf,16))
-		error("Can't read next bytes");
-}
+int colcnt;
 
 unsigned char data[1024 * 1024];
 unsigned char temp[128 * 128];
 
 void readTiles(char *fname) 
 {
-	long buf[4];
+	int buf[4];
 	int tile;
 	int column;
 	unsigned char *src, *dest;
@@ -111,24 +106,24 @@ void readTiles(char *fname)
 		);
 	xread(fd, buf, 16);
 	printf("\n; Art file -----------------\n");
-	printf("; Artversion: %ld\n", buf[0]);
+	printf("; Artversion: %d\n", buf[0]);
 	if (buf[0] != 1 )
 		error("Bad artversion");
-	printf("; Numtiles:   %ld\n", buf[1]);
-	printf("; Tilestart:  %ld\n", buf[2]);
+	printf("; Numtiles:   %d\n", buf[1]);
+	printf("; Tilestart:  %d\n", buf[2]);
 	tilestart=buf[2];
-	printf("; Tileend:    %ld\n", buf[3]);
+	printf("; Tileend:    %d\n", buf[3]);
 	tileend=buf[3];
 	tilecnt=tileend-tilestart+1;
-	printf("; Tilecnt:    %ld\n", tilecnt);
+	printf("; Tilecnt:    %d\n", tilecnt);
 
 	tilesizx=malloc(tilecnt*sizeof(short));
 	tilesizy=malloc(tilecnt*sizeof(short));
-	picanm=malloc(tilecnt*sizeof(long));
+	picanm=malloc(tilecnt*sizeof(int));
 	
 	xread(fd, tilesizx, tilecnt*sizeof(short));
 	xread(fd, tilesizy, tilecnt*sizeof(short));
-	xread(fd, picanm, tilecnt*sizeof(long));
+	xread(fd, picanm, tilecnt*sizeof(int));
 
 	read(fd,data,sizeof(data));
 	tiles = malloc(tilecnt*sizeof(struct tile));

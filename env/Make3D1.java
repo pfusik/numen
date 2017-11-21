@@ -115,7 +115,7 @@ public class Make3D1 {
 	private static final int HAMMER_Y3 = HAMMER_Y1 + HAMMER_METAL_HEIGHT;
 	private static final int HAMMER_Z1 = 32 - HAMMER_METAL_WIDTH / 2;
 	private static final int HAMMER_Z2 = HAMMER_Z1 + HAMMER_METAL_WIDTH;
-	// normalne œcian metalu
+	// normalne Å›cian metalu
 	private static final double[] n_bok = {0, 0, -1};
 	private static final double[] n_bok2 = {0, 0, 1};
 	private static final double[] n_tyl = {1, 0, 0};
@@ -163,7 +163,7 @@ public class Make3D1 {
 			os.write((int) (32 - ENV_R * 0.7 * Math.cos(a)));
 			os.write((int) (32 - ENV_R * 0.7 * Math.sin(a)));
 		}
-		// tylna œcianka metalu
+		// tylna Å›cianka metalu
 		os.write(new byte[] {2, 1, 3, 4, 0});
 		// boczne drewno
 		for (int i = 0; i < HAMMER_WOOD_SIDES; i++) {
@@ -173,17 +173,17 @@ public class Make3D1 {
 			os.write(9 + 2 * ((i + 1) % HAMMER_WOOD_SIDES));
 			os.write(0);
 		}
-		// ty³ drewna
+		// tyÅ‚ drewna
 		for (int i = 0; i < HAMMER_WOOD_SIDES; i++)
 			os.write(8 + 2 * (HAMMER_WOOD_SIDES - i));
 		os.write(0);
 		// boki metalu
 		os.write(new byte[] {2, 4, 8, 6, 0});
 		os.write(new byte[] {1, 5, 7, 3, 0});
-		// przód metalu
+		// przÃ³d metalu
 		os.write(new byte[] {1, 2, 6, 5, 0});
 		os.write(new byte[] {5, 6, 8, 7, 0});
-		// spód metalu
+		// spÃ³d metalu
 		os.write(new byte[] {4, 3, 7, 8, 0});
 		os.write(0);
 		os.close();
