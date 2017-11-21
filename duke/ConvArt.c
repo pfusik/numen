@@ -104,7 +104,11 @@ void readTiles(char *fname)
 	int columnlength;
 	int x, y;
 	
-	int fd = open(fname, O_RDONLY | O_BINARY);
+	int fd = open(fname, O_RDONLY
+#ifdef O_BINARY
+		| O_BINARY
+#endif
+		);
 	xread(fd, buf, 16);
 	printf("\n; Art file -----------------\n");
 	printf("; Artversion: %ld\n", buf[0]);

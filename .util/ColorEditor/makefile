@@ -19,7 +19,6 @@ MANIFEST.MF:
 	echo Manifest-Version: 1.0>MANIFEST.MF
 	echo Main-Class: pl.scene.taquart.coledit.ColorEditor>>MANIFEST.MF
 	echo Created-By: 1.4.0 (Sun Microsystems Inc.)>>MANIFEST.MF
-	echo.>>c:\windows\temp\MANIFEST.MF
 
 .PHONY: clean
 clean:
