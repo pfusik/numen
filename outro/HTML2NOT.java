@@ -59,9 +59,9 @@ public class HTML2NOT extends Parser {
 	private int translate(char c) {
 		switch (c) {
 		case '~': return '|';
-		case '³': return 'l' & 0x1f;
-		case 'ó': return 'o' & 0x1f;
-		case 'œ': return 's' & 0x1f;
+		case 'Å‚': return 'l' & 0x1f;
+		case 'Ã³': return 'o' & 0x1f;
+		case 'Å›': return 's' & 0x1f;
 		default:
 			if (!(c >= ' ' && c <= '_' || c >= 'a' && c <= 'z'))
 				throw new IllegalArgumentException("Character " + c);
@@ -190,7 +190,7 @@ public class HTML2NOT extends Parser {
 		is.read(sizes, 0x00, 0x20);
 		is.read(sizes, 0x60, 0x20);
 		is.close();
-		Reader r = new FileReader(args[1]);
+		Reader r = new InputStreamReader(new FileInputStream(args[1]), "UTF8");
 		OutputStream os = new FileOutputStream(args[2]);
 		new HTML2NOT(sizes, os).parse(r);
 		r.close();

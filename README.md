@@ -11,7 +11,7 @@ Build instructions
 Install:
 * [xasm](https://github.com/pfusik/xasm)
 * Java SDK
-* gcc, Make - use [Cygwin](http://cygwin.com)
+* gcc, Make - on Windows install [Cygwin](http://cygwin.com)
 
 These tools should be on your PATH.
 
@@ -50,4 +50,4 @@ Links
 -----
 
 * [Website](http://numen.scene.pl/)
-* [Comment and vote at pouet.net](http://www.pouet.net/prod.php?which=9044&howmanycomments=-1)
+* [Comment and vote at pouët.net](http://www.pouet.net/prod.php?which=9044&howmanycomments=-1)
