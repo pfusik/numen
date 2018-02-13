@@ -9,15 +9,14 @@ game: game.xex
 # Mapster (Duke Nukem 3D level editor) directory
 # (relative to a level's directory)
 MAPSTERDIR = ../../.util/mapster
-MAPSTER = ./mapster.exe
+MAPSTER = ./mapster32.exe
 # This directory (relative to Mapster directory)
 RELMAPSTERDIR = ../../duke
 
 .PHONY: edit
 edit: tiles000.art palette.dat
 	cp palette.dat tiles000.art $(MAPSTERDIR)
-	cd $(MAPSTERDIR)
-	$(MAPSTER) -map $(RELMAPSTERDIR)/$(DIRNAME)/map.map
+	cd $(MAPSTERDIR) && $(MAPSTER) -map $(RELMAPSTERDIR)/$(DIRNAME)/map.map
 
 .PHONY: play
 play: tiles000.art palette.dat
