@@ -11,7 +11,7 @@ JAVAC = javac -classpath $(JAVACP) -encoding utf-8
 RUNOBX = runobx
 RUNXEX = start
 RUNATR = start
-XASM = xasm /p /q
+XASM = xasm -q
 
 .DELETE_ON_ERROR:  # always
 
@@ -22,7 +22,7 @@ XASM = xasm /p /q
 	$(JAVAC) $<
 
 %.nex: %.asx ../nex.asx ../numendef.asx
-	$(XASM) /o:$@ /d:numen=1 $<
+	$(XASM) -o $@ -d numen=1 $<
 
 %.obx: %.asx
-	$(XASM) /d:numen=0 $<
+	$(XASM) -d numen=0 $<
