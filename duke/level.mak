@@ -31,13 +31,13 @@ duke.nex: ../engine.asx ../lookup.asx ../upsector.asx
 endif
 
 duke.obx:
-	$(XASM) /d:numen=0 /d:level=$(LEVEL) duke.asx
+	$(XASM) -d numen=0 -d level=$(LEVEL) duke.asx
 
 game.xex: ../game.asx
-	$(XASM) /o:game.xex /d:level=$(LEVEL) ../game.asx
+	$(XASM) -o game.xex -d level=$(LEVEL) ../game.asx
 
 duke.nex:
-	$(XASM) /o:duke.nex /d:numen=1 /d:level=$(LEVEL) duke.asx
+	$(XASM) -o duke.nex -d numen=1 -d level=$(LEVEL) duke.asx
 
 map.asx: ../ConvMap.class map.map gfx.txt
 	$(JAVA) ConvMap map.map gfx.txt $(COLORS) >map.asx
