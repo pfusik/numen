@@ -38,10 +38,13 @@ init
 	lda	#121
 	cmp:rne	^4b
 	sei
+	lda	^31
+	pha
 	mva	#$fe	^31
 	lda	#$e0
 	jsr	checkRAM
-	mva	#$ff	^31
+	pla
+	sta	^31
 	bcc	cli_xlxe
 checkAntic
 	lda	^4b
