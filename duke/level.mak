@@ -8,20 +8,19 @@ game: game.xex
 
 # Mapster (Duke Nukem 3D level editor) directory
 # (relative to a level's directory)
-MAPSTERDIR = ..\..\.util\mapster
-MAPSTER = mapster.exe
+MAPSTERDIR = ../../.util/mapster
+MAPSTER = ./mapster32.exe
 # This directory (relative to Mapster directory)
-RELMAPSTERDIR = ..\..\duke
+RELMAPSTERDIR = ../../duke
 
 .PHONY: edit
 edit: tiles000.art palette.dat
 	cp palette.dat tiles000.art $(MAPSTERDIR)
-	cd $(MAPSTERDIR)
-	$(MAPSTER) -map $(RELMAPSTERDIR)\$(DIRNAME)\map.map
+	cd $(MAPSTERDIR) && $(MAPSTER) -map $(RELMAPSTERDIR)/$(DIRNAME)/map.map
 
 .PHONY: play
 play: tiles000.art palette.dat
-	..\playduke.bat
+	../playduke.bat
 
 duke.obx game.xex duke.nex: ../world.equ map.asx tiles.asx
 duke.obx duke.nex: duke.asx ../pilot.asx ../../numendef.asx track.asx
@@ -32,13 +31,13 @@ duke.nex: ../engine.asx ../lookup.asx ../upsector.asx
 endif
 
 duke.obx:
-	$(XASM) /d:numen=0 /d:level=$(LEVEL) duke.asx
+	$(XASM) -d numen=0 -d level=$(LEVEL) duke.asx
 
 game.xex: ../game.asx
-	$(XASM) /o:game.xex /d:level=$(LEVEL) ..\game.asx
+	$(XASM) -o game.xex -d level=$(LEVEL) ../game.asx
 
 duke.nex:
-	$(XASM) /o:duke.nex /d:numen=1 /d:level=$(LEVEL) duke.asx
+	$(XASM) -o duke.nex -d numen=1 -d level=$(LEVEL) duke.asx
 
 map.asx: ../ConvMap.class map.map gfx.txt
 	$(JAVA) ConvMap map.map gfx.txt $(COLORS) >map.asx

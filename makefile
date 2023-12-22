@@ -53,19 +53,16 @@ Numen_B.atr: FilesToATR.class bootb.obx numen2.tqa
 	$(JAVA) FilesToATR 1040 128 Numen_B.atr bootb.obx numen2.tqa
 
 Numen.atr: FilesToATR.class dos256.obx start/start.com memory.cfg numen1.tqa numen2.tqa outro/outro.com numen.txt
-# Can't use following, because the command line is too long for stupid Windows 98 !
-#	$(JAVA) FilesToATR 376 256 Numen.atr dos256.obx start/start.com memory.cfg numen1.tqa numen2.tqa outro/outro.com numen.txt
-# This is just a few characters shorter:
-	java -cp . FilesToATR 376 256 Numen.atr dos256.obx start/start.com memory.cfg numen1.tqa numen2.tqa outro/outro.com numen.txt
+	$(JAVA) FilesToATR 376 256 Numen.atr dos256.obx start/start.com memory.cfg numen1.tqa numen2.tqa outro/outro.com numen.txt
 
 demo.xex: numen1.tqa numen2.tqa
 	cat numen1.tqa numen2.tqa > demo.xex
 
 dos128.obx: dos.asx
-	$(XASM) /o:dos128.obx /d:SECTOR_SIZE=128 dos.asx
+	$(XASM) -o $@ -d SECTOR_SIZE=128 dos.asx
 
 dos256.obx: dos.asx
-	$(XASM) /o:dos256.obx /d:SECTOR_SIZE=256 dos.asx
+	$(XASM) -o $@ -d SECTOR_SIZE=256 dos.asx
 
 numen1.tqa numen2.tqa: DemoLinker.class loader.obx playinf.obx inflate.obx $(DEMOPARTS)
 	$(JAVA) DemoLinker

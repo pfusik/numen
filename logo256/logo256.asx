@@ -126,7 +126,7 @@ dli1
 	mva	#$c0	^1b
 	sta	^4a
 	mva	#$40	^1b
-	cmp	(0,x)
+:3	nop
 	mva	<dll	^42
 	sta	^4a
 	mva	#$c0	^1b

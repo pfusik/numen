@@ -1,10 +1,17 @@
 CC = gcc -s -O2 -Wall
-JAVA = java -cp ".;..;../.."
-JAVAC = javac -classpath ".;..;../.."
+ifdef COMSPEC
+# Windows
+JAVACP = ".;..;../.."
+else
+# Linux or macOS
+JAVACP = .:..:../..
+endif
+JAVA = java -cp $(JAVACP)
+JAVAC = javac -classpath $(JAVACP) -encoding utf-8
 RUNOBX = runobx
-RUNXEX = c:\atari\a800win\atari800win.exe -run
-RUNATR = c:\atari\a800win\atari800win.exe
-XASM = xasm.exe /p /q
+RUNXEX = start
+RUNATR = start
+XASM = xasm -q
 
 .DELETE_ON_ERROR:  # always
 
@@ -15,7 +22,7 @@ XASM = xasm.exe /p /q
 	$(JAVAC) $<
 
 %.nex: %.asx ../nex.asx ../numendef.asx
-	$(XASM) /o:$@ /d:numen=1 $<
+	$(XASM) -o $@ -d numen=1 $<
 
 %.obx: %.asx
-	$(XASM) /d:numen=0 $<
+	$(XASM) -d numen=0 $<

@@ -770,7 +770,9 @@ movepic_panel1
 	beq	*	; ??? something very bad must have happened ???
 	dex	; don't count base bank (which should be the last)
 	stx	totalBanks
-	mva	#$ff	^31
+	lda	^31
+	ora	#$fe
+	sta	^31
 ; by default use first 16 banks
 	ldy	#15
 initAutoBanks

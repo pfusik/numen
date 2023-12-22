@@ -8,16 +8,16 @@ start.com: tests.xex start.zix
 	cat $^ > start.com
 
 tests.xex: tests.asx
-	$(XASM) /o:$@ $<
+	$(XASM) -o $@ $<
 
 start.zix: ../ZipXex.class zipx9600.obx start.xex
 	$(JAVA) ZipXex zipx9600.obx \$$9600 start.xex start.zix
 
 zipx9600.obx: ../zipxex.asx
-	$(XASM) /o:$@ /d:inflate=\$$9600 $<
+	$(XASM) -o $@ -d inflate=\$$9600 $<
 
 start.xex: start.asx ../filelen.asx ../banks.asx font.raw diablik.gr8 numen.gr8
-	$(XASM) /o:$@ $<
+	$(XASM) -o $@ $<
 
 .PHONY: ../filelen.asx
 ../filelen.asx:

@@ -1,15 +1,15 @@
 import java.io.*;
 
-// Wejœciowy strumieñ danych do odczytywania danych o kolejnoœci bajtów Little Endian
-// (DataInputStream zak³ada Big Endian)
+// WejÅ›ciowy strumieÅ„ danych do odczytywania danych o kolejnoÅ›ci bajtÃ³w Little Endian
+// (DataInputStream zakÅ‚ada Big Endian)
 class LittleEndianDataInputStream extends FilterInputStream {
 	// konstruktor
 	public LittleEndianDataInputStream(InputStream is) {
 		super(is);
 	}
 
-	// pominiêcie n bajtów
-	// zapewnia, ¿e rzeczywiœcie n bajtów zostanie pominiêtych
+	// pominiÄ™cie n bajtÃ³w
+	// zapewnia, Å¼e rzeczywiÅ›cie n bajtÃ³w zostanie pominiÄ™tych
 	public long skip(long n) throws IOException {
 		long i = n - super.skip(n);
 		while (--i >= 0)

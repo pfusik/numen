@@ -158,7 +158,7 @@ public class Test extends Canvas implements Runnable {
 				sx[i][j] += dx[i][j];
 				sy[i][j] += dy[i][j];
 			}
-			// rób palety
+			// rÃ³b palety
 			int t1 = px[i][0] += ax[i][0];
 			int t2 = px[i][1] += ax[i][1];
 			for (int j = 0; j < PAL_SIZE; j++)
